@@ -106,12 +106,14 @@ typedef struct Widget {
 	struct Widget* parent;
 
 	float margin;
+	float height;
 
 	enum {
 		WIDGET_TYPE_LABEL = 0,
 	} type;
 
 	Layout layout;
+	uint index;
 } Widget;
 
 typedef struct {
@@ -133,6 +135,7 @@ typedef struct {
 	float transparency;
 
 	uint widgets_count;
+	Layout layout;
 
 	Text title;
 
@@ -198,6 +201,11 @@ void widget_draw(Window* window, Widget* widget, Vector3 position);
 Vector3 widget_get_real_position(Widget* widget);
 void widget_set_transparency(Widget* widget, float transparency);
 float widget_get_height(Widget* widget);
+
+void error(const char* s) {
+	printf("[Error] %s\n", s);
+	exit(1);
+}
 
 void camera_create_rotation_matrix(Mat4 destination, float rx, float ry) {
 	float rotation_matrix_x[16];
@@ -943,6 +951,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	window->position.z = 0;
 
 	window->widgets_count = 0;
+	window->layout = LAYOUT_PACK;
 
 	Vector3 title_color = { 0.2f, 0.2f, 1 };
 	text_init(&window->title, title, window_title_font_texture, 0.05f, window->position, ((float) M_PI) * 3 / 2, title_color);
@@ -962,10 +971,9 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	window->drawables[0] = background_drawable;
 
 	Vector3 backgroud_color = {
-	//	2 / 255.f,
-	//	128 / 255.f,
-	//	219 / 255.f
-		1, 1, 1
+		2 / 255.f,
+		128 / 255.f,
+		219 / 255.f
 	};
 
 	material_set_uniform_vec(background_drawable->material, 0, backgroud_color);
@@ -1004,6 +1012,7 @@ Vector3 window_get_anchor(Window* window) {
 }
 
 void window_draw(Window* window) {
+	// Drawing the background
 	Drawable* background_drawable = window->drawables[0];
 
 	material_set_uniform_float(background_drawable->material, 6, (float) glfwGetTime());
@@ -1011,37 +1020,45 @@ void window_draw(Window* window) {
 	material_use(background_drawable->material, NULL, NULL);
 	drawable_draw(background_drawable, GL_TRIANGLES);
 
+	// Drawing the title's line
 	Drawable* line_drawable = window->drawables[1];
 
 	material_use(line_drawable->material, NULL, NULL);
 	drawable_draw(line_drawable, GL_LINES);
 
+	// Drawing the window's title
 	Vector3 shadow_displacement = { 0.01f, 0.f, 0.f };
 	text_draw(&window->title, &shadow_displacement, window->height * 0.8f - 0.05f, 1.f, window->title.position);
 	
-	float pack_margin = 0.f;
+	// Drawing widgets
+	if (window->layout == LAYOUT_PACK) {
+		// If the window layout is set to pack (every element on top of the next)
+		for (uint i = 0; i < window->widgets_count; i++) {
+			Vector3 real_position = window_get_anchor(window);
+			vector3_add(&real_position, real_position, widget_get_real_position(window->widgets[i]));
 
-	for (uint i = 0; i < window->widgets_count; i++) {
-		Vector3 real_position = window_get_anchor(window);
-		
-		vector3_add(&real_position, real_position, widget_get_real_position(window->widgets[i]));
-
-		if (!window->widgets[i]->parent)
-			real_position.y -= pack_margin;
-
-		widget_draw(window, window->widgets[i], real_position);
-
-		pack_margin += widget_get_height(window->widgets[i]) + window->widgets[i]->margin;
+			widget_draw(window, window->widgets[i], real_position);
+		}
+	}
+	else if (window->layout == LAYOUT_GRID) {
+		// If the window layout is set to grid (take up the max space in the window)
+		error("Grid layout not supported");
 	}
 }
 
 Vector3 widget_get_real_position(Widget* widget) {
-	Vector3 widget_position = { widget->position.x + widget->margin, widget->position.y - widget->margin, 0.f };
+	Vector3 widget_position = {
+		widget->position.x + widget->margin, 
+		widget->position.y - widget->margin,
+		0.f
+	};
 
 	if (!widget->parent) {
 		return widget_position;
 	}
-	else { 
+	else {
+		widget_position.y -= widget->parent->height;
+
 		Vector3 real_position,
 			parent_position = widget_get_real_position(widget->parent);
 
@@ -1051,30 +1068,54 @@ Vector3 widget_get_real_position(Widget* widget) {
 	}
 }
 
-Widget* widget_label_create(Window* window, Widget* parent, float pos_x, float pos_y, char* text, float text_size, Vector3 text_color, float margin, Layout layout) {
+Widget* widget_label_create(Window* window, Widget* parent, char* text, float text_size, Vector3 text_color, float margin, Layout layout) {
 	Label* label = malloc(sizeof(Label));
-	window->widgets[window->widgets_count++] = label;
 
 	label->header.type = WIDGET_TYPE_LABEL;
 
 	label->header.parent = parent;
-	label->header.position.x = pos_x;
-	label->header.position.y = pos_y;
 	label->header.layout = layout;
 	label->header.margin = margin;
 
-	Vector3 text_position = { pos_x, pos_y, 0.f };
-	text_init(&label->text, text, window_title_font_texture, text_size, text_position, 0.f, text_color);
+	label->header.position.x = 0.f;
+	label->header.position.y = 0.f;
+
+	label->header.index = window->widgets_count;
+
+	text_init(&label->text, text, window_title_font_texture, text_size, widget_get_real_position(label, window), 0.f, text_color);
+
+	label->header.height = text_get_height(&label->text);
+	label->header.index = window->widgets_count;
+
+	for (uint i = 0; i < window->widgets_count; i++) {
+		if (window->widgets[i]->parent == parent && window->widgets[i]->index < label->header.index) {
+			label->header.position.y -= window->widgets[i]->height + label->header.margin;
+		}
+	}
+
+	for (Widget* ptr = parent; ptr != NULL; ptr = ptr->parent) {
+		for (uint i = 0; i < window->widgets_count; i++) {
+			if (window->widgets[i]->parent == ptr->parent && window->widgets[i]->index > ptr->index) {
+				window->widgets[i]->position.y -= label->header.height + label->header.margin;
+			}
+		}
+	}
+
+	window->widgets[window->widgets_count++] = label;
 
 	return label;
 }
 
 float widget_get_height(Widget* widget) {
+	float height = 0.f;
+
 	switch (widget->type) {
 		case WIDGET_TYPE_LABEL:
-			return text_get_height(&((Label*)widget)->text);
+			height = text_get_height(&((Label*)widget)->text);
 			break;
 	}
+
+	return height + widget->margin;
 }
 
 void widget_label_draw(Window* window, Widget* widget, Vector3 position) {

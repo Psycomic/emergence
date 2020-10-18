@@ -15,8 +15,8 @@ typedef struct {
 } ArrayBufferDeclaration;
 
 typedef enum {
-	WIDGET_LAYOUT_PACK,
-	WIDGET_LAYOUT_GRID,
+	LAYOUT_PACK,
+	LAYOUT_GRID,
 } Layout;
 
 typedef struct {
@@ -61,11 +61,10 @@ void scene_handle_events(Scene* scene, GLFWwindow* window);
 void window_set_position(Window* window, float x, float y);
 
 Text* text_create(char* string, GLuint font_texture, float size, Vector3 position, float angle, Vector3 color);
-void text_draw(Text* text, Vector3* shadow_displacement, float max_width);
 void text_set_color(Text* text, Vector3 color);
 void text_set_angle(Text* text, float angle);
 
-Widget* widget_label_create(Window* window, Widget* parent, float pos_x, float pos_y, char* text, float text_size, Vector3 text_color, float margin, Layout layout);
+Widget* widget_label_create(Window* window, Widget* parent, char* text, float text_size, Vector3 text_color, float margin, Layout layout);
 
 #endif // RENDER_INTERNAL
 #endif // RENDER_HEADER

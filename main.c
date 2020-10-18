@@ -7,6 +7,20 @@
 #include <math.h>
 #include <string.h>
 
+#ifdef _WIN32 
+#include <windows.h>
+
+void usleep(clock_t time) {
+	Sleep(time);
+}
+#endif // _WIN32 
+#ifdef __linux__
+
+#include <unistd.h>
+
+#endif // __linux__
+
+
 #include "misc.h"
 #include "render.h"
 #include "physics.h"
@@ -27,16 +41,16 @@ int main(void) {
 		printf("Error when loading image !\n");
 
 	Image lain_image;
-	if (image_load_bmp(&lain_image, "./images/lain.bmp") >= 0)
+	if (image_load_bmp(&lain_image, "./images/copland_os_enterprise.bmp") >= 0)
 		printf("Success loading lain !\n");
 	else
 		printf("Error when loading image !\n");
-
+	/*
 	Image lain_image_png;
 	if (image_load_png(&lain_image_png, "./images/copland_os_enterprise.png") >= 0)
 		printf("Success loading lain !\n");
 	else
-		printf("Error when loading image !\n");
+		printf("Error when loading image !\n");*/
 
 	Vector3 camera_position = { 0.f, 0.f, 0.f };
 
@@ -110,9 +124,12 @@ int main(void) {
 	Window* window1 = window_create(scene, 0.5f, 0.5f, window1_position, "NAVIGATOR");
 	Window* window2 = window_create(scene, 0.4f, 0.3f, window2_position, "FILES");
 
-	Vector3 label_color = { 1, 1, 1 };
+	Vector3 white = { 1, 1, 1 };
+	Vector3 red = { 1, 0, 0 };
+	Vector3 black = { 0, 0, 1 };
+	Vector3 green = { 0, 1, 0 };
 
-	Widget* label = widget_label_create(window1, NULL, 0.f, 0.f, 
+	Widget* label = widget_label_create(window1, NULL,
 		"THROUGH ME THE WAY INTO THE SUFFERING CITY\n"
 		"THROUGH ME THE WAY TO THE ETERNAL PAIN\n"
 		"THROUGH ME THE WAY THAT RUNS AMONG THE LOST\n\n"
@@ -123,25 +140,36 @@ int main(void) {
 
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
 		"WERE MADE, AND I ENDURE ETERNALLY\n"
-		"ABANDON EVERY HOPE, WHO ENTER HERE\n\n"
+		"ABANDON EVERY HOPE WHO ENTER HERE\n\n",
+		0.05f, white, 0.05f, LAYOUT_PACK);
 
+	Widget* label2 = widget_label_create(window1, label,
+		"THREE RINGS FOR THE ELVEN-KINGS UNDER THE SKY\n"
+		"SEVEN FOR THE DWARF LORDS IN THEIR HALLS OF STONE\n"
+		"NINE FOR MORTAL MEN DOOMED TO DIE\n"
+		"ONE FOR THE DARK LORD ON HIS DARK THRONE\n"
+		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n"
+		"ONE RING TO RULE THEM ALL, ONE RING TO FIND THEM\n"
+		"ONE RING TO BRING THEM ALL, AND IN THE DARKNESS BIND THEM\n"
+		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n",
+		0.03f, red, 0.05f, LAYOUT_PACK);
 
-		"I NEED TO WRITE TEXT TO FILL THIS UP\n"
-		"CAN ANYONE HELP ME\n"
-		"I DONT THINK ANYONE HAS EVER THOUGHT OF IT\n"
-		"PROBABLY ANOTHER PROBLEM\n"
-		"BUGS EVERYWHERE.\n",
-		0.03f, label_color, 0.01f, WIDGET_LAYOUT_PACK);
+	Widget* label3 = widget_label_create(window1, label,
+		"DESUUUU !\n\n"
+		"WINDOWS XP ?\n"
+		"DESU\n",
+		0.03f, black, 0.05f, LAYOUT_PACK);
 
-	Vector3 label2_color = { 1, 0, 0 };
-
-	Widget* label2 = widget_label_create(window1, NULL, 0.f, 0.f,
-		"HEY YOU !\n\n"
-		"HOW ARE YOU DOING ?\n"
+	Widget* label4 = widget_label_create(window1, label2,
+		"HEY !\n\n"
+		"HEY ?\n"
 		"HEY\n",
-		0.03f, label2_color, 0.01f, WIDGET_LAYOUT_PACK);
+		0.03f, green, 0.05f, LAYOUT_PACK);
+
+	clock_t spf = 16;
 
 	while (!glfwWindowShouldClose(window)) {
+		clock_t start = clock();
 		scene_draw(scene, background_color);
 
 		glfwSwapBuffers(window);
@@ -155,6 +183,9 @@ int main(void) {
 			drawable_update(triangle1_drawable);
 			drawable_update(triangle2_drawable);
 		}
+
+		clock_t end = clock();
+		usleep(max(spf - (end - start), 0));
 	}
 
 	glfwTerminate();
