@@ -99,7 +99,7 @@ int main(void) {
 		{texture_coords, sizeof(texture_coords), 2, 1}
 	};
 
-	Drawable* triangle1_drawable = drawable_create(scene, NULL, 3, triangle1_buffers, 2, texture_material1, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
+	Drawable* triangle1_drawable = drawable_create(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	GLuint copland_os_texture = texture_create(&copland_os_image, 1);
 	image_destroy(&copland_os_image);
@@ -111,7 +111,7 @@ int main(void) {
 		{texture_coords, sizeof(texture_coords), 2, 1}
 	};
 
-	Drawable* triangle2_drawable = drawable_create(scene, NULL, 3, triangle2_buffers, 2, texture_material2, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
+	Drawable* triangle2_drawable = drawable_create(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	float window1_position[] = {
 		0.5f, 0.2f
@@ -141,7 +141,7 @@ int main(void) {
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
 		"WERE MADE, AND I ENDURE ETERNALLY\n"
 		"ABANDON EVERY HOPE WHO ENTER HERE\n\n",
-		0.05f, white, 0.05f, LAYOUT_PACK);
+		0.03f, white, 0.01f, LAYOUT_PACK);
 
 	Widget* label2 = widget_label_create(window1, label,
 		"THREE RINGS FOR THE ELVEN-KINGS UNDER THE SKY\n"
@@ -152,19 +152,11 @@ int main(void) {
 		"ONE RING TO RULE THEM ALL, ONE RING TO FIND THEM\n"
 		"ONE RING TO BRING THEM ALL, AND IN THE DARKNESS BIND THEM\n"
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n",
-		0.03f, red, 0.05f, LAYOUT_PACK);
+		0.03f, red, 0.01f, LAYOUT_PACK);
 
-	Widget* label3 = widget_label_create(window1, label,
-		"DESUUUU !\n\n"
-		"WINDOWS XP ?\n"
-		"DESU\n",
-		0.03f, black, 0.05f, LAYOUT_PACK);
-
-	Widget* label4 = widget_label_create(window1, label2,
-		"HEY !\n\n"
-		"HEY ?\n"
-		"HEY\n",
-		0.03f, green, 0.05f, LAYOUT_PACK);
+//	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, red, 0.01f, 0.01f, LAYOUT_PACK);
+	Widget* label3 = widget_label_create(window1, label2, "TEST\n", 0.03f, green, 0.01f, LAYOUT_PACK);
+	Widget* label4 = widget_label_create(window1, label, "TEST\n", 0.03f, green, 0.01f, LAYOUT_PACK);
 
 	clock_t spf = 16;
 

@@ -20,7 +20,7 @@ typedef union {
 	float D[4];
 } Vector4;
 
-typedef float* Mat4;
+typedef float Mat4[16];
 
 /// A Shape	object (a polyhedron) used for collision detection
 typedef struct {

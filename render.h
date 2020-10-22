@@ -53,7 +53,7 @@ void drawable_update(Drawable* drawable);
 void drawable_update_buffer(Drawable* drawable, uint buffer_id);
 
 Scene* scene_create(Vector3 camera_position);
-Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_number, Material* material, Vector3* position, GLuint* textures, uint textures_count, uint flags);
+Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_number, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
 Window* window_create(Scene* scene, float width, float height, float* position, char* title);
 void scene_draw(Scene* scene, Vector3 clear_color);
 void scene_handle_events(Scene* scene, GLFWwindow* window);
@@ -65,6 +65,7 @@ void text_set_color(Text* text, Vector3 color);
 void text_set_angle(Text* text, float angle);
 
 Widget* widget_label_create(Window* window, Widget* parent, char* text, float text_size, Vector3 text_color, float margin, Layout layout);
+Widget* widget_button_create(Window* window, Widget* parent, char* text, float text_size, Vector3 color, float margin, float padding, Layout layout);
 
 #endif // RENDER_INTERNAL
 #endif // RENDER_HEADER

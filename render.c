@@ -64,6 +64,8 @@ typedef struct {
 	GLuint* textures;
 
 	GLuint vertex_array;
+	GLenum draw_mode;
+
 	uint textures_count;
 	uint elements_count;
 	uint buffer_count;
@@ -81,8 +83,8 @@ typedef struct {
 	float rx;
 	float ry;
 
-	float perspective_matrix[16];	// Not having to recreate one every time
-	float rotation_matrix[16];		// Needed for the direction
+	Mat4 perspective_matrix;	// Not having to recreate one every time
+	Mat4 rotation_matrix;		// Needed for the direction
 } Camera;
 
 // Abstraction over text. Basically a collection of drawables, each with a 
@@ -110,6 +112,7 @@ typedef struct Widget {
 
 	enum {
 		WIDGET_TYPE_LABEL = 0,
+		WIDGET_TYPE_BUTTON
 	} type;
 
 	Layout layout;
@@ -121,6 +124,15 @@ typedef struct {
 
 	Text text;
 } Label;
+
+typedef struct {
+	Widget header;
+
+	float padding;
+
+	Text text;
+	Drawable* button_background;
+} Button;
 
 // Window UI : a width, height, mininum width and transparency.
 // every drawable has its own container, differing from the original scene.
@@ -173,10 +185,10 @@ static unsigned short rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 GLuint window_background_shader;
 GLuint ui_texture_shader;
 GLuint color_shader;
-GLuint window_title_font_texture;
+GLuint monospaced_font_texture;
 
 static char* color_uniforms[] = {
-	"color", "model_position"
+	"color", "model_position", "transparency"
 };
 
 Drawable axis_drawable;
@@ -197,7 +209,7 @@ void window_set_transparency(Window* window, float transparency);
 
 void material_use(Material* material, float* model_matrix, float* view_position_matrix);
 
-void widget_draw(Window* window, Widget* widget, Vector3 position);
+void widget_draw(Window* window, Widget* widget);
 Vector3 widget_get_real_position(Widget* widget);
 void widget_set_transparency(Widget* widget, float transparency);
 float widget_get_height(Widget* widget);
@@ -208,8 +220,8 @@ void error(const char* s) {
 }
 
 void camera_create_rotation_matrix(Mat4 destination, float rx, float ry) {
-	float rotation_matrix_x[16];
-	float rotation_matrix_y[16];
+	Mat4 rotation_matrix_x;
+	Mat4 rotation_matrix_y;
 
 	mat4_create_rotation_x(rotation_matrix_x, rx);
 	mat4_create_rotation_y(rotation_matrix_y, ry);
@@ -218,8 +230,8 @@ void camera_create_rotation_matrix(Mat4 destination, float rx, float ry) {
 }
 
 void camera_create_final_matrix(Mat4 destination, Mat4 perspective, Mat4 rotation, Vector3 position) {
-	float translation_matrix[16];
-	float temporary_matrix[16];
+	Mat4 translation_matrix;
+	Mat4 temporary_matrix;
 
 	vector3_neg(&position);
 	mat4_create_translation(translation_matrix, position);
@@ -335,6 +347,11 @@ void array_buffer_update(Buffer* buffer) {
 	glBufferSubData(GL_ARRAY_BUFFER, 0, buffer->size, buffer->data);
 }
 
+void array_buffer_destroy(Buffer* buffer) {
+	glDeleteBuffers(1, &buffer->buffer);
+	free(buffer->data);
+}
+
 GLuint texture_create(Image* image, bool generate_mipmap) {
 	GLuint texture;
 	glGenTextures(1, &texture);
@@ -359,13 +376,14 @@ void rectangle_vertices_set(float* rectangle_vertices, float width, float height
 }
 
 // Additional buffers : Vector3* buffer_data, uint data_number, GLuint data_layout
-void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
 	drawable->buffer_count = declarations_count;
 	drawable->material = material;
 	drawable->position = position;
 	drawable->textures = textures;
 	drawable->textures_count = textures_count;
 	drawable->flags = flags;
+	drawable->draw_mode = mode;
 
 	glGenVertexArrays(1, &drawable->vertex_array);
 	glBindVertexArray(drawable->vertex_array);
@@ -393,30 +411,28 @@ void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_n
 	glBindVertexArray(0);
 }
 
-Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_number, Material* material, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
-	Drawable* drawable = malloc(sizeof(Drawable) + declarations_number * sizeof(Buffer));
+Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+	Drawable* drawable = malloc(sizeof(Drawable) + declarations_count * sizeof(Buffer));
 
 	scene->drawables[scene->drawables_count++] = drawable;
 
-	drawable_init(drawable, elements, elements_number, declarations, declarations_number, material, position, textures, textures_count, flags);
+	drawable_init(drawable, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
 	return drawable;
 }
 
 void drawable_destroy(Drawable* drawable) {
 	for (uint i = 0; i < drawable->buffer_count; i++) {
-		glDeleteBuffers(1, &drawable->buffers[i].buffer);
-		free(drawable->buffers[i].data);
+		array_buffer_destroy(&drawable->buffers[i]);
 	}
 
 	if (drawable->flags & DRAWABLE_USES_ELEMENTS) {
-		glDeleteBuffers(1, &drawable->elements_buffer.buffer);
-		free(drawable->elements_buffer.data);
+		array_buffer_destroy(&drawable->elements_buffer);
 	}
 
 	free(drawable);
 }
 
-void drawable_draw(Drawable* drawable, GLenum mode) {
+void drawable_draw(Drawable* drawable) {
 	for (uint i = 0; i < drawable->textures_count; i++) {
 		glActiveTexture(GL_TEXTURE0 + i);
 		glBindTexture(GL_TEXTURE_2D, drawable->textures[i]);
@@ -425,9 +441,9 @@ void drawable_draw(Drawable* drawable, GLenum mode) {
 	glBindVertexArray(drawable->vertex_array);
 
 	if ((drawable->flags & DRAWABLE_USES_ELEMENTS) > 0)
-		glDrawElements(mode, drawable->elements_count, GL_UNSIGNED_SHORT, NULL);
+		glDrawElements(drawable->draw_mode, drawable->elements_count, GL_UNSIGNED_SHORT, NULL);
 	else
-		glDrawArrays(mode, 0, drawable->elements_count);
+		glDrawArrays(drawable->draw_mode, 0, drawable->elements_count);
 }
 
 void drawable_update_buffer(Drawable* drawable, uint buffer_id) {
@@ -439,7 +455,7 @@ void drawable_update(Drawable* drawable) {
 		array_buffer_update(&drawable->buffers[i]);
 }
 
-void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, Vector3* position, uint flags) {
+void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, uint flags) {
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
 	rectangle_vertices_set(rectangle_vertices, width, height);
 
@@ -447,10 +463,10 @@ void drawable_rectangle_init(Drawable* drawable, float width, float height, Mate
 		{rectangle_vertices, sizeof(float) * 8, 2, 0},
 	};
 
-	drawable_init(drawable, rectangle_elements, array_size(rectangle_elements), rectangle_buffers, 1, material, position, NULL, 0, flags);
+	drawable_init(drawable, rectangle_elements, array_size(rectangle_elements), rectangle_buffers, 1, material, mode, position, NULL, 0, flags);
 }
 
-void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags) {
+void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags) {
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
 	rectangle_vertices_set(rectangle_vertices, width, height);
 
@@ -459,15 +475,12 @@ void drawable_rectangle_texture_init(Drawable* drawable, float width, float heig
 		{texture_uv, sizeof(float) * 8, 2, 1}
 	};
 
-	drawable_init(drawable, rectangle_elements, array_size(rectangle_elements), rectangle_buffers, 2, material, position, textures, textures_count, flags);
+	drawable_init(drawable, rectangle_elements, array_size(rectangle_elements), rectangle_buffers, 2, material, mode, position, textures, textures_count, flags);
 }
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height) {
 	float* rectangle_vertices = rectangle->buffers[0].data;
-	rectangle_vertices[0] = 0.f; rectangle_vertices[1] = 0.f;
-	rectangle_vertices[2] = width; rectangle_vertices[3] = 0.f;
-	rectangle_vertices[4] = 0.f; rectangle_vertices[5] = height;
-	rectangle_vertices[6] = width; rectangle_vertices[7] = height;
+	rectangle_vertices_set(rectangle_vertices, width, height);
 
 	drawable_update_buffer(rectangle, 0);
 }
@@ -739,7 +752,7 @@ void text_init(Text* text, char* string, GLuint font_texture, float size, Vector
 		{drawable_uvs, sizeof(float) * 12 * text_length, 2, 1}
 	};
 
-	drawable_init(text->drawable, NULL, 6 * text_length, declarations, array_size(declarations), glyph_material, NULL, &text->font_texture, 1, 0x0);
+	drawable_init(text->drawable, NULL, 6 * text_length, declarations, array_size(declarations), glyph_material, GL_TRIANGLES, NULL, &text->font_texture, 1, 0x0);
 }
 
 Text* text_create(char* string, GLuint font_texture, float size, Vector3 position, float angle, Vector3 color) {
@@ -796,13 +809,13 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	float camera_final_matrix[16];
+	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
 
 	for (uint i = 0; i < scene->drawables_count; i++) {
 		Drawable* drawable = scene->drawables[i];
 
-		float position_matrix[16];
+		Mat4 position_matrix;
 		mat4_create_translation(position_matrix, *drawable->position);
 
 		// Drawing the elements added to the scene
@@ -826,6 +839,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	if (scene->flags & SCENE_GUI_MODE) {
 		glDisable(GL_DEPTH_TEST);
 
+		// Drawing the windows
 		for (uint i = 0; i < scene->windows_count; i++)
 			window_draw(&scene->windows[(i + scene->selected_window + 1) % scene->windows_count]);
 	}
@@ -954,7 +968,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	window->layout = LAYOUT_PACK;
 
 	Vector3 title_color = { 0.2f, 0.2f, 1 };
-	text_init(&window->title, title, window_title_font_texture, 0.05f, window->position, ((float) M_PI) * 3 / 2, title_color);
+	text_init(&window->title, title, monospaced_font_texture, 0.05f, window->position, ((float) M_PI) * 3 / 2, title_color);
 
 	static char* ui_material_uniforms[] = {
 		"color",
@@ -967,13 +981,16 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	};
 
 	Drawable* background_drawable = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
-	drawable_rectangle_init(background_drawable, window->width, window->height, material_create(window_background_shader, ui_material_uniforms, array_size(ui_material_uniforms)), &window->position, 0x0);
+	drawable_rectangle_init(background_drawable, window->width, window->height, material_create(window_background_shader, ui_material_uniforms, array_size(ui_material_uniforms)), GL_TRIANGLES, &window->position, 0x0);
 	window->drawables[0] = background_drawable;
 
 	Vector3 backgroud_color = {
-		2 / 255.f,
-		128 / 255.f,
-		219 / 255.f
+		//2 / 255.f,
+		//128 / 255.f,
+		//219 / 255.f
+		1 / 255.f,
+		64 / 255.f,
+		109 / 255.f
 	};
 
 	material_set_uniform_vec(background_drawable->material, 0, backgroud_color);
@@ -989,7 +1006,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 		0.6f, 0.6f, 0.6f
 	};
 
-	drawable_init(text_bar_drawable, NULL, 2, text_bar_declarations, 1, material_create(color_shader, color_uniforms, array_size(color_uniforms)), &window->position, NULL, 0, 0x0);
+	drawable_init(text_bar_drawable, NULL, 2, text_bar_declarations, 1, material_create(color_shader, color_uniforms, array_size(color_uniforms)), GL_LINES, &window->position, NULL, 0, 0x0);
 	window->drawables[1] = text_bar_drawable;
 
 	material_set_uniform_vec(window->drawables[1]->material, 0, bar_color);
@@ -1034,16 +1051,22 @@ void window_draw(Window* window) {
 	if (window->layout == LAYOUT_PACK) {
 		// If the window layout is set to pack (every element on top of the next)
 		for (uint i = 0; i < window->widgets_count; i++) {
-			Vector3 real_position = window_get_anchor(window);
-			vector3_add(&real_position, real_position, widget_get_real_position(window->widgets[i]));
-
-			widget_draw(window, window->widgets[i], real_position);
+			widget_draw(window, window->widgets[i]);
 		}
 	}
 	else if (window->layout == LAYOUT_GRID) {
 		// If the window layout is set to grid (take up the max space in the window)
 		error("Grid layout not supported");
 	}
+}
+
+Vector2 window_get_max_position(Window* window) {
+	Vector2 max_positon;
+
+	max_positon.x = window->width * 0.95f;
+	max_positon.y = window->height * 0.8f;
+
+	return max_positon;
 }
 
 Vector3 widget_get_real_position(Widget* widget) {
@@ -1068,83 +1091,146 @@ Vector3 widget_get_real_position(Widget* widget) {
 	}
 }
 
-Widget* widget_label_create(Window* window, Widget* parent, char* text, float text_size, Vector3 text_color, float margin, Layout layout) {
-	Label* label = malloc(sizeof(Label));
+void widget_init(Widget* widget,  Window* window, Widget* parent, float margin, Layout layout) {
+	widget->parent = parent;
+	widget->layout = layout;
+	widget->margin = margin;
 
-	label->header.type = WIDGET_TYPE_LABEL;
+	widget->position.x = 0.f;
+	widget->position.y = 0.f;
 
-	label->header.parent = parent;
-	label->header.layout = layout;
-	label->header.margin = margin;
-
-	label->header.position.x = 0.f;
-	label->header.position.y = 0.f;
-
-	label->header.index = window->widgets_count;
-
-	text_init(&label->text, text, window_title_font_texture, text_size, widget_get_real_position(label, window), 0.f, text_color);
-
-	label->header.height = text_get_height(&label->text);
-	label->header.index = window->widgets_count;
+	widget->index = window->widgets_count;
 
 	for (uint i = 0; i < window->widgets_count; i++) {
-		if (window->widgets[i]->parent == parent && window->widgets[i]->index < label->header.index) {
-			label->header.position.y -= window->widgets[i]->height + label->header.margin;
+		if (window->widgets[i]->parent == parent && window->widgets[i]->index < widget->index) {
+			widget->position.y -= window->widgets[i]->height + widget->margin;
 		}
 	}
 
 	for (Widget* ptr = parent; ptr != NULL; ptr = ptr->parent) {
 		for (uint i = 0; i < window->widgets_count; i++) {
 			if (window->widgets[i]->parent == ptr->parent && window->widgets[i]->index > ptr->index) {
-				window->widgets[i]->position.y -= label->header.height + label->header.margin;
+				window->widgets[i]->position.y -= widget->height + widget->margin;
 			}
 		}
 	}
 
-	window->widgets[window->widgets_count++] = label;
+	window->widgets[window->widgets_count++] = widget;
+}
+
+Widget* widget_label_create(Window* window, Widget* parent, char* text, float text_size, Vector3 color, float margin, Layout layout) {
+	Label* label = malloc(sizeof(Label));
+
+	label->header.type = WIDGET_TYPE_LABEL;
+
+	Vector3 text_position = { 0.f, 0.f, 0.f };
+	text_init(&label->text, text, monospaced_font_texture, text_size, text_position, 0.f, color);
+
+	label->header.height = text_get_height(&label->text);
+
+	widget_init(label, window, parent, margin, layout);
 
 	return label;
 }
 
+Widget* widget_button_create(Window* window, Widget* parent, char* text, float text_size, Vector3 color, float margin, float padding, Layout layout) {
+	Button* button = malloc(sizeof(Button));
+
+	button->header.type = WIDGET_TYPE_BUTTON;
+
+	Vector3 text_position = { 0.f, 0.f, 0.f };
+	text_init(&button->text, text, monospaced_font_texture, text_size, text_position, 0.f, color);
+
+	button->header.height = text_get_height(&button->text) + padding * 2;
+	float width = text_get_width(&button->text);
+	float height = button->header.height;
+
+	float* button_rectangle_vertices = malloc(sizeof(float) * 16);
+
+	button_rectangle_vertices[0] = 0.f; button_rectangle_vertices[1] = 0.f, button_rectangle_vertices[2] = 0.f; button_rectangle_vertices[3] = height;
+	button_rectangle_vertices[4] = 0.f; button_rectangle_vertices[5] = height; button_rectangle_vertices[6] = width; button_rectangle_vertices[7] = height;
+	button_rectangle_vertices[8] = width; button_rectangle_vertices[9] = height; button_rectangle_vertices[10] = 0.f; button_rectangle_vertices[11] = height;
+	button_rectangle_vertices[12] = 0.f; button_rectangle_vertices[13] = height; button_rectangle_vertices[14] = 0.f;  button_rectangle_vertices[15] = 0.f;
+
+	ArrayBufferDeclaration button_background_declarations[] = {
+		{button_rectangle_vertices, sizeof(float) * 16, 2, 0}
+	};
+
+	button->button_background = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
+
+	Material* button_material = material_create(color_shader, color_uniforms, array_size(color_uniforms));
+	drawable_init(button->button_background, NULL, 8, button_background_declarations, 1, button_material, GL_LINES, &window->position, NULL, 0, 0x0);
+
+	widget_init(button, window, parent, margin, layout);
+}
+
 float widget_get_height(Widget* widget) {
-	float height = 0.f;
-
-	switch (widget->type) {
-		case WIDGET_TYPE_LABEL:
-			height = text_get_height(&((Label*)widget)->text);
-			break;
-	}
-
-	return height + widget->margin;
+	return widget->height;
 }
 
 void widget_label_draw(Window* window, Widget* widget, Vector3 position) {
 	Label* label_widget = widget;
-	position.y -= label_widget->text.size;
 
 	static Vector3 label_shadow_displacement = { 0.005f, 0.f };
 
 	text_set_position(&label_widget->text, position);
 
+	Vector2 window_max_position = window_get_max_position(window);
+
 	text_draw(&label_widget->text, &label_shadow_displacement, 
-		window->width * 0.95f - (position.x - window->position.x) - widget->margin * 2,
-		window->height * 0.8f, window_get_anchor(window));
+		window_max_position.x - (position.x - window->position.x) - widget->margin * 2,
+		window_max_position.y, 
+		window_get_anchor(window));
+}
+
+void widget_label_set_transparency(Widget* widget, float transparency) {
+	text_set_transparency(&((Label*)widget)->text, transparency);
+}
+
+void widget_button_draw(Window* window, Widget* widget, Vector3 position) {
+	Button* button = widget;
+
+	text_set_position(&button->text, position);
+
+	Vector2 window_max_position = window_get_max_position(window);
+
+	text_draw(&button->text, NULL,
+		window_max_position.x - (position.x - window->position.x) - widget->margin * 2,
+		window_max_position.y,
+		window_get_anchor(window));
+
+	material_use(button->button_background->material, NULL, NULL);
+	material_set_uniform_vec(button->button_background->material, 1, position);
+
+	drawable_draw(button->button_background);
+}
+
+void widget_button_set_transparency(Widget* widget, float transparency) {
+	Button* button = widget;
+	
+	text_set_transparency(&button->text, transparency);
+	material_set_uniform_float(button->button_background->material, 2, transparency);
 }
 
 static void (*widget_draw_vtable[])(Window* window, Widget* widget, Vector3 position) = {
-	[WIDGET_TYPE_LABEL] = &widget_label_draw
+	[WIDGET_TYPE_LABEL] = &widget_label_draw,
+	[WIDGET_TYPE_BUTTON] = &widget_button_draw,
 };
 
-void widget_draw(Window* window, Widget* widget, Vector3 position) {
-	widget_draw_vtable[widget->type](window, widget, position);
+static void (*widget_set_transparency_vtable[]) (Widget* widget, float transparency) = {
+	[WIDGET_TYPE_LABEL] = &widget_label_set_transparency,
+	[WIDGET_TYPE_BUTTON] = &widget_button_set_transparency,
+};
+
+void widget_draw(Window* window, Widget* widget) {
+	Vector3 real_position = window_get_anchor(window);
+	vector3_add(&real_position, real_position, widget_get_real_position(widget));
+
+	widget_draw_vtable[widget->type](window, widget, real_position);
 }
 
 void widget_set_transparency(Widget* widget, float transparency) {
-	switch (widget->type) {
-	case WIDGET_TYPE_LABEL:
-		text_set_transparency(&((Label*)widget)->text, transparency);
-		break;
-	}
+	widget_set_transparency_vtable[widget->type](widget, transparency);
 }
 
 void render_initialize(void) {
@@ -1177,7 +1263,7 @@ void render_initialize(void) {
 	axis_material = material_create(axis_shader, axis_shader_uniforms, 1);
 	material_set_uniform_vec(axis_material, 0, blue);
 
-	drawable_init(&axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, &axis_position, NULL, 0, 0x0);
+	drawable_init(&axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
 
 	window_background_shader = shader_create("./shaders/vertex_shader_ui_background.glsl", "./shaders/fragment_shader_ui_background.glsl");
 	ui_texture_shader = shader_create("./shaders/vertex_shader_ui_texture.glsl", "./shaders/fragment_shader_texture.glsl");
@@ -1190,7 +1276,7 @@ void render_initialize(void) {
 	else
 		printf("Error when loading image !\n");
 
-	window_title_font_texture = texture_create(&font_image, 1);
+	monospaced_font_texture = texture_create(&font_image, 1);
 	image_destroy(&font_image);
 }
 

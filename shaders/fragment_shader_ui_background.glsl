@@ -31,8 +31,10 @@ void main(void) {
 	vec3 distance_vector = FragPos - (position + vec3(width / 2, height / 2, 0));
 
 	float distance_to_middle = length(vec3(distance_vector.x / width, distance_vector.y / height, distance_vector.z));
-	float rounding_effect = 1 - clamp(distance_to_middle, 0, 1) * 1.7;
+	float rounding_effect = 1 - clamp(distance_to_middle, 0, 1) * 1.5;
 
-	FragColor = vec4(color + vec3(rand(), rand(), rand()) * 0.1, 
-		transparency * clamp((sin(relative_position.y * 700/* + time * 70*/) + 1.5) / 3 * rounding_effect * 1.3f, 0, 1));
+	rounding_effect = clamp(rounding_effect * 10, 0, 0.8);
+
+	FragColor = vec4(color,// + vec3(rand(), rand(), rand()) * 0.1, 
+		transparency * clamp((sin(relative_position.y * 700) + 1.8) / 3, 0, 1) * rounding_effect * 1.3f);
 }

@@ -53,7 +53,7 @@ Shape* physic_body_get_shape(PhysicBody* body) {
 }
 
 void physic_body_solve_collision(PhysicBody* body1, PhysicBody* body2, Collision* collision) {
-	// Solve only if colliding 
+	// Solve only if colliding
 	if (collision->depth < 0.f)
 		return;
 
@@ -81,11 +81,11 @@ void physic_body_solve_collision(PhysicBody* body1, PhysicBody* body2, Collision
 	vector3_scalar_mul(&impulse_body1, impulse, body1->mass_inv);
 	vector3_scalar_mul(&impulse_body2, impulse, body2->mass_inv);
 
-	// Applying the impulses 
+	// Applying the impulses
 	vector3_sub(&body1->velocity, body1->velocity, impulse_body1);
 	vector3_add(&body2->velocity, body2->velocity, impulse_body2);
 
-	// Position correction  
+	// Position correction
 	const float percent = 0.0f; // usually 20% to 80%
 	const float correction = (collision->depth / (body1->mass_inv + body2->mass_inv)) * percent;
 
