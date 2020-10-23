@@ -145,6 +145,7 @@ typedef struct {
 	float min_height;
 
 	float transparency;
+	float pack_last_size;
 
 	uint widgets_count;
 	Layout layout;
@@ -964,6 +965,8 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 
 	window->position.z = 0;
 
+	window->pack_last_size = 0.f;
+
 	window->widgets_count = 0;
 	window->layout = LAYOUT_PACK;
 
@@ -1080,8 +1083,6 @@ Vector3 widget_get_real_position(Widget* widget) {
 		return widget_position;
 	}
 	else {
-		widget_position.y -= widget->parent->height;
-
 		Vector3 real_position,
 			parent_position = widget_get_real_position(widget->parent);
 
@@ -1091,23 +1092,22 @@ Vector3 widget_get_real_position(Widget* widget) {
 	}
 }
 
-void widget_init(Widget* widget,  Window* window, Widget* parent, float margin, Layout layout) {
+void widget_init(Widget* widget, Window* window, Widget* parent, float margin, Layout layout) {
 	widget->parent = parent;
 	widget->layout = layout;
 	widget->margin = margin;
 
 	widget->position.x = 0.f;
-	widget->position.y = 0.f;
+	widget->position.y = parent ? -parent->height : -window->pack_last_size;
 
 	widget->index = window->widgets_count;
 
-	for (uint i = 0; i < window->widgets_count; i++) {
-		if (window->widgets[i]->parent == parent && window->widgets[i]->index < widget->index) {
-			widget->position.y -= window->widgets[i]->height + widget->margin;
-		}
-	}
+	for (Widget* ptr = widget; ptr != NULL; ptr = ptr->parent) {
+		if (ptr->parent)
+			ptr->parent->height += widget->height;
+		else
+			window->pack_last_size += widget->height;
 
-	for (Widget* ptr = parent; ptr != NULL; ptr = ptr->parent) {
 		for (uint i = 0; i < window->widgets_count; i++) {
 			if (window->widgets[i]->parent == ptr->parent && window->widgets[i]->index > ptr->index) {
 				window->widgets[i]->position.y -= widget->height + widget->margin;

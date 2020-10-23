@@ -154,9 +154,9 @@ int main(void) {
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n",
 		0.03f, red, 0.01f, LAYOUT_PACK);
 
-//	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, red, 0.01f, 0.01f, LAYOUT_PACK);
+	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, red, 0.01f, 0.01f, LAYOUT_PACK);
 	Widget* label3 = widget_label_create(window1, label2, "TEST\n", 0.03f, green, 0.01f, LAYOUT_PACK);
-	Widget* label4 = widget_label_create(window1, label, "TEST\n", 0.03f, green, 0.01f, LAYOUT_PACK);
+	Widget* label4 = widget_label_create(window1, label, "TEST\n", 0.03f, black, 0.01f, LAYOUT_PACK);
 
 	clock_t spf = 16;
 
