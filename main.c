@@ -140,8 +140,8 @@ int main(void) {
 
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
 		"WERE MADE, AND I ENDURE ETERNALLY\n"
-		"ABANDON EVERY HOPE WHO ENTER HERE\n\n",
-		0.03f, white, 0.01f, LAYOUT_PACK);
+		"ABANDON EVERY HOPE WHO ENTER HERE\n",
+		0.03f, white, 0.05f, LAYOUT_PACK);
 
 	Widget* label2 = widget_label_create(window1, label,
 		"THREE RINGS FOR THE ELVEN-KINGS UNDER THE SKY\n"
@@ -152,11 +152,11 @@ int main(void) {
 		"ONE RING TO RULE THEM ALL, ONE RING TO FIND THEM\n"
 		"ONE RING TO BRING THEM ALL, AND IN THE DARKNESS BIND THEM\n"
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n",
-		0.03f, red, 0.01f, LAYOUT_PACK);
+		0.03f, red, 0.05f, LAYOUT_PACK);
 
-	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, red, 0.01f, 0.01f, LAYOUT_PACK);
-	Widget* label3 = widget_label_create(window1, label2, "TEST\n", 0.03f, green, 0.01f, LAYOUT_PACK);
-	Widget* label4 = widget_label_create(window1, label, "TEST\n", 0.03f, black, 0.01f, LAYOUT_PACK);
+	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, black, 0.05f, 0.05f, LAYOUT_PACK);
+	Widget* label3 = widget_label_create(window1, label2, "TEST\n", 0.03f, green, 0.05f, LAYOUT_PACK);
+	Widget* label4 = widget_label_create(window1, label, "TEST\n", 0.03f, black, 0.05f, LAYOUT_PACK);
 
 	clock_t spf = 16;
 

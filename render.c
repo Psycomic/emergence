@@ -988,9 +988,6 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	window->drawables[0] = background_drawable;
 
 	Vector3 backgroud_color = {
-		//2 / 255.f,
-		//128 / 255.f,
-		//219 / 255.f
 		1 / 255.f,
 		64 / 255.f,
 		109 / 255.f
@@ -1005,7 +1002,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 		{line_vertices, sizeof(float) * 4, 2, 0}
 	};
 
-	Vector3 bar_color = {
+	static Vector3 bar_color = {
 		0.6f, 0.6f, 0.6f
 	};
 
@@ -1013,6 +1010,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	window->drawables[1] = text_bar_drawable;
 
 	material_set_uniform_vec(window->drawables[1]->material, 0, bar_color);
+	material_set_uniform_float(window->drawables[1]->material, 2, 1.f);
 
 	window_set_size(window, width, height);
 	window_set_position(window, position[0], position[1]);
@@ -1074,7 +1072,7 @@ Vector2 window_get_max_position(Window* window) {
 
 Vector3 widget_get_real_position(Widget* widget) {
 	Vector3 widget_position = {
-		widget->position.x + widget->margin, 
+		widget->position.x + widget->margin,
 		widget->position.y - widget->margin,
 		0.f
 	};
@@ -1104,9 +1102,9 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 
 	for (Widget* ptr = widget; ptr != NULL; ptr = ptr->parent) {
 		if (ptr->parent)
-			ptr->parent->height += widget->height;
+			ptr->parent->height += widget->height + widget->margin;
 		else
-			window->pack_last_size += widget->height;
+			window->pack_last_size += widget->height + widget->margin;
 
 		for (uint i = 0; i < window->widgets_count; i++) {
 			if (window->widgets[i]->parent == ptr->parent && window->widgets[i]->index > ptr->index) {
@@ -1141,25 +1139,21 @@ Widget* widget_button_create(Window* window, Widget* parent, char* text, float t
 	Vector3 text_position = { 0.f, 0.f, 0.f };
 	text_init(&button->text, text, monospaced_font_texture, text_size, text_position, 0.f, color);
 
+	button->padding = padding;
 	button->header.height = text_get_height(&button->text) + padding * 2;
-	float width = text_get_width(&button->text);
-	float height = button->header.height;
+
+	float width = text_get_width(&button->text) + padding * 2;
+	float height = button->header.height + padding * 2;
 
 	float* button_rectangle_vertices = malloc(sizeof(float) * 16);
 
-	button_rectangle_vertices[0] = 0.f; button_rectangle_vertices[1] = 0.f, button_rectangle_vertices[2] = 0.f; button_rectangle_vertices[3] = height;
-	button_rectangle_vertices[4] = 0.f; button_rectangle_vertices[5] = height; button_rectangle_vertices[6] = width; button_rectangle_vertices[7] = height;
-	button_rectangle_vertices[8] = width; button_rectangle_vertices[9] = height; button_rectangle_vertices[10] = 0.f; button_rectangle_vertices[11] = height;
-	button_rectangle_vertices[12] = 0.f; button_rectangle_vertices[13] = height; button_rectangle_vertices[14] = 0.f;  button_rectangle_vertices[15] = 0.f;
-
-	ArrayBufferDeclaration button_background_declarations[] = {
-		{button_rectangle_vertices, sizeof(float) * 16, 2, 0}
-	};
-
 	button->button_background = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
+	Vector3 button_background_color = { 1.f, 0.f, 0.f };
 
 	Material* button_material = material_create(color_shader, color_uniforms, array_size(color_uniforms));
-	drawable_init(button->button_background, NULL, 8, button_background_declarations, 1, button_material, GL_LINES, &window->position, NULL, 0, 0x0);
+
+	drawable_rectangle_init(button->button_background, width, height, button_material, GL_TRIANGLES, &window->position, 0x0);
+	material_set_uniform_vec(button_material, 0, button_background_color);
 
 	widget_init(button, window, parent, margin, layout);
 }
@@ -1190,6 +1184,17 @@ void widget_label_set_transparency(Widget* widget, float transparency) {
 void widget_button_draw(Window* window, Widget* widget, Vector3 position) {
 	Button* button = widget;
 
+	Vector3 background_position = position;
+	background_position.y -= button->padding * 2;
+
+	material_use(button->button_background->material, NULL, NULL);
+	material_set_uniform_vec(button->button_background->material, 1, background_position);
+
+	drawable_draw(button->button_background);
+
+	position.x += button->padding;
+	position.y -= button->padding;
+
 	text_set_position(&button->text, position);
 
 	Vector2 window_max_position = window_get_max_position(window);
@@ -1198,11 +1203,6 @@ void widget_button_draw(Window* window, Widget* widget, Vector3 position) {
 		window_max_position.x - (position.x - window->position.x) - widget->margin * 2,
 		window_max_position.y,
 		window_get_anchor(window));
-
-	material_use(button->button_background->material, NULL, NULL);
-	material_set_uniform_vec(button->button_background->material, 1, position);
-
-	drawable_draw(button->button_background);
 }
 
 void widget_button_set_transparency(Widget* widget, float transparency) {
@@ -1254,13 +1254,9 @@ void render_initialize(void) {
 
 	static Vector3 axis_position = { 0.f, 0.f, 0.f };
 
-	static char* axis_shader_uniforms[] = {
-		"color"
-	};
-
 	axis_shader = shader_create("./shaders/vertex_shader_uniform_color.glsl", "./shaders/fragment_shader_uniform_color.glsl");
 
-	axis_material = material_create(axis_shader, axis_shader_uniforms, 1);
+	axis_material = material_create(axis_shader, color_uniforms, array_size(color_uniforms));
 	material_set_uniform_vec(axis_material, 0, blue);
 
 	drawable_init(&axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
