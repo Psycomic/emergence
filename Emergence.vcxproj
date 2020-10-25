@@ -170,9 +170,6 @@
     <ClInclude Include="stack_allocator.h" />
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Notes.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="shaders\fragment_shader_texture.glsl" />
     <None Include="shaders\fragment_shader_ui_background.glsl" />
     <None Include="shaders\fragment_shader_uniform_color.glsl" />

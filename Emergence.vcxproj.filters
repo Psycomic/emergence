@@ -73,9 +73,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Notes.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="shaders\fragment_shader_color.glsl">
       <Filter>shaders\fragment</Filter>
     </None>

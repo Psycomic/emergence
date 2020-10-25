@@ -1,7 +1,7 @@
 #version 330 core
 
 out vec4 FragColor;
-in vec3 FragPos;
+in vec3 fragPos;
 
 uniform vec3 color = vec3(0, 1, 0);
 uniform float transparency = 1;
@@ -26,9 +26,9 @@ float rand() {
 }
 
 void main(void) {
-	vec3 relative_position = FragPos - position;
+	vec3 relative_position = fragPos - position;
 
-	vec3 distance_vector = FragPos - (position + vec3(width / 2, height / 2, 0));
+	vec3 distance_vector = fragPos - (position + vec3(width / 2, height / 2, 0));
 
 	float distance_to_middle = length(vec3(distance_vector.x / width, distance_vector.y / height, distance_vector.z));
 	float rounding_effect = 1 - clamp(distance_to_middle, 0, 1) * 1.5;

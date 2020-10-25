@@ -129,7 +129,7 @@ int main(void) {
 	Vector3 black = { 0, 0, 1 };
 	Vector3 green = { 0, 1, 0 };
 
-	Widget* label = widget_label_create(window1, NULL,
+	Widget* label = widget_button_create(window1, NULL,
 		"THROUGH ME THE WAY INTO THE SUFFERING CITY\n"
 		"THROUGH ME THE WAY TO THE ETERNAL PAIN\n"
 		"THROUGH ME THE WAY THAT RUNS AMONG THE LOST\n\n"
@@ -140,10 +140,10 @@ int main(void) {
 
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
 		"WERE MADE, AND I ENDURE ETERNALLY\n"
-		"ABANDON EVERY HOPE WHO ENTER HERE\n",
-		0.03f, white, 0.05f, LAYOUT_PACK);
+		"ABANDON EVERY HOPE WHO ENTER HERE",
+		0.03f, 0.05f, white, LAYOUT_PACK);
 
-	Widget* label2 = widget_label_create(window1, label,
+	Widget* label2 = widget_button_create(window1, label,
 		"THREE RINGS FOR THE ELVEN-KINGS UNDER THE SKY\n"
 		"SEVEN FOR THE DWARF LORDS IN THEIR HALLS OF STONE\n"
 		"NINE FOR MORTAL MEN DOOMED TO DIE\n"
@@ -151,12 +151,12 @@ int main(void) {
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n"
 		"ONE RING TO RULE THEM ALL, ONE RING TO FIND THEM\n"
 		"ONE RING TO BRING THEM ALL, AND IN THE DARKNESS BIND THEM\n"
-		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n",
-		0.03f, red, 0.05f, LAYOUT_PACK);
+		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE",
+		0.03f, 0.05f, red, LAYOUT_PACK);
 
-	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, black, 0.05f, 0.05f, LAYOUT_PACK);
-	Widget* label3 = widget_label_create(window1, label2, "TEST\n", 0.03f, green, 0.05f, LAYOUT_PACK);
-	Widget* label4 = widget_label_create(window1, label, "TEST\n", 0.03f, black, 0.05f, LAYOUT_PACK);
+	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, 0.05f, black, LAYOUT_PACK);
+	Widget* label3 = widget_button_create(window1, label2, "TEST", 0.03f, 0.05f, green, LAYOUT_PACK);
+	Widget* label4 = widget_button_create(window1, label, "TEST", 0.03f, 0.05f, black, LAYOUT_PACK);
 
 	clock_t spf = 16;
 
