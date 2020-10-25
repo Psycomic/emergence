@@ -1023,6 +1023,8 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 
 	material_set_uniform_vec(window->drawables[1]->material, 0, bar_color);
 	material_set_uniform_float(window->drawables[1]->material, 2, 1.f);
+	material_set_uniform_float(window->drawables[1]->material, 3, -1.f);
+	material_set_uniform_float(window->drawables[1]->material, 4, -1.f);
 
 	window_set_size(window, width, height);
 	window_set_position(window, position[0], position[1]);
@@ -1070,7 +1072,7 @@ void window_draw(Window* window) {
 Vector2 window_get_max_position(Window* window) {
 	Vector2 max_positon;
 
-	max_positon.x = window->width * 0.95f;
+	max_positon.x = window->width * 0.95f - (window_get_anchor(window).x - window->position.x);
 	max_positon.y = window->height * 0.8f;
 
 	return max_positon;
@@ -1181,7 +1183,7 @@ void widget_label_draw(Window* window, Widget* widget, Vector3 position) {
 	Vector2 window_max_position = window_get_max_position(window);
 
 	text_draw(&label_widget->text, &label_shadow_displacement, 
-		window_max_position.x - (position.x - window->position.x),
+		window_max_position.x,
 		window_max_position.y, 
 		window_get_anchor(window));
 }
@@ -1192,20 +1194,22 @@ void widget_button_draw(Window* window, Widget* widget, Vector3 position) {
 	Vector3 background_position = position;
 	background_position.y -= text_get_height(&button->text) - button->text.size;
 
-	material_use(button->button_background->material, NULL, NULL);
+	Vector2 window_max_position = window_get_max_position(window);
+
 	material_set_uniform_vec(button->button_background->material, 1, background_position);
-	material_set_uniform_float(button->button_background->material, 3, window->width);
-	material_set_uniform_float(button->button_background->material, 4, window->height);
 	material_set_uniform_vec(button->button_background->material, 5, window_get_anchor(window));
+
+	material_set_uniform_float(button->button_background->material, 3, window_max_position.x);
+	material_set_uniform_float(button->button_background->material, 4, window_max_position.y);	
+	
+	material_use(button->button_background->material, NULL, NULL);
 
 	drawable_draw(button->button_background);
 
 	text_set_position(&button->text, position);
 
-	Vector2 window_max_position = window_get_max_position(window);
-
 	text_draw(&button->text, NULL,
-		window_max_position.x - (position.x - window->position.x),
+		window_max_position.x,
 		window_max_position.y,
 		window_get_anchor(window));
 }
@@ -1264,16 +1268,14 @@ void render_initialize(void) {
 	static Vector3 axis_position = { 0.f, 0.f, 0.f };
 
 	axis_shader = shader_create("./shaders/vertex_shader_uniform_color.glsl", "./shaders/fragment_shader_uniform_color.glsl");
+	window_background_shader = shader_create("./shaders/vertex_shader_ui_background.glsl", "./shaders/fragment_shader_ui_background.glsl");
+	ui_texture_shader = shader_create("./shaders/vertex_shader_ui_texture.glsl", "./shaders/fragment_shader_texture.glsl");
+	color_shader = shader_create("./shaders/vertex_shader_ui_background.glsl", "./shaders/fragment_shader_uniform_color.glsl");
 
 	axis_material = material_create(axis_shader, color_uniforms, array_size(color_uniforms));
 	material_set_uniform_vec(axis_material, 0, blue);
 
 	drawable_init(&axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
-
-	window_background_shader = shader_create("./shaders/vertex_shader_ui_background.glsl", "./shaders/fragment_shader_ui_background.glsl");
-	ui_texture_shader = shader_create("./shaders/vertex_shader_ui_texture.glsl", "./shaders/fragment_shader_texture.glsl");
-
-	color_shader = shader_create("./shaders/vertex_shader_ui_background.glsl", "./shaders/fragment_shader_uniform_color.glsl");
 
 	Image font_image;
 	if (image_load_bmp(&font_image, "./fonts/monospace.bmp") >= 0)

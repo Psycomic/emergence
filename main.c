@@ -129,7 +129,7 @@ int main(void) {
 	Vector3 black = { 0, 0, 1 };
 	Vector3 green = { 0, 1, 0 };
 
-	Widget* label = widget_button_create(window1, NULL,
+	Widget* label = widget_label_create(window1, NULL,
 		"THROUGH ME THE WAY INTO THE SUFFERING CITY\n"
 		"THROUGH ME THE WAY TO THE ETERNAL PAIN\n"
 		"THROUGH ME THE WAY THAT RUNS AMONG THE LOST\n\n"
