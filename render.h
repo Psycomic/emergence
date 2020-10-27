@@ -65,7 +65,7 @@ void text_set_color(Text* text, Vector3 color);
 void text_set_angle(Text* text, float angle);
 
 Widget* widget_label_create(Window* window, Widget* parent, char* text, float text_size, float margin, Vector3 text_color, Layout layout);
-Widget* widget_button_create(Window* window, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout);
+Widget* widget_button_create(Window* window, Widget* parent, char* text, float text_size, float margin, float padding, Layout layout);
 
 #endif // RENDER_INTERNAL
 #endif // RENDER_HEADER

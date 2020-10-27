@@ -121,7 +121,7 @@ int main(void) {
 		0.1f, 0.2f
 	};
 
-	Window* window1 = window_create(scene, 0.5f, 0.5f, window1_position, "NAVIGATOR");
+	Window* window1 = window_create(scene, 0.5f, 0.5f, window1_position, "DANTE INFERNO");
 	Window* window2 = window_create(scene, 0.4f, 0.3f, window2_position, "FILES");
 
 	Vector3 white = { 1, 1, 1 };
@@ -141,9 +141,9 @@ int main(void) {
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
 		"WERE MADE, AND I ENDURE ETERNALLY\n"
 		"ABANDON EVERY HOPE WHO ENTER HERE",
-		0.03f, 0.05f, white, LAYOUT_PACK);
+		0.03f, 0.02f, white, LAYOUT_PACK);
 
-	Widget* label2 = widget_button_create(window1, label,
+	Widget* label2 = widget_label_create(window1, label,
 		"THREE RINGS FOR THE ELVEN-KINGS UNDER THE SKY\n"
 		"SEVEN FOR THE DWARF LORDS IN THEIR HALLS OF STONE\n"
 		"NINE FOR MORTAL MEN DOOMED TO DIE\n"
@@ -154,9 +154,9 @@ int main(void) {
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE",
 		0.03f, 0.05f, red, LAYOUT_PACK);
 
-	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, 0.05f, black, LAYOUT_PACK);
-	Widget* label3 = widget_button_create(window1, label2, "TEST", 0.03f, 0.05f, green, LAYOUT_PACK);
-	Widget* label4 = widget_button_create(window1, label, "TEST", 0.03f, 0.05f, black, LAYOUT_PACK);
+	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, 0.02f, 0.01f, LAYOUT_PACK);
+	Widget* label3 = widget_button_create(window1, label2, "TEST", 0.03f, 0.02f, 0.01f, LAYOUT_PACK);
+	Widget* label4 = widget_label_create(window1, label, "TEST", 0.03f, 0.02f, black, LAYOUT_PACK);
 
 	clock_t spf = 16;
 

@@ -85,9 +85,6 @@
     <None Include="shaders\fragment_shader_ui_background.glsl">
       <Filter>shaders\fragment</Filter>
     </None>
-    <None Include="shaders\fragment_shader_uniform_color.glsl">
-      <Filter>shaders\fragment</Filter>
-    </None>
     <None Include="shaders\vertex_shader_color.glsl">
       <Filter>shaders\vertex</Filter>
     </None>
@@ -105,6 +102,9 @@
     </None>
     <None Include="shaders\vertex_shader_uniform_color.glsl">
       <Filter>shaders\vertex</Filter>
+    </None>
+    <None Include="shaders\fragment_shader_uniform_color.glsl">
+      <Filter>shaders\fragment</Filter>
     </None>
   </ItemGroup>
 </Project>

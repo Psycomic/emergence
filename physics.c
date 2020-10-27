@@ -103,12 +103,12 @@ void physic_body_solve_collision(PhysicBody* body1, PhysicBody* body2, Collision
 }
 
 World* world_create(Vector3 gravity, uint capacity) {
-	World* world = stack_allocator_malloc(sizeof(World));
+	World* world = malloc(sizeof(World));
 
 	world->bodies_number = 0;
 	world->gravity = gravity;
 
-	world->bodies = stack_allocator_malloc(sizeof(PhysicBody) * capacity);
+	world->bodies = malloc(sizeof(PhysicBody) * capacity);
 
 	return world;
 }
