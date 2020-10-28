@@ -85,13 +85,13 @@ int main(void) {
 	GLFWwindow* window = opengl_window_create(800, 800, "Hello world");
 	Scene* scene = scene_create(camera_position);
 
-	Vector3 background_color = { 0, 0, 0.2 };
+	Vector3 background_color = { 0, 0, 0.2f };
 
-	GLuint texture_shader = shader_create("./shaders/vertex_shader_texture.glsl", "./shaders/fragment_shader_texture.glsl");
+	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 
 	GLuint lain_texture = texture_create(&lain_image, 1);
 	image_destroy(&lain_image);
-
+	
 	Material* texture_material1 = material_create(texture_shader, 0, NULL);
 
 	ArrayBufferDeclaration triangle1_buffers[] = {
@@ -139,18 +139,18 @@ int main(void) {
 		"THE HIGHEST WISDOM, AND THE PRIMAL LOVE\n\n"
 
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
-		"WERE MADE, AND I ENDURE ETERNALLY\n"
+		"WERE MADE AND I ENDURE ETERNALLY\n"
 		"ABANDON EVERY HOPE WHO ENTER HERE",
 		0.03f, 0.02f, white, LAYOUT_PACK);
 
 	Widget* label2 = widget_label_create(window1, label,
-		"THREE RINGS FOR THE ELVEN-KINGS UNDER THE SKY\n"
+		"THREE RINGS FOR THE ELVEN KINGS UNDER THE SKY\n"
 		"SEVEN FOR THE DWARF LORDS IN THEIR HALLS OF STONE\n"
 		"NINE FOR MORTAL MEN DOOMED TO DIE\n"
 		"ONE FOR THE DARK LORD ON HIS DARK THRONE\n"
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n"
-		"ONE RING TO RULE THEM ALL, ONE RING TO FIND THEM\n"
-		"ONE RING TO BRING THEM ALL, AND IN THE DARKNESS BIND THEM\n"
+		"ONE RING TO RULE THEM ALL ONE RING TO FIND THEM\n"
+		"ONE RING TO BRING THEM ALL AND IN THE DARKNESS BIND THEM\n"
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE",
 		0.03f, 0.05f, red, LAYOUT_PACK);
 
@@ -158,7 +158,8 @@ int main(void) {
 	Widget* label3 = widget_button_create(window1, label2, "TEST", 0.03f, 0.02f, 0.01f, LAYOUT_PACK);
 	Widget* label4 = widget_label_create(window1, label, "TEST", 0.03f, 0.02f, black, LAYOUT_PACK);
 
-	clock_t spf = 16;
+	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
+	printf("Seconds per frame: %d\n", spf);
 
 	while (!glfwWindowShouldClose(window)) {
 		clock_t start = clock();
