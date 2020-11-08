@@ -56,3 +56,13 @@ void dynamic_array_push_back(DynamicArray* arr, void* element) {
 void dynamic_array_at(DynamicArray* arr, uint index, void* buffer) {
 	memcpy(buffer, (char*)arr->data + index * arr->element_size, arr->element_size);
 }
+
+Vector3 rgb_to_vec(uchar r, uchar g, uchar b) {
+	Vector3 result;
+
+	result.x = (float)r / 255.f;
+	result.y = (float)g / 255.f;
+	result.z = (float)b / 255.f;
+
+	return result;
+}

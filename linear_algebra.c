@@ -85,18 +85,48 @@ void mat4_create_scale(Mat4 destination, Vector3 scale) {
 	}
 }
 
-void mat4_create_perspective(Mat4 destination, float far, float near) {
+void mat4_create_perspective(Mat4 destination, float far, float near, float fov, float aspect_ratio) {
+#ifdef _DEBUG
+	assert(fov > 0.f && fov < 180.f);
+#endif
+
+	float s = 1.f / tanf((fov / 2) * ((float)M_PI / 180));
+
 	for (uint i = 0; i < 16; ++i) {
 		destination[i] = 0;
 	}
 
-	destination[0] = 1;
-	destination[5] = 1;
+	destination[0] = s / aspect_ratio;
+	destination[5] = s;
 
 	destination[10] = -(far) / (far - near);
 	destination[11] = -1;
-	destination[14] = -(far * near) / (far - near);
+	destination[14] = -(2 * far * near) / (far - near);
 }
+
+void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, float top, float near, float far) {
+	float lr = 1.f / (left - right);
+	float bt = 1.f / (bottom - top);
+	float nf = 1.f / (near - far);
+	
+	out[0] = -2 * lr;
+	out[1] = 0;
+	out[2] = 0;
+	out[3] = 0;
+	out[4] = 0;
+	out[5] = -2 * bt;
+	out[6] = 0;
+	out[7] = 0;
+	out[8] = 0;
+	out[9] = 0;
+	out[10] = 2 * nf;
+	out[11] = 0;
+	out[12] = (left + right) * lr;
+	out[13] = (top + bottom) * bt;
+	out[14] = (far + near) * nf;
+	out[15] = 1;
+}
+
 
 void mat4_create_rotation_x(Mat4 destination, float angle) {
 	for (uint i = 0; i < 4; ++i) {
@@ -245,7 +275,7 @@ float point_line_intersect(float l1_projection, float l2_projection, float l1_di
 
 Collision triangle_triangle_collide(Vector3* triangle1, Vector3* triangle2) {
 	Collision result = { -1.f, {0.f, 0.f, 0.f} };
-	
+
 	Vector3 plane1_normal;
 	Vector3 plane2_normal;
 
@@ -258,17 +288,17 @@ Collision triangle_triangle_collide(Vector3* triangle1, Vector3* triangle2) {
 	for (uint i = 0; i < 3; i++)
 		dot_plane1[i] = vector3_dot(plane1_normal, triangle2[i]) + d1;
 
-	if ((dot_plane1[0] < 0.f) == (dot_plane1[1] < 0.f) && 
+	if ((dot_plane1[0] < 0.f) == (dot_plane1[1] < 0.f) &&
 		(dot_plane1[1] < 0.f) == (dot_plane1[2] < 0.f))
 		return result;
-	
+
 	float dot_plane2[3];
 	float d2 = -vector3_dot(plane2_normal, triangle2[0]);
 
 	for (uint i = 0; i < 3; i++)
 		dot_plane2[i] = vector3_dot(plane2_normal, triangle1[i]) + d2;
 
-	if ((dot_plane2[0] < 0.f) == (dot_plane2[1] < 0.f) && 
+	if ((dot_plane2[0] < 0.f) == (dot_plane2[1] < 0.f) &&
 		(dot_plane2[1] < 0.f) == (dot_plane2[2] < 0.f))
 		return result;
 
@@ -338,7 +368,7 @@ Collision shape_shape_collide(Shape* shape1, Shape* shape2) {
 		Vector3 shape1_triangle[3];
 
 		uint id_x, id_y, id_z;
-		
+
 		if (shape1->elements) {
 			id_x = shape1->elements[x];
 			id_y = shape1->elements[x + 1];

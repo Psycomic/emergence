@@ -45,12 +45,6 @@ int main(void) {
 		printf("Success loading lain !\n");
 	else
 		printf("Error when loading image !\n");
-	/*
-	Image lain_image_png;
-	if (image_load_png(&lain_image_png, "./images/copland_os_enterprise.png") >= 0)
-		printf("Success loading lain !\n");
-	else
-		printf("Error when loading image !\n");*/
 
 	Vector3 camera_position = { 0.f, 0.f, 0.f };
 
@@ -82,8 +76,8 @@ int main(void) {
 	PhysicBody* triangle2_body = world_body_add(physic_world, &triangle2_shape, 1.f);
 
 	// Creating a window and initialize an opengl context
-	GLFWwindow* window = opengl_window_create(800, 800, "Hello world");
-	Scene* scene = scene_create(camera_position);
+	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");
+	Scene* scene = scene_create(camera_position, window);
 
 	Vector3 background_color = { 0, 0, 0.2f };
 
@@ -126,24 +120,25 @@ int main(void) {
 
 	Vector3 white = { 1, 1, 1 };
 	Vector3 red = { 1, 0, 0 };
-	Vector3 black = { 0, 0, 1 };
+	Vector3 blue = { 0, 0, 1 };
+	Vector3 black = { 0, 0, 0 };
 	Vector3 green = { 0, 1, 0 };
 
-	Widget* label = widget_label_create(window1, NULL,
+	Widget* label1 = widget_label_create(window1, NULL,
 		"THROUGH ME THE WAY INTO THE SUFFERING CITY\n"
 		"THROUGH ME THE WAY TO THE ETERNAL PAIN\n"
 		"THROUGH ME THE WAY THAT RUNS AMONG THE LOST\n\n"
 
 		"JUSTICE URGED ON MY HIGH ARTIFICER\n"
 		"MY MAKER WAS DIVINE AUTHORITY\n"
-		"THE HIGHEST WISDOM, AND THE PRIMAL LOVE\n\n"
+		"THE HIGHEST WISDOM AND THE PRIMAL LOVE\n\n"
 
 		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
 		"WERE MADE AND I ENDURE ETERNALLY\n"
 		"ABANDON EVERY HOPE WHO ENTER HERE",
-		0.03f, 0.02f, white, LAYOUT_PACK);
+		10.f, 7.f, black, LAYOUT_PACK);
 
-	Widget* label2 = widget_label_create(window1, label,
+	Widget* label2 = widget_label_create(window1, label1,
 		"THREE RINGS FOR THE ELVEN KINGS UNDER THE SKY\n"
 		"SEVEN FOR THE DWARF LORDS IN THEIR HALLS OF STONE\n"
 		"NINE FOR MORTAL MEN DOOMED TO DIE\n"
@@ -152,11 +147,12 @@ int main(void) {
 		"ONE RING TO RULE THEM ALL ONE RING TO FIND THEM\n"
 		"ONE RING TO BRING THEM ALL AND IN THE DARKNESS BIND THEM\n"
 		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE",
-		0.03f, 0.05f, red, LAYOUT_PACK);
+		10.f, 7.f, red, LAYOUT_PACK);
 
-	Widget* button = widget_button_create(window1, NULL, "CLICK ME", 0.03f, 0.02f, 0.01f, LAYOUT_PACK);
-	Widget* label3 = widget_button_create(window1, label2, "TEST", 0.03f, 0.02f, 0.01f, LAYOUT_PACK);
-	Widget* label4 = widget_label_create(window1, label, "TEST", 0.03f, 0.02f, black, LAYOUT_PACK);
+	Widget* button1 = widget_button_create(window1, NULL, "CLICK ME", 10.f, 7.f, 5.f, LAYOUT_PACK);
+	Widget* button2 = widget_button_create(window1, label2, "CANCEL", 10.f, 7.f, 5.f, LAYOUT_PACK);
+	
+	Widget* label4 = widget_label_create(window1, label1, "OK", 10.f, 7.f, blue, LAYOUT_PACK);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 	printf("Seconds per frame: %d\n", spf);

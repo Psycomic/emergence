@@ -6,7 +6,10 @@
 
 #include <GL/glew.h>
 
+#include "linear_algebra.h"
+
 typedef unsigned int uint;
+typedef unsigned char uchar;
 
 typedef struct {
 	void* data;
@@ -18,6 +21,8 @@ int read_file(char* buffer, const char* filename);
 
 float random_float(void);
 void random_arrayf(float* destination, uint size);
+
+Vector3 rgb_to_vec(uchar r, uchar g, uchar b);
 
 void memory_multiple_copy_f(float* src, float* dst, uint repeat, uint size);
 

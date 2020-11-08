@@ -12,6 +12,8 @@ uniform bool is_text = false;
 uniform float max_width = 0.1f;
 uniform float max_height = 0.1f;
 
+uniform mat4 view_position;
+
 uniform vec3 anchor_position;
 
 uniform vec3 color = vec3(1, 0, 0);

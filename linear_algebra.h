@@ -48,7 +48,8 @@ void vector3_normalize(Vector3* dest, Vector3 src);
 
 void mat4_create_translation(Mat4 destination, Vector3 direction);
 void mat4_create_scale(Mat4 destination, Vector3 scale);
-void mat4_create_perspective(Mat4 destination, float far, float near);
+void mat4_create_perspective(Mat4 destination, float far, float near, float fov, float aspect_ratio);
+void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, float top, float near, float far);
 
 void mat4_create_rotation_x(Mat4 destination, float angle);
 void mat4_create_rotation_y(Mat4 destination, float angle);

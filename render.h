@@ -52,7 +52,7 @@ GLuint texture_create(Image* image, bool generate_mipmap);
 void drawable_update(Drawable* drawable);
 void drawable_update_buffer(Drawable* drawable, uint buffer_id);
 
-Scene* scene_create(Vector3 camera_position);
+Scene* scene_create(Vector3 camera_position, GLFWwindow* window);
 Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_number, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
 Window* window_create(Scene* scene, float width, float height, float* position, char* title);
 void scene_draw(Scene* scene, Vector3 clear_color);
