@@ -20,16 +20,27 @@ void usleep(clock_t time) {
 
 #endif // __linux__
 
-
 #include "misc.h"
 #include "render.h"
 #include "physics.h"
 #include "images.h"
+#include "noise.h"
 
 #define WORLD_STEP 0.1f
-#define MAX_CUBES_NUMBER 500
 
-#define CUBE_SIZE 50
+#define TERRAIN_SIZE 100
+
+#define POINTS_COUNT 50
+
+float points[POINTS_COUNT * 2];
+
+float terrain_noise(float x, float y) {
+	float positon[2] = {
+		x, y
+	};
+
+	return voronoi_noise(2, points, POINTS_COUNT, positon, &cellular_noise);
+}
 
 int main(void) {
 	srand((uint)time(NULL));  // Seed for random number generation
@@ -75,6 +86,21 @@ int main(void) {
 	Shape triangle2_shape = { {0.f, 1.f, 0.5f}, triangle2_vertices, NULL, 3, 3 };
 	PhysicBody* triangle2_body = world_body_add(physic_world, &triangle2_shape, 1.f);
 
+	Vector3* terrain_vertices = malloc(sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE);
+	unsigned short* terrain_indexes = malloc(sizeof(unsigned short) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
+	Vector3* terrain_color = malloc(sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
+
+	random_arrayf(points, 2 * POINTS_COUNT);
+
+	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
+		terrain_color[i].x = random_float();
+		terrain_color[i].y = 0.f;
+		terrain_color[i].z = random_float();
+	}
+
+	terrain_create(terrain_vertices, TERRAIN_SIZE, 5.f, 10.f, &terrain_noise);
+	terrain_elements(terrain_indexes, TERRAIN_SIZE);
+
 	// Creating a window and initialize an opengl context
 	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");
 	Scene* scene = scene_create(camera_position, window);
@@ -82,6 +108,7 @@ int main(void) {
 	Vector3 background_color = { 0, 0, 0.2f };
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
+	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
 
 	GLuint lain_texture = texture_create(&lain_image, 1);
 	image_destroy(&lain_image);
@@ -107,6 +134,17 @@ int main(void) {
 
 	Drawable* triangle2_drawable = drawable_create(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
 
+	Material* terrain_material = material_create(color_shader, NULL, 0);
+
+	ArrayBufferDeclaration terrain_buffers[] = {
+		{terrain_vertices, sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE, 3, 0},
+		{terrain_color, sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, 3, 1}
+	};
+
+	Vector3 terrain_position = { 0.f, -5.f, 0.f };
+
+	Drawable* terrain_drawable = drawable_create(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
+
 	float window1_position[] = {
 		0.5f, 0.2f
 	};
@@ -124,6 +162,7 @@ int main(void) {
 	Vector3 black = { 0, 0, 0 };
 	Vector3 green = { 0, 1, 0 };
 
+	// Window 1's widgets
 	Widget* label1 = widget_label_create(window1, NULL,
 		"THROUGH ME THE WAY INTO THE SUFFERING CITY\n"
 		"THROUGH ME THE WAY TO THE ETERNAL PAIN\n"
@@ -154,17 +193,22 @@ int main(void) {
 	
 	Widget* label4 = widget_label_create(window1, label1, "OK", 10.f, 7.f, blue, LAYOUT_PACK);
 
+	// Window 2's widgets
+	Widget* label5 = widget_label_create(window2, NULL, "HELLO WORLD\nFUCK YOU", 10.f, 4.f, red, LAYOUT_PACK);
+
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 	printf("Seconds per frame: %d\n", spf);
 
+	glfwPollEvents();
+
+	clock_t start = clock();
 	while (!glfwWindowShouldClose(window)) {
-		clock_t start = clock();
+
 		scene_draw(scene, background_color);
+		scene_handle_events(scene, window);
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();
-
-		scene_handle_events(scene, window);
 
 		if (glfwGetKey(window, GLFW_KEY_Q)) {
 			world_update(physic_world, 0.01f);
@@ -175,6 +219,8 @@ int main(void) {
 
 		clock_t end = clock();
 		usleep(max(spf - (end - start), 0));
+
+		start = clock();
 	}
 
 	glfwTerminate();
