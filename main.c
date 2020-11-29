@@ -6,6 +6,7 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <assert.h>
 
 #ifdef _WIN32 
 #include <windows.h>
@@ -28,18 +29,33 @@ void usleep(clock_t time) {
 
 #define WORLD_STEP 0.1f
 
-#define TERRAIN_SIZE 100
+#define TERRAIN_SIZE 255
 
-#define POINTS_COUNT 50
+#define POINTS_COUNT 100
 
 float points[POINTS_COUNT * 2];
+
+static Scene* scene;
 
 float terrain_noise(float x, float y) {
 	float positon[2] = {
 		x, y
 	};
 
-	return voronoi_noise(2, points, POINTS_COUNT, positon, &cellular_noise);
+	return voronoi_noise(2, points, POINTS_COUNT, positon, &cave_noise);
+}
+
+void click_callback(Widget* widget, Event* evt) {
+	float window_position[] = {
+		random_float() * 800.f - 400.f, 
+		random_float() * 600.f - 300.f
+	};
+
+	WindowID confirm_window = window_create(scene, 200.f, 100.f, window_position, "CONFIRM");
+
+	widget_label_create(confirm_window, scene, NULL, "DO YOU WANT TO CONFIRM", 14.f, 5.f, red, LAYOUT_PACK);
+	widget_button_create(confirm_window, scene, NULL, "YES", 10.f, 5.f, 5.f, LAYOUT_PACK);
+	widget_button_create(confirm_window, scene, NULL, "NO", 10.f, 5.f, 5.f, LAYOUT_PACK);
 }
 
 int main(void) {
@@ -92,18 +108,20 @@ int main(void) {
 
 	random_arrayf(points, 2 * POINTS_COUNT);
 
-	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
-		terrain_color[i].x = random_float();
-		terrain_color[i].y = 0.f;
-		terrain_color[i].z = random_float();
-	}
-
-	terrain_create(terrain_vertices, TERRAIN_SIZE, 5.f, 10.f, &terrain_noise);
+	terrain_create(terrain_vertices, TERRAIN_SIZE, 10.f, 20.f, &terrain_noise);
 	terrain_elements(terrain_indexes, TERRAIN_SIZE);
+
+	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
+		float height = terrain_vertices[terrain_indexes[i]].y / 5.f;
+
+		terrain_color[terrain_indexes[i]].x = height;
+		terrain_color[terrain_indexes[i]].y = 0.f;
+		terrain_color[terrain_indexes[i]].z = 1.f;
+	}
 
 	// Creating a window and initialize an opengl context
 	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");
-	Scene* scene = scene_create(camera_position, window);
+	scene = scene_create(camera_position, window);
 
 	Vector3 background_color = { 0, 0, 0.2f };
 
@@ -153,48 +171,17 @@ int main(void) {
 		0.1f, 0.2f
 	};
 
-	Window* window1 = window_create(scene, 0.5f, 0.5f, window1_position, "DANTE INFERNO");
-	Window* window2 = window_create(scene, 0.4f, 0.3f, window2_position, "FILES");
-
-	Vector3 white = { 1, 1, 1 };
-	Vector3 red = { 1, 0, 0 };
-	Vector3 blue = { 0, 0, 1 };
-	Vector3 black = { 0, 0, 0 };
-	Vector3 green = { 0, 1, 0 };
+	WindowID terrain_window = window_create(scene, 0.5f, 0.5f, window1_position, "EDIT TERRAIN");
 
 	// Window 1's widgets
-	Widget* label1 = widget_label_create(window1, NULL,
-		"THROUGH ME THE WAY INTO THE SUFFERING CITY\n"
-		"THROUGH ME THE WAY TO THE ETERNAL PAIN\n"
-		"THROUGH ME THE WAY THAT RUNS AMONG THE LOST\n\n"
-
-		"JUSTICE URGED ON MY HIGH ARTIFICER\n"
-		"MY MAKER WAS DIVINE AUTHORITY\n"
-		"THE HIGHEST WISDOM AND THE PRIMAL LOVE\n\n"
-
-		"BEFORE ME NOTHING BUT ETERNAL THINGS\n"
-		"WERE MADE AND I ENDURE ETERNALLY\n"
-		"ABANDON EVERY HOPE WHO ENTER HERE",
-		10.f, 7.f, black, LAYOUT_PACK);
-
-	Widget* label2 = widget_label_create(window1, label1,
-		"THREE RINGS FOR THE ELVEN KINGS UNDER THE SKY\n"
-		"SEVEN FOR THE DWARF LORDS IN THEIR HALLS OF STONE\n"
-		"NINE FOR MORTAL MEN DOOMED TO DIE\n"
-		"ONE FOR THE DARK LORD ON HIS DARK THRONE\n"
-		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE\n"
-		"ONE RING TO RULE THEM ALL ONE RING TO FIND THEM\n"
-		"ONE RING TO BRING THEM ALL AND IN THE DARKNESS BIND THEM\n"
-		"IN THE LAND OF MORDOR WHERE THE SHADOWS LIE",
-		10.f, 7.f, red, LAYOUT_PACK);
-
-	Widget* button1 = widget_button_create(window1, NULL, "CLICK ME", 10.f, 7.f, 5.f, LAYOUT_PACK);
-	Widget* button2 = widget_button_create(window1, label2, "CANCEL", 10.f, 7.f, 5.f, LAYOUT_PACK);
+	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL, "EDIT TERRAIN\n", 20.f, 0.f, black, LAYOUT_PACK);
 	
-	Widget* label4 = widget_label_create(window1, label1, "OK", 10.f, 7.f, blue, LAYOUT_PACK);
+	Widget* terrain_presentation_width = widget_label_create(terrain_window, scene, terrain_presentation, "WIDTH\n", 10.f, 0.f, red, LAYOUT_PACK);
+	Widget* terrain_presentation_height = widget_label_create(terrain_window, scene, terrain_presentation, "HEIGHT\n", 10.f, 0.f, red, LAYOUT_PACK);
 
-	// Window 2's widgets
-	Widget* label5 = widget_label_create(window2, NULL, "HELLO WORLD\nFUCK YOU", 10.f, 4.f, red, LAYOUT_PACK);
+	Widget* button = widget_button_create(terrain_window, scene, terrain_presentation, "CONFIRM", 12.f, 0.f, 5.f, LAYOUT_PACK);
+
+	widget_set_on_click(button, &click_callback);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 	printf("Seconds per frame: %d\n", spf);

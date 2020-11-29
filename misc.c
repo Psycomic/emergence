@@ -38,26 +38,50 @@ void memory_multiple_copy_f(float* src, float* dst, uint repeat, uint size) {
 			dst[i + j] = src[i / repeat];
 }
 
-#define DYNAMIC_ARRAY_DEFAULT_CAPACITY 10
+Vector3 rgb_to_vec(uchar r, uchar g, uchar b) {
+	Vector3 result;
+
+	result.x = (float)r / 255.f;
+	result.y = (float)g / 255.f;
+	result.z = (float)b / 255.f;
+
+	return result;
+}
+
+#define DYNAMIC_ARRAY_DEFAULT_CAPACITY ((size_t)2)
 
 void dynamic_array_create_fn(DynamicArray* arr, size_t element_size) {
 	arr->size = 0;
 	arr->element_size = element_size;
-	arr->capacity = DYNAMIC_ARRAY_DEFAULT_CAPACITY * arr->element_size;
-	arr->data = malloc(arr->capacity);
+	arr->capacity = DYNAMIC_ARRAY_DEFAULT_CAPACITY;
+	arr->data = malloc(arr->capacity * arr->element_size);
 }
 
-void dynamic_array_push_back(DynamicArray* arr, void* element) {
-	if ((++arr->size) * arr->element_size > arr->capacity) {
-		arr->data = realloc(arr->data, arr->capacity + DYNAMIC_ARRAY_DEFAULT_CAPACITY * arr->element_size);
-		assert(arr->data != NULL);
+void* dynamic_array_push_back(DynamicArray* arr) {
+	if (arr->size == arr->capacity) {
+		arr->capacity += DYNAMIC_ARRAY_DEFAULT_CAPACITY;
+
+		arr->data = realloc(arr->data, arr->capacity * arr->element_size);
 	}
-	
-	memcpy((char*)arr->data + (arr->size - 1), element, arr->element_size);
+
+	return ((uchar*)arr->data) + arr->size++ * arr->element_size;
 }
 
-void dynamic_array_at(DynamicArray* arr, uint index, void* buffer) {
-	memcpy(buffer, (char*)arr->data + index * arr->element_size, arr->element_size);
+void* dynamic_array_at(DynamicArray* arr, uint index) {
+	assert(index < arr->size);
+
+	return (uchar*)arr->data + (size_t)index * arr->element_size;
+}
+
+void dynamic_array_swap(DynamicArray* arr, uint src, uint dst) {
+	assert(src < arr->size&& dst < arr->size);
+
+	memcpy((uchar*)arr->data + (size_t)dst * arr->element_size, (uchar*)arr->data + (size_t)src * arr->element_size, arr->element_size);
+}
+
+void dynamic_array_remove(DynamicArray* arr, uint id) {
+	dynamic_array_swap(arr, arr->size - 1, id);
+	arr->size--;
 }
 
 List* cons(void* data, size_t data_size, List* next) {
@@ -109,12 +133,19 @@ void* list_map(List* list, void (*function)(void*)) {
 	}
 }
 
-Vector3 rgb_to_vec(uchar r, uchar g, uchar b) {
-	Vector3 result;
+#undef malloc
+#undef free
 
-	result.x = (float)r / 255.f;
-	result.y = (float)g / 255.f;
-	result.z = (float)b / 255.f;
+void* debug_malloc(size_t size, const char* file, const uint line) {
+	void* return_value = malloc(size);
 
-	return result;
+	printf("Malloc %p at %s:%d\n", return_value, file, line);
+
+	return return_value;
+}
+
+void* debug_free(void* ptr, const char* file, const uint line) {
+	printf("Free %p at %s:%d\n", ptr, file, line);
+
+	free(ptr);
 }
