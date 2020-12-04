@@ -119,6 +119,19 @@ int main(void) {
 		terrain_color[terrain_indexes[i]].z = 1.f;
 	}
 
+#define ITERATIONS_NUMBER 5000
+
+	Vector3 hopalong_points[ITERATIONS_NUMBER];
+	Vector3 hopalong_color[ITERATIONS_NUMBER];
+
+	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
+		hopalong_color[i].x = random_float();
+		hopalong_color[i].y = 0.f;
+		hopalong_color[i].z = 1.f;
+	}
+
+	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, -1.5f, 2.2f, -1.4f, 0.1f);
+
 	// Creating a window and initialize an opengl context
 	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");
 	scene = scene_create(camera_position, window);
@@ -131,7 +144,7 @@ int main(void) {
 	GLuint lain_texture = texture_create(&lain_image, 1);
 	image_destroy(&lain_image);
 	
-	Material* texture_material1 = material_create(texture_shader, 0, NULL);
+	Material* texture_material1 = material_create(texture_shader, NULL, 0);
 
 	ArrayBufferDeclaration triangle1_buffers[] = {
 		{triangle1_vertices, sizeof(triangle1_vertices), 3, 0},
@@ -143,7 +156,7 @@ int main(void) {
 	GLuint copland_os_texture = texture_create(&copland_os_image, 1);
 	image_destroy(&copland_os_image);
 
-	Material* texture_material2 = material_create(texture_shader, 0, NULL);
+	Material* texture_material2 = material_create(texture_shader, NULL, 0);
 
 	ArrayBufferDeclaration triangle2_buffers[] = {
 		{triangle2_vertices, sizeof(triangle2_vertices), 3, 0},
@@ -162,6 +175,17 @@ int main(void) {
 	Vector3 terrain_position = { 0.f, -5.f, 0.f };
 
 	Drawable* terrain_drawable = drawable_create(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
+
+	Material* hopalong_material = material_create(color_shader, NULL, 0);
+
+	ArrayBufferDeclaration hopalong_buffers[] = {
+		{hopalong_points, sizeof(hopalong_points), 3, 0},
+		{hopalong_color, sizeof(hopalong_color), 3, 1}
+	};
+
+	Vector3	hopalong_position = { 10.f, 0.f, 5.f };
+
+	Drawable* hopalong_drawable = drawable_create(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
 	float window1_position[] = {
 		0.5f, 0.2f
@@ -184,7 +208,7 @@ int main(void) {
 	widget_set_on_click(button, &click_callback);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
-	printf("Seconds per frame: %d\n", spf);
+	printf("Seconds per frame: %ld\n", spf);
 
 	glfwPollEvents();
 

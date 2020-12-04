@@ -1015,10 +1015,10 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 		float screen_x = (float)xpos - (width / 2.f),
 			screen_y = -(float)ypos + (height / 2.f);
 
-		for (uint i = 0; i < ((Window*)dynamic_array_at(&scene->windows, scene->selected_window))->widgets_count; i++) {
-			Widget* widget = ((Window*)dynamic_array_at(&scene->windows, scene->selected_window))->widgets[i];
+		for (uint i = 0; i < DYNAMIC_ARRAY_AT(&scene->windows, scene->selected_window, Window)->widgets_count; i++) {
+			Widget* widget = DYNAMIC_ARRAY_AT(&scene->windows, scene->selected_window, Window)->widgets[i];
 
-			if (widget_is_colliding(widget, ((Window*)dynamic_array_at(&scene->windows, scene->selected_window)), screen_x, screen_y)) {
+			if (widget_is_colliding(widget, dynamic_array_at(&scene->windows, scene->selected_window), screen_x, screen_y)) {
 				Event evt;
 				evt.mouse_info.screen_x = screen_x;
 				evt.mouse_info.screen_y = screen_y;
@@ -1556,7 +1556,6 @@ void widget_destroy(Widget* widget) {
 
 void render_initialize(void) {
 	// Initializing the drawable axis
-	static Vector3 blue = { 0, 0, 1 };
 
 	static Vector3 axis[] = {
 		0.f, 0.f, 0.f,

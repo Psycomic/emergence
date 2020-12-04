@@ -8,6 +8,7 @@ typedef unsigned int uint;
 float random_float(void);
 float lerp(float a0, float a1, float w);
 float llerp(float a, float b, float w);
+float sign(float x);
 
 // Perlin / octavien noise : interpolated white noise, with layers
 void perlin_initialize_gradient(float* gradient, uint size);
@@ -22,6 +23,9 @@ float voronoi_noise(uint dimensions, float* points, uint points_number, float* p
 float cellular_noise(float* distance, float* position);
 float worley_noise(float* distance, float* position);
 float cave_noise(float* distance, float* position);
+
+// Some interesting noise
+void hopalong_fractal(Vector3* destination, uint iterations_number, float a, float b, float c, float scale);
 
 // Create shapes from noise function
 void terrain_create(Vector3* terrain_vertices, uint size, float height, float width, float (*noise_function)(float x, float y));

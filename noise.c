@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <assert.h>
+
 #include "linear_algebra.h"
 
 #define index(x, y, z, size) x + y * size + z * size * size
@@ -20,6 +22,15 @@ float lerp(float a0, float a1, float w) {
 
 float llerp(float a, float b, float w) {
 	return a + (b - a) * w;
+}
+
+float sign(float x) {
+	if (x > 0.f) {
+		return 1.f;
+	}
+	else {
+		return -1.f;
+	}
 }
 
 float random_float() {
@@ -135,6 +146,24 @@ float cave_noise(float* distance, float* position) {
 float cellular_noise(float* distance, float* position) {
 	return distance[0];
 }
+
+void hopalong_fractal(Vector3* destination, uint iterations_number, float a, float b, float c, float scale) {
+	float x = 0.f,
+		y = 0.f;
+
+	for (uint i = 0; i < iterations_number; i++) {
+		float temp_x = y - sign(x) * sqrtf(abs(b * x - c));
+		float temp_y = a - x;
+
+		x = temp_x;
+		y = temp_y;
+
+		destination[i].x = x * scale;
+		destination[i].y = y * scale;
+		destination[i].z = 0.f;
+	}
+}
+
 
 void terrain_create(Vector3* terrain_vertices, uint size, float height, float width, float (*noise_function)(float x, float y)) {
 	for (uint x = 0; x < size; ++x) {
