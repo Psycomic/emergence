@@ -13,6 +13,21 @@
 
 #include "linear_algebra.h"
 
+void vector2_add(Vector2* dest, Vector2 a, Vector2 b) {
+	dest->x = a.x + b.x;
+	dest->y = a.y + b.y;
+}
+
+void vector2_sub(Vector2* dest, Vector2 a, Vector2 b) {
+	dest->x = a.x - b.x;
+	dest->y = a.y - b.y;
+}
+
+void vector2_neg(Vector2* dest, Vector2 a) {
+	dest->x = -a.x;
+	dest->y = -a.y;
+}
+
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b) {
 	dest->x = a.x + b.x;
 	dest->y = a.y + b.y;

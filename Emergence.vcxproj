@@ -170,6 +170,7 @@
     <ClInclude Include="stack_allocator.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="shaders\fragment_ui_texture.glsl" />
     <None Include="shaders\fragment_ui_button.glsl" />
     <None Include="shaders\fragment_texture.glsl" />
     <None Include="shaders\fragment_ui_background.glsl" />

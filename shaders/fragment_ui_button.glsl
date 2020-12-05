@@ -7,8 +7,8 @@ uniform vec3 color;
 
 uniform float transparency = 1;
 
-uniform vec3 anchor_position;
-uniform vec3 model_position;
+uniform vec2 anchor_position;
+uniform vec2 model_position;
 
 uniform mat4 view_position;
 

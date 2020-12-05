@@ -6,8 +6,10 @@ out vec2 TexCoord;
 out vec2 fragPos;
 
 uniform mat4 view_position;
-uniform vec3 model_position;
-uniform vec3 center_position;
+
+uniform vec2 model_position;
+uniform vec2 center_position;
+
 uniform float angle = 0.f;
 
 mat2 rotate2d(float _angle) {
@@ -16,9 +18,9 @@ mat2 rotate2d(float _angle) {
 }
 
 void main() {
-	vec2 relative_position = model_position.xy - center_position.xy;
-	gl_Position = view_position * vec4(rotate2d(angle) * (vertexPos + relative_position) + center_position.xy, 0.1, 1);
+	vec2 relative_position = model_position - center_position;
+	gl_Position = view_position * vec4(rotate2d(angle) * (vertexPos + relative_position) + center_position, 0.1, 1);
 
-	fragPos = vertexPos.xy + model_position.xy;
+	fragPos = vertexPos + model_position;
 	TexCoord = texPos;
 }

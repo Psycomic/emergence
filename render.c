@@ -21,11 +21,13 @@
 // Shader's uniform abstraction. 
 typedef struct {
 	enum { 
-		UNIFORM_VEC3, UNIFORM_FLOAT, UNIFORM_BOOL 
+		UNIFORM_VEC3, UNIFORM_VEC2,
+		UNIFORM_FLOAT, UNIFORM_BOOL 
 	} type;
 
 	union {
-		Vector3 vec;
+		Vector3 vec3;
+		Vector2 vec2;
 		float f;
 		uint b;
 	} data;
@@ -94,7 +96,7 @@ typedef struct {
 // Abstraction over text. Basically a collection of drawables, each with a 
 // glyph texture, to end up with text
 typedef struct {
-	Vector3 position;
+	Vector2 position;
 	Vector3 color;
 
 	Drawable* drawable;
@@ -150,7 +152,7 @@ typedef struct {
 // Window UI : a width, height, mininum width and transparency.
 // every drawable has its own container, differing from the original scene.
 typedef struct {
-	Vector3 position;
+	Vector2 position;
 
 	float width;
 	float height;
@@ -169,6 +171,12 @@ typedef struct {
 	Drawable* drawables[2];
 	Widget* widgets[64];
 } Window;
+
+typedef struct {
+	GLuint id;
+
+	Buffer buffers[];
+} Shader;
 
 #define SCENE_MAX_WINDOWS 4
 
@@ -222,7 +230,6 @@ static char* ui_button_uniforms[] = {
 
 static char* ui_texture_uniforms[] = {
 	"model_position",
-	"is_text",
 	"color",
 	"angle",
 	"center_position",
@@ -266,7 +273,7 @@ void window_destroy(Scene* scene, uint id);
 void material_use(Material* material, float* model_matrix, float* view_position_matrix);
 
 void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix);
-Vector3 widget_get_real_position(Widget* widget, Window* window);
+Vector2 widget_get_real_position(Widget* widget, Window* window);
 void widget_set_transparency(Widget* widget, float transparency);
 float widget_get_margin_height(Widget* widget);
 GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y);
@@ -675,11 +682,19 @@ Material* material_create(GLuint shader, char** uniforms_position, uint uniforms
 	return new_material;
 }
 
-void material_set_uniform_vec(Material* material, uint uniform_id, Vector3 vec) {
+void material_set_uniform_vec3(Material* material, uint uniform_id, Vector3 vec) {
 	assert(uniform_id < material->uniforms_count);
 
 	material->uniforms[uniform_id].type = UNIFORM_VEC3;
-	material->uniforms[uniform_id].data.vec = vec;
+	material->uniforms[uniform_id].data.vec3 = vec;
+	material->uniforms[uniform_id].is_set = GL_TRUE;
+}
+
+void material_set_uniform_vec2(Material* material, uint uniform_id, Vector2 vec) {
+	assert(uniform_id < material->uniforms_count);
+
+	material->uniforms[uniform_id].type = UNIFORM_VEC2;
+	material->uniforms[uniform_id].data.vec2 = vec;
 	material->uniforms[uniform_id].is_set = GL_TRUE;
 }
 
@@ -715,7 +730,10 @@ void material_use(Material* material, float* model_matrix, float* view_position_
 
 			switch (material->uniforms[i].type) {
 			case UNIFORM_VEC3:
-				glUniform3f(uniform_id, uniforms[i].data.vec.x, uniforms[i].data.vec.y, uniforms[i].data.vec.z);
+				glUniform3f(uniform_id, uniforms[i].data.vec3.x, uniforms[i].data.vec3.y, uniforms[i].data.vec3.z);
+				break;
+			case UNIFORM_VEC2:
+				glUniform2f(uniform_id, uniforms[i].data.vec2.x, uniforms[i].data.vec2.y);
 				break;
 			case UNIFORM_FLOAT:
 				glUniform1f(uniform_id, uniforms[i].data.f);
@@ -729,20 +747,20 @@ void material_use(Material* material, float* model_matrix, float* view_position_
 }
 
 void text_set_color(Text* text, Vector3 color) {
-	material_set_uniform_vec(text->drawable->material, 2, color);
+	material_set_uniform_vec3(text->drawable->material, 1, color);
 }
 
 void text_set_transparency(Text* text, float transparency) {
-	material_set_uniform_float(text->drawable->material, 5, transparency);
+	material_set_uniform_float(text->drawable->material, 4, transparency);
 }
 
 void text_set_angle(Text* text, float angle) {
 	text->angle = angle;
 
-	material_set_uniform_float(text->drawable->material, 3, text->angle);
+	material_set_uniform_float(text->drawable->material, 2, text->angle);
 }
 
-void text_set_position(Text* text, Vector3 position) {
+void text_set_position(Text* text, Vector2 position) {
 	text->position = position;
 }
 
@@ -778,7 +796,7 @@ float text_get_height(Text* text) {
 }
 
 // Every glyph will be a 32 x 32 texture. This means the image is 64 x 416
-Text* text_create(char* string, GLuint font_texture, float size, Vector3 position, float angle, Vector3 color) {
+Text* text_create(char* string, GLuint font_texture, float size, Vector2 position, float angle, Vector3 color) {
 	Text* text = malloc(sizeof(Text));
 	assert(text != NULL);
 
@@ -792,10 +810,9 @@ Text* text_create(char* string, GLuint font_texture, float size, Vector3 positio
 	uint text_length = strlen(string);
 
 	Material* glyph_material = material_create(ui_texture_shader, ui_texture_uniforms, ARRAY_SIZE(ui_texture_uniforms));
-	material_set_uniform_bool(glyph_material, 1, GL_TRUE);
-	material_set_uniform_vec(glyph_material, 2, text->color);
-	material_set_uniform_float(glyph_material, 3, text->angle);
-	material_set_uniform_float(glyph_material, 5, 1.f);
+	material_set_uniform_vec3(glyph_material, 1, text->color);
+	material_set_uniform_float(glyph_material, 2, text->angle);
+	material_set_uniform_float(glyph_material, 4, 1.f);
 
 	float* drawable_uvs = malloc(sizeof(float) * 12 * text_length);
 	float* drawable_vertices = malloc(sizeof(float) * 12 * text_length);
@@ -877,35 +894,33 @@ void text_destroy(Text* text) {
 	free(text);
 }
 
-void text_draw(Text* text, Vector3* shadow_displacement, float max_width, float max_height, Vector3 anchor, Mat4 view_position_matrix) {
-	Vector3 text_position = text->position;
+void text_draw(Text* text, Vector2* shadow_displacement, float max_width, float max_height, Vector2 anchor, Mat4 view_position_matrix) {
+	Vector2 text_position = text->position;
 
 	// Setting text uniforms
-	material_set_uniform_float(text->drawable->material, 6, max_width);		// Max width
-	material_set_uniform_float(text->drawable->material, 7, max_height);	// Max height
+	material_set_uniform_float(text->drawable->material, 5, max_width);		// Max width
+	material_set_uniform_float(text->drawable->material, 6, max_height);	// Max height
 	
-	material_set_uniform_vec(text->drawable->material, 4, text_position);	// Position
-
-	material_set_uniform_vec(text->drawable->material, 8, anchor);			// Anchor position
+	material_set_uniform_vec2(text->drawable->material, 3, text_position);	// Position
+	material_set_uniform_vec2(text->drawable->material, 7, anchor);			// Anchor position
 
 	material_use(text->drawable->material, NULL, view_position_matrix);	// Using the text's material
 
 	if (shadow_displacement) {
 		Vector3 shadow_color = { 0.f, 0.f, 0.f };
-		Vector3 shadow_drawable_position;
+		Vector2 shadow_drawable_position;
 
-		vector3_add(&shadow_drawable_position, text_position, *shadow_displacement);	// Setting the shadow's position
+		vector2_add(&shadow_drawable_position, text_position, *shadow_displacement);	// Setting the shadow's position
 
-		glUniform3f(text->drawable->material->uniforms[0].location, shadow_drawable_position.x, shadow_drawable_position.y, shadow_drawable_position.z);	// Model position
-		glUniform3f(text->drawable->material->uniforms[2].location, shadow_color.x, shadow_color.y, shadow_color.z);										// Color
-
+		glUniform3f(text->drawable->material->uniforms[2].location, shadow_color.x, shadow_color.y, shadow_color.z);			// Color
+		glUniform2f(text->drawable->material->uniforms[0].location, shadow_drawable_position.x, shadow_drawable_position.y);	// Model position
 
 		drawable_draw(text->drawable);	// Drawing the shadow
 
 	}
 
-	glUniform3f(text->drawable->material->uniforms[2].location, text->color.x, text->color.y, text->color.z);		// Color
-	glUniform3f(text->drawable->material->uniforms[0].location, text_position.x, text_position.y, text_position.z);	// Model position
+	glUniform3f(text->drawable->material->uniforms[2].location, text->color.x, text->color.y, text->color.z);	// Color
+	glUniform2f(text->drawable->material->uniforms[0].location, text_position.x, text_position.y);				// Model position
 
 	drawable_draw(text->drawable);	// Drawing the text
 }
@@ -1090,7 +1105,7 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 }
 
 void window_update(Window* window) {
-	Vector3 text_position = window->position;
+	Vector2 text_position = window->position;
 	text_position.y += 0.1f * window->height;
 	text_position.x += 6.f;
 
@@ -1106,9 +1121,9 @@ void window_set_position(Window* window, float x, float y) {
 	window_update(window);
 
 	Material* background_material = window->drawables[0]->material;
-	material_set_uniform_vec(background_material, 2, window->position);
+	material_set_uniform_vec2(background_material, 2, window->position);
 
-	material_set_uniform_vec(window->drawables[1]->material, 1, window->position);
+	material_set_uniform_vec2(window->drawables[1]->material, 1, window->position);
 }
 
 void window_set_size(Window* window, float width, float height) {
@@ -1140,8 +1155,6 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window->min_width = 200.f;
 	window->min_height = 100.f;
 
-	window->position.z = 0;
-
 	window->pack_last_size = 0.f;
 
 	window->widgets_count = 0;
@@ -1160,7 +1173,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	// #ECE8D9
 	Vector3 backgroud_color = rgb_to_vec(0x1d, 0x23, 0x86);
 
-	material_set_uniform_vec(background_drawable->material, 0, backgroud_color);
+	material_set_uniform_vec3(background_drawable->material, 0, backgroud_color);
 
 	Drawable* text_bar_drawable = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
 
@@ -1179,7 +1192,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	drawable_init(text_bar_drawable, NULL, 2, text_bar_declarations, 1, material_create(color_shader, color_uniforms, ARRAY_SIZE(color_uniforms)), GL_LINES, NULL, NULL, 0, 0x0);
 	window->drawables[1] = text_bar_drawable;
 
-	material_set_uniform_vec(window->drawables[1]->material, 0, bar_color);
+	material_set_uniform_vec3(window->drawables[1]->material, 0, bar_color);
 
 	window_set_size(window, width, height);
 	window_set_position(window, position[0], position[1]);
@@ -1190,11 +1203,10 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	return scene->windows.size - 1;
 }
 
-Vector3 window_get_anchor(Window* window) {
-	Vector3 window_anchor = { 
+Vector2 window_get_anchor(Window* window) {
+	Vector2 window_anchor = { 
 		window->position.x + 30.f, 
-		window->position.y + window->height - 30.f,
-		0.f
+		window->position.y + window->height - 30.f
 	};
 
 	return window_anchor;
@@ -1213,7 +1225,7 @@ void window_draw(Window* window, Mat4 view_position_matrix) {
 	material_use(line_drawable->material, NULL, view_position_matrix);
 	drawable_draw(line_drawable);
 
-	Vector3 shadow_displacement = { 0.01f, 0.f, 0.f };
+	Vector3 shadow_displacement = { 0.01f, 0.f };
 
 	text_draw(window->title, &shadow_displacement, window->height * 0.8f - 0.05f, window->title->size, window->title->position, view_position_matrix);
 
@@ -1224,7 +1236,7 @@ void window_draw(Window* window, Mat4 view_position_matrix) {
 }
 
 Vector2 window_get_max_position(Window* window) {
-	Vector3 window_anchor = window_get_anchor(window);
+	Vector2 window_anchor = window_get_anchor(window);
 
 	Vector2 max_positon;
 	max_positon.x = window->width - (window_anchor.x - window->position.x);
@@ -1256,23 +1268,22 @@ void window_destroy(Scene* scene, uint id) {
 	scene->selected_window = scene->selected_window % scene->windows.size;
 }
 
-Vector3 widget_get_real_position(Widget* widget, Window* window) {
-	Vector3 widget_position = {
+Vector2 widget_get_real_position(Widget* widget, Window* window) {
+	Vector2 widget_position = {
 		widget->position.x + widget->margin,
-		widget->position.y,
-		0.f
+		widget->position.y
 	};
 
 	if (widget->parent == NULL) {
 		widget_position.y -= widget->margin;
-		vector3_add(&widget_position, widget_position, window_get_anchor(window));
+		vector2_add(&widget_position, widget_position, window_get_anchor(window));
 
 		return widget_position;
 	}
 	else {
-		Vector3 real_position, parent_position = widget_get_real_position(widget->parent, window);
+		Vector2 real_position, parent_position = widget_get_real_position(widget->parent, window);
 
-		vector3_add(&real_position, widget_position, parent_position);
+		vector2_add(&real_position, widget_position, parent_position);
 
 		return real_position;
 	}
@@ -1349,7 +1360,7 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 }
 
 GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y) {
-	Vector3 real_position = widget_get_real_position(widget, window);
+	Vector2 real_position = widget_get_real_position(widget, window);
 
 	if (x <= window->position.x || x >= window->position.x + window->width ||
 		y <= window->position.y || y >= window->position.y + window->height) {
@@ -1387,7 +1398,7 @@ void widget_set_on_click(Widget* widget, EventCallback on_click) {
 Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout) {
 	Window* window = dynamic_array_at(&scene->windows, window_id);
 	
-	Vector3 text_position = { 0.f, 0.f, 0.f };
+	Vector2 text_position = { 0.f, 0.f };
 
 	Label* label = malloc(sizeof(Label));
 
@@ -1411,7 +1422,7 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 
 	static const float border_size = 1.f;
 
-	Vector3 text_position = { 0.f, 0.f, 0.f };
+	Vector2 text_position = { 0.f, 0.f };
 
 	Button* button = malloc(sizeof(Button));	// Allocating the button widget
 	assert(button != NULL);
@@ -1436,17 +1447,17 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 		button_material, GL_TRIANGLES, NULL, 0x0);
 	
 	material_set_uniform_float(button_material, 5, border_size);			// Border size
-	material_set_uniform_vec(button_material, 8, button_background_color);	// Color
+	material_set_uniform_vec3(button_material, 8, button_background_color);	// Color
 
 	widget_init(button, window, parent, margin, layout);	// Intializing the widget
 
 	return button;
 }
 
-void widget_label_draw(Window* window, Widget* widget, Vector3 position, Mat4 view_position_matrix) {
+void widget_label_draw(Window* window, Widget* widget, Vector2 position, Mat4 view_position_matrix) {
 	Label* label_widget = widget;
 
-	static Vector3 label_shadow_displacement = { 0.005f, 0.f };
+	static Vector2 label_shadow_displacement = { 0.005f, 0.f };
 
 	text_set_position(label_widget->text, position);	// Setting the text's position
 
@@ -1455,18 +1466,18 @@ void widget_label_draw(Window* window, Widget* widget, Vector3 position, Mat4 vi
 	text_draw(label_widget->text, &label_shadow_displacement, window_max_position.x, window_max_position.y, window_get_anchor(window), view_position_matrix);
 }
 
-void widget_button_draw(Window* window, Widget* widget, Vector3 position, Mat4 view_position_matrix) {
+void widget_button_draw(Window* window, Widget* widget, Vector2 position, Mat4 view_position_matrix) {
 	Button* button = widget;
 
-	Vector3 background_position = position;		// Calculating the button's background position
+	Vector2 background_position = position;		// Calculating the button's background position
 	background_position.y -= button->header.height + button->padding * 2;
 
 	Vector2 window_max_position = window_get_max_position(window);	// Max position before fading
 
 	Material* button_material = button->button_background->material;
 
-	material_set_uniform_vec(button_material, 0, background_position);			// Position
-	material_set_uniform_vec(button_material, 4, window_get_anchor(window));	// Anchor
+	material_set_uniform_vec2(button_material, 0, background_position);			// Position
+	material_set_uniform_vec2(button_material, 4, window_get_anchor(window));	// Anchor
 
 	material_set_uniform_float(button_material, 2, window_max_position.x);		// Max Width
 	material_set_uniform_float(button_material, 3, window_max_position.y);		// Max Height
@@ -1476,11 +1487,11 @@ void widget_button_draw(Window* window, Widget* widget, Vector3 position, Mat4 v
 
 	if (widget->state & WIDGET_STATE_HOVERED) {		// Setting the background color
 		button->text->color = button_text_hover_color;
-		material_set_uniform_vec(button_material, 8, button_background_hover_color);
+		material_set_uniform_vec3(button_material, 8, button_background_hover_color);
 	}
 	else {
 		button->text->color = button_text_color;
-		material_set_uniform_vec(button_material, 8, button_background_color);
+		material_set_uniform_vec3(button_material, 8, button_background_color);
 	}
 
 
@@ -1524,7 +1535,7 @@ void widget_button_destroy(Widget* widget) {
 	free(button);
 }
 
-static void (*widget_draw_vtable[])(Window*, Widget*, Vector3, Mat4) = {
+static void (*widget_draw_vtable[])(Window*, Widget*, Vector2, Mat4) = {
 	[WIDGET_TYPE_LABEL] = &widget_label_draw,
 	[WIDGET_TYPE_BUTTON] = &widget_button_draw,
 };
@@ -1540,7 +1551,7 @@ static void (*widget_destroy_vtable[])(Widget*) = {
 };
 
 void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix) {
-	Vector3 real_position = widget_get_real_position(widget, window);
+	Vector2 real_position = widget_get_real_position(widget, window);
 
 	widget_draw_vtable[widget->type](window, widget, real_position, view_position_matrix);
 }
@@ -1575,12 +1586,12 @@ void render_initialize(void) {
 
 	axis_shader = shader_create("./shaders/vertex_uniform_color.glsl", "./shaders/fragment_uniform_color.glsl");
 	ui_background_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_background.glsl");
-	ui_texture_shader = shader_create("./shaders/vertex_ui_texture.glsl", "./shaders/fragment_texture.glsl");
+	ui_texture_shader = shader_create("./shaders/vertex_ui_texture.glsl", "./shaders/fragment_ui_texture.glsl");
 	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_button.glsl");
 	color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl");
 
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
-	material_set_uniform_vec(axis_material, 0, blue);
+	material_set_uniform_vec3(axis_material, 0, blue);
 
 	drawable_init(&axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
 

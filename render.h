@@ -62,7 +62,8 @@ typedef void Widget;
 GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader_path);
 
 Material* material_create(GLuint shader, char** uniforms_position, uint uniforms_count);
-void material_set_uniform_vec(Material* material, uint program_id, Vector3 vec);
+void material_set_uniform_vec3(Material* material, uint program_id, Vector3 vec);
+void material_set_uniform_vec2(Material* material, uint program_id, Vector2 vec);
 void material_set_uniform_float(Material* material, uint program_id, float f);
 void material_use(Material* material, float* model_matrix, float* position_view_matrix);
 
@@ -79,7 +80,7 @@ uint window_create(Scene* scene, float width, float height, float* position, cha
 void scene_draw(Scene* scene, Vector3 clear_color);
 void scene_handle_events(Scene* scene, GLFWwindow* window);
 
-Text* text_create(char* string, GLuint font_texture, float size, Vector3 position, float angle, Vector3 color);
+Text* text_create(char* string, GLuint font_texture, float size, Vector2 position, float angle, Vector3 color);
 void text_set_color(Text* text, Vector3 color);
 void text_set_angle(Text* text, float angle);
 

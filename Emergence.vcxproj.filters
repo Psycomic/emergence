@@ -115,5 +115,8 @@
     <None Include="shaders\fragment_ui_button.glsl">
       <Filter>shaders\fragment\UI</Filter>
     </None>
+    <None Include="shaders\fragment_ui_texture.glsl">
+      <Filter>shaders\fragment\UI</Filter>
+    </None>
   </ItemGroup>
 </Project>
