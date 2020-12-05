@@ -170,7 +170,6 @@ typedef struct {
 	Widget* widgets[64];
 } Window;
 
-#define SCENE_MAX_DRAWABLES 10
 #define SCENE_MAX_WINDOWS 4
 
 #define SCENE_GUI_MODE		(1 << 0)
@@ -182,13 +181,12 @@ typedef struct {
 // graphical aspect of the game : the 3D view and the 2D UI.
 typedef struct {
 	DynamicArray windows;	// Window array
-	Drawable* drawables[SCENE_MAX_DRAWABLES];
+	DynamicArray drawables;	// Drawables array
 
 	Camera camera;
 
 	uint glfw_last_character;
 	uint flags;
-	uint drawables_count;
 	uint selected_window;
 } Scene;
 
@@ -487,12 +485,13 @@ void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_n
 }
 
 Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
-	Drawable* drawable = malloc(sizeof(Drawable) + declarations_count * sizeof(Buffer));
+	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
 
-	scene->drawables[scene->drawables_count++] = drawable;
+	*drawable_pos = malloc(sizeof(Drawable) + declarations_count * sizeof(Buffer));
 
-	drawable_init(drawable, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
-	return drawable;
+
+	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
+	return *drawable_pos;
 }
 
 void drawable_destroy(Drawable* drawable) {
@@ -922,10 +921,10 @@ Scene* scene_create(Vector3 camera_position, GLFWwindow* window) {
 	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height);
 
 	scene->flags = 0x0;
-	scene->drawables_count = 0;
 	scene->selected_window = 0;
 	scene->glfw_last_character = 0;
 
+	DYNAMIC_ARRAY_CREATE(&scene->drawables, Drawable*);
 	DYNAMIC_ARRAY_CREATE(&scene->windows, Window);
 
 	glfwSetWindowUserPointer(window, scene);
@@ -954,8 +953,8 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
 
-	for (uint i = 0; i < scene->drawables_count; i++) {
-		Drawable* drawable = scene->drawables[i];
+	for (uint i = 0; i < scene->drawables.size; i++) {
+		Drawable* drawable = *(Drawable**)dynamic_array_at(&scene->drawables, i);
 
 		Mat4 position_matrix;
 		mat4_create_translation(position_matrix, *drawable->position);
