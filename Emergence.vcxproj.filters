@@ -54,6 +54,9 @@
     <ClCompile Include="images.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="unit_tests.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="linear_algebra.h">

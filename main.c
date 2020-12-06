@@ -37,6 +37,8 @@ float points[POINTS_COUNT * 2];
 
 static Scene* scene;
 
+void execute_tests(void);
+
 float terrain_noise(float x, float y) {
 	float positon[2] = {
 		x, y
@@ -59,7 +61,11 @@ void click_callback(Widget* widget, Event* evt) {
 }
 
 int main(void) {
-	srand((uint)time(NULL));  // Seed for random number generation
+	srand((uint)time(NULL));	// Seed for random number generation
+
+#ifdef _DEBUG
+	execute_tests();			// Unit tests
+#endif
 
 	Image copland_os_image;
 	if (image_load_bmp(&copland_os_image, "./images/copland_os_enterprise.bmp") >= 0)
@@ -125,9 +131,12 @@ int main(void) {
 	Vector3 hopalong_color[ITERATIONS_NUMBER];
 
 	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
-		hopalong_color[i].x = random_float();
-		hopalong_color[i].y = 0.f;
-		hopalong_color[i].z = 1.f;
+		float c = (i % ITERATIONS_NUMBER) / (float)ITERATIONS_NUMBER;
+		float c2 = 1.f - c;
+
+		hopalong_color[i].x = c;
+		hopalong_color[i].y = c2;
+		hopalong_color[i].z = 0.f;
 	}
 
 	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, -1.5f, 2.2f, -1.4f, 0.1f);

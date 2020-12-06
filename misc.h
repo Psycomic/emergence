@@ -32,6 +32,19 @@ typedef struct List {
 	char data[];
 } List;
 
+typedef struct HashTableEntry {
+	char* key;
+
+	struct HashTableEntry* next_entry;
+
+	char data[];
+} HashTableEntry;
+
+typedef struct {
+	HashTableEntry** entries;
+	uint size;
+} HashTable;
+
 int read_file(char* buffer, const char* filename);
 
 float random_float(void);
@@ -58,5 +71,9 @@ void* list_map(List* list, void (*function)(void*));
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void* debug_free(void* ptr, const char* file, const uint line);
+
+HashTable* hash_table_create(uint size);
+int hash_table_set(HashTable* table, char* key, void* value, uint value_size);
+void* hash_table_get(HashTable* table, char* key);
 
 #endif

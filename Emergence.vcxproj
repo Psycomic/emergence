@@ -159,6 +159,7 @@
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
     </ClCompile>
     <ClCompile Include="stack_allocator.c" />
+    <ClCompile Include="unit_tests.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="linear_algebra.h" />

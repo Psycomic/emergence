@@ -89,7 +89,7 @@ List* cons(void* data, size_t data_size, List* next) {
 	assert(list != NULL);
 
 	memcpy(list->data, data, data_size);
-	
+
 	list->next = next;
 
 	return list;
@@ -148,4 +148,97 @@ void* debug_free(void* ptr, const char* file, const uint line) {
 	printf("Free %p at %s:%d\n", ptr, file, line);
 
 	free(ptr);
+}
+
+uint str_hash(char* str, uint maxval) {
+	uint hash = 12;
+
+	do {
+		hash = hash << 8;
+		hash += *str;
+	} while (*(++str) != '\0');
+
+	return hash % maxval;
+}
+
+HashTable* hash_table_create(uint size) {
+	assert(size >= 1);
+
+	HashTable* hash_table = malloc(sizeof(HashTable));
+
+	if (hash_table == NULL)
+		return NULL;
+
+	hash_table->size = size;
+
+	if ((hash_table->entries = malloc(sizeof(HashTableEntry*) * size)) == NULL)
+		return NULL;
+
+	for (uint i = 0; i < size; i++)
+		hash_table->entries[i] = NULL;
+
+	return hash_table;
+}
+
+int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
+	uint index = str_hash(key, table->size);
+
+	if (table->entries[index] == NULL) {	// If no collisions
+		if ((table->entries[index] = malloc(sizeof(HashTableEntry) + value_size)) == NULL)
+			return -1;
+
+		HashTableEntry* entry = table->entries[index];
+
+		entry->key = key;
+		entry->next_entry = NULL;
+
+		if (memcpy_s(entry->data, value_size, value, value_size) != 0)
+			return -1;
+	}
+	else {	// Collision
+		HashTableEntry* entry = table->entries[index];
+
+		for (; entry->next_entry != NULL; entry = entry->next_entry) {
+			if (strcmp(entry->key, key) == 0) {	// If already exists
+				if (memcpy_s(entry->data, value_size, value, value_size) != 0)
+					return -1;
+
+				return 0;
+			}
+		}
+
+		if (strcmp(entry->key, key) == 0) {
+			if (memcpy_s(entry->data, value_size, value, value_size) != 0)
+				return -1;
+
+			return 0;
+		}
+
+		if ((entry->next_entry = malloc(sizeof(HashTableEntry) + value_size)) == NULL)
+			return -1;
+
+		entry->next_entry->key = key;
+		entry->next_entry->next_entry = NULL;
+
+		if (memcpy_s(entry->next_entry->data, value_size, value, value_size))
+			return -1;
+	}
+
+	return 0;
+}
+
+void* hash_table_get(HashTable* table, char* key) {
+	uint index = str_hash(key, table->size);
+
+	HashTableEntry* entry = table->entries[index];
+
+	if (entry == NULL)
+		return NULL;
+
+	if (entry->next_entry == NULL)	// Sole entry in list
+		return entry->data;
+
+	for (; strcmp(entry->key, key) != 0; entry = entry->next_entry);
+
+	return entry->data;
 }
