@@ -125,10 +125,10 @@ int main(void) {
 		terrain_color[terrain_indexes[i]].z = 1.f;
 	}
 
-#define ITERATIONS_NUMBER 5000
+#define ITERATIONS_NUMBER 10000
 
-	Vector3 hopalong_points[ITERATIONS_NUMBER];
-	Vector3 hopalong_color[ITERATIONS_NUMBER];
+	Vector3* hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
+	Vector3* hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 
 	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
 		float c = (i % ITERATIONS_NUMBER) / (float)ITERATIONS_NUMBER;
@@ -188,8 +188,8 @@ int main(void) {
 	Material* hopalong_material = material_create(color_shader, NULL, 0);
 
 	ArrayBufferDeclaration hopalong_buffers[] = {
-		{hopalong_points, sizeof(hopalong_points), 3, 0},
-		{hopalong_color, sizeof(hopalong_color), 3, 1}
+		{hopalong_points, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 0},
+		{hopalong_color, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 1}
 	};
 
 	Vector3	hopalong_position = { 10.f, 0.f, 5.f };

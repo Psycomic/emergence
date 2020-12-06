@@ -714,6 +714,14 @@ void material_set_uniform_bool(Material* material, uint uniform_id, uint b) {
 	material->uniforms[uniform_id].is_set = GL_TRUE;
 }
 
+void material_uniform_vec2(Material* material, uint uniform_id, Vector2 vec) {
+	glUniform2f(material->uniforms[uniform_id].location, vec.x, vec.y);
+}
+
+void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec) {
+	glUniform3f(material->uniforms[uniform_id].location, vec.x, vec.y, vec.z);
+}
+
 void material_use(Material* material, float* model_matrix, float* view_position_matrix) {
 	glUseProgram(material->program_id);
 
@@ -897,14 +905,13 @@ void text_destroy(Text* text) {
 void text_draw(Text* text, Vector2* shadow_displacement, float max_width, float max_height, Vector2 anchor, Mat4 view_position_matrix) {
 	Vector2 text_position = text->position;
 
-	// Setting text uniforms
 	material_set_uniform_float(text->drawable->material, 5, max_width);		// Max width
 	material_set_uniform_float(text->drawable->material, 6, max_height);	// Max height
 	
 	material_set_uniform_vec2(text->drawable->material, 3, text_position);	// Position
 	material_set_uniform_vec2(text->drawable->material, 7, anchor);			// Anchor position
 
-	material_use(text->drawable->material, NULL, view_position_matrix);	// Using the text's material
+	material_use(text->drawable->material, NULL, view_position_matrix);		// Using the text's material
 
 	if (shadow_displacement) {
 		Vector3 shadow_color = { 0.f, 0.f, 0.f };
@@ -912,15 +919,15 @@ void text_draw(Text* text, Vector2* shadow_displacement, float max_width, float 
 
 		vector2_add(&shadow_drawable_position, text_position, *shadow_displacement);	// Setting the shadow's position
 
-		glUniform3f(text->drawable->material->uniforms[2].location, shadow_color.x, shadow_color.y, shadow_color.z);			// Color
-		glUniform2f(text->drawable->material->uniforms[0].location, shadow_drawable_position.x, shadow_drawable_position.y);	// Model position
+		material_uniform_vec3(text->drawable->material, 2, shadow_color);				// Color
+		material_uniform_vec2(text->drawable->material, 0, shadow_drawable_position);	// Model position
 
 		drawable_draw(text->drawable);	// Drawing the shadow
 
 	}
 
-	glUniform3f(text->drawable->material->uniforms[2].location, text->color.x, text->color.y, text->color.z);	// Color
-	glUniform2f(text->drawable->material->uniforms[0].location, text_position.x, text_position.y);				// Model position
+	material_uniform_vec3(text->drawable->material, 2, text->color);				// Color
+	material_uniform_vec2(text->drawable->material, 0, text_position);				// Model position
 
 	drawable_draw(text->drawable);	// Drawing the text
 }
@@ -1018,12 +1025,10 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 
 	if ((scene->flags & SCENE_GUI_MODE) && scene->windows.size > 0) {
 		for (uint i = 0; i < scene->windows.size; i++) {
-			if (i == scene->selected_window) {
-				window_set_transparency(dynamic_array_at(&scene->windows, i), 1.f);
-			}
-			else {
+			if (i == scene->selected_window)
+				window_set_transparency(dynamic_array_at(&scene->windows, i), 0.9f);
+			else
 				window_set_transparency(dynamic_array_at(&scene->windows, i), 0.3f);
-			}
 		}
 
 		float screen_x = (float)xpos - (width / 2.f),
@@ -1055,7 +1060,7 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 
 		switch (scene->glfw_last_character) {
 		case ' ':
-			scene->selected_window = (scene->selected_window + 1) % scene->windows.size;
+			scene->selected_window = ((size_t)scene->selected_window + 1) % scene->windows.size;
 			break;
 		case 'c':
 			window_destroy(scene, scene->selected_window);
@@ -1164,7 +1169,6 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window->title = text_create(title, monospaced_font_texture, 15.f, window->position, ((float) M_PI) * 3 / 2, title_color);
 
 	Drawable* background_drawable = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
-
 	assert(background_drawable != NULL);
 
 	drawable_rectangle_init(background_drawable, window->width, window->height, material_create(ui_background_shader, ui_background_uniforms, ARRAY_SIZE(ui_background_uniforms)), GL_TRIANGLES, NULL, 0x0);
@@ -1252,13 +1256,11 @@ void window_destroy(Scene* scene, uint id) {
 	free(window->drawables[1]->buffers[0].data);
 
 	// Freeing memory resources
-	for (uint i = 0; i < ARRAY_SIZE(window->drawables); i++) {
+	for (uint i = 0; i < ARRAY_SIZE(window->drawables); i++)
 		drawable_destroy(window->drawables[i]);
-	}
 	
-	for (uint i = 0; i < window->widgets_count; i++) {
+	for (uint i = 0; i < window->widgets_count; i++)
 		widget_destroy(window->widgets[i]);
-	}
 
 	text_destroy(window->title);
 
