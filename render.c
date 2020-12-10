@@ -13,69 +13,11 @@
 #include "linear_algebra.h"
 #include "stack_allocator.h"
 #include "render.h"
+#include "drawable.h"
 
 #define SCENE_DEFAULT_CAPACITY 10
 #define CAMERA_SPEED 0.1f
 #define MOUSE_SENSIBILLITY 0.01f
-
-// Shader's uniform abstraction. 
-typedef struct {
-	enum { 
-		UNIFORM_VEC3, UNIFORM_VEC2,
-		UNIFORM_FLOAT, UNIFORM_BOOL 
-	} type;
-
-	union {
-		Vector3 vec3;
-		Vector2 vec2;
-		float f;
-		uint b;
-	} data;
-
-	GLint location;
-	GLboolean is_set;
-} Uniform;
-
-// Basically a collection of uniforms for a particular shader.
-typedef struct {
-	GLuint program_id;
-	GLint view_position_matrix_location;
-	GLint model_matrix_location;
-
-	uint uniforms_count;
-	Uniform uniforms[];
-} Material;
-
-// Array Buffer abstraction
-typedef struct {
-	void* data;
-	uint size;
-	GLuint buffer;
-} Buffer;
-
-// Biggest abstraction yet. A Drawable is a collection of array
-// buffers, some flags, a material, a pointer to a position, and some flags.
-
-#define DRAWBLE_MAX_BUFFER_COUNT 256
-
-typedef struct {
-	Buffer elements_buffer;
-
-	Material* material;
-	Vector3* position;
-	GLuint* textures;
-
-	GLuint vertex_array;
-	GLenum draw_mode;
-
-	uint textures_count;
-	uint elements_count;
-	uint buffer_count;
-	uint flags;
-
-	Buffer buffers[];
-} Drawable;
-
 
 /// A camera, that holds a position and a rotation to render
 /// a scene correctly
@@ -172,12 +114,6 @@ typedef struct {
 	Widget* widgets[64];
 } Window;
 
-typedef struct {
-	GLuint id;
-
-	Buffer buffers[];
-} Shader;
-
 #define SCENE_MAX_WINDOWS 4
 
 #define SCENE_GUI_MODE		(1 << 0)
@@ -197,8 +133,6 @@ typedef struct {
 	uint flags;
 	uint selected_window;
 } Scene;
-
-static unsigned short rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 
 static GLuint ui_background_shader;
 static GLuint ui_texture_shader;
@@ -255,7 +189,7 @@ static Vector3 button_background_hover_color = { 0.9f, 0.9f, 1.f };
 static Vector3 button_text_color = { 0.f, 0.f, 0.f };
 static Vector3 button_text_hover_color = { 0.2f, 0.2f, 0.4f };
 
-Drawable axis_drawable;
+static Drawable* axis_drawable;
 
 double last_xpos = -1.0, last_ypos = -1.0;
 
@@ -410,362 +344,27 @@ GLFWwindow* opengl_window_create(uint width, uint height, const char* title) {
 	return window;
 }
 
-Buffer array_buffer_create(uint size, int type, void* data) {
-	GLuint array_buffer;
-	glGenBuffers(1, &array_buffer);
-	glBindBuffer(type, array_buffer);
-	glBufferData(type, size, data, GL_DYNAMIC_DRAW);
-
-	Buffer buffer;
-	buffer.buffer = array_buffer;
-	buffer.data = data;
-	buffer.size = size;
-
-	return buffer;
-}
-
-void array_buffer_update(Buffer* buffer) {
-	glBindBuffer(GL_ARRAY_BUFFER, buffer->buffer);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, buffer->size, buffer->data);
-}
-
-void array_buffer_destroy(Buffer* buffer) {
-	glDeleteBuffers(1, &buffer->buffer);
-}
-
-GLuint texture_create(Image* image, bool generate_mipmap) {
-	GLuint texture;
-	glGenTextures(1, &texture);
-
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image->width, image->height, 0, image->color_encoding, GL_UNSIGNED_BYTE, image->data);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-	if (generate_mipmap)
-		glGenerateMipmap(GL_TEXTURE_2D);
-
-	return texture;
-}
-
-void rectangle_vertices_set(float* rectangle_vertices, float width, float height) {
-	rectangle_vertices[0] = 0.f; rectangle_vertices[1] = 0.f;
-	rectangle_vertices[2] = width; rectangle_vertices[3] = 0.f;
-	rectangle_vertices[4] = 0.f; rectangle_vertices[5] = height;
-	rectangle_vertices[6] = width; rectangle_vertices[7] = height;
-}
-
-void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
-	drawable->buffer_count = declarations_count;
-	drawable->material = material;
-	drawable->position = position;
-	drawable->textures = textures;
-	drawable->textures_count = textures_count;
-	drawable->flags = flags;
-	drawable->draw_mode = mode;
-
-	glGenVertexArrays(1, &drawable->vertex_array);
-	glBindVertexArray(drawable->vertex_array);
-
-	for (uint i = 0; i < declarations_count; i++) {
-		drawable->buffers[i] = array_buffer_create(declarations[i].data_size, GL_ARRAY_BUFFER, declarations[i].data);
-
-		glBindBuffer(GL_ARRAY_BUFFER, drawable->buffers[i].buffer);
-		glVertexAttribPointer(declarations[i].data_layout, declarations[i].stride, GL_FLOAT, GL_FALSE, declarations[i].stride * sizeof(float), NULL);
-
-		glEnableVertexAttribArray(declarations[i].data_layout);
-	}
-
-	drawable->elements_count = elements_number;
-
-	if (elements != NULL) {
-		drawable->elements_buffer = array_buffer_create(elements_number * sizeof(unsigned short), GL_ELEMENT_ARRAY_BUFFER, elements);
-		drawable->flags |= DRAWABLE_USES_ELEMENTS;
-	}
-	else {
-		drawable->elements_buffer.buffer = 0;
-		drawable->flags &= ~DRAWABLE_USES_ELEMENTS;
-	}
-
-	glBindVertexArray(0);
-}
-
-Drawable* drawable_create(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
 	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
 
-	*drawable_pos = malloc(sizeof(Drawable) + declarations_count * sizeof(Buffer));
-
+	*drawable_pos = drawable_allocate(declarations_count);
 
 	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
 	return *drawable_pos;
 }
 
-void drawable_destroy(Drawable* drawable) {
-	for (uint i = 0; i < drawable->buffer_count; i++) {
-		array_buffer_destroy(&drawable->buffers[i]);
-	}
-
-	if (drawable->flags & DRAWABLE_USES_ELEMENTS) {
-		array_buffer_destroy(&drawable->elements_buffer);
-	}
-
-	glDeleteVertexArrays(1, &drawable->vertex_array);
-
-	free(drawable->material);
-	free(drawable);
-}
-
-void drawable_draw(Drawable* drawable) {
-	for (uint i = 0; i < drawable->textures_count; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(GL_TEXTURE_2D, drawable->textures[i]);
-	}
-	
-	glBindVertexArray(drawable->vertex_array);
-
-	if ((drawable->flags & DRAWABLE_USES_ELEMENTS) > 0)
-		glDrawElements(drawable->draw_mode, drawable->elements_count, GL_UNSIGNED_SHORT, NULL);
-	else
-		glDrawArrays(drawable->draw_mode, 0, drawable->elements_count);
-}
-
-void drawable_update_buffer(Drawable* drawable, uint buffer_id) {
-	array_buffer_update(&drawable->buffers[buffer_id]);
-}
-
-void drawable_update(Drawable* drawable) {
-	for (uint i = 0; i < drawable->buffer_count; i++)
-		array_buffer_update(&drawable->buffers[i]);
-}
-
-void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, uint flags) {
-	float* rectangle_vertices = malloc(sizeof(float) * 8);
-	rectangle_vertices_set(rectangle_vertices, width, height);
-
-	ArrayBufferDeclaration rectangle_buffers[] = {
-		{rectangle_vertices, sizeof(float) * 8, 2, 0},
-	};
-
-	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 1, material, mode, position, NULL, 0, flags);
-}
-
-void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags) {
-	float* rectangle_vertices = malloc(sizeof(float) * 8);
-	rectangle_vertices_set(rectangle_vertices, width, height);
-	
-	ArrayBufferDeclaration rectangle_buffers[] = {
-		{rectangle_vertices, sizeof(float) * 8, 2, 0},
-		{texture_uv, sizeof(float) * 8, 2, 1}
-	};
-
-	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 2, material, mode, position, textures, textures_count, flags);
-}
-
-void drawable_rectangle_set_size(Drawable* rectangle, float width, float height) {
-	float* rectangle_vertices = rectangle->buffers[0].data;
-	rectangle_vertices_set(rectangle_vertices, width, height);
-
-	drawable_update_buffer(rectangle, 0);
-}
-
-GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader_path) {
-	GLboolean errors_occurred = GL_FALSE;
-
-	// Create the shaders
-	GLuint VertexShaderID = glCreateShader(GL_VERTEX_SHADER);
-	GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
-
-	// Read the Vertex Shader code from the file
-	char VertexShaderCode[2048];
-	read_file(VertexShaderCode, vertex_shader_path);
-
-	// Read the Fragment Shader code from the file
-	char FragmentShaderCode[2048];
-	read_file(FragmentShaderCode, fragment_shader_path);
-
-	GLint Result = GL_FALSE;
-	int InfoLogLength;
-
-	// Compile Vertex Shader
-	printf("Compiling shader : %s\n", vertex_shader_path);
-	char const* VertexSourcePointer = VertexShaderCode;
-
-	glShaderSource(VertexShaderID, 1, &VertexSourcePointer, NULL);
-	glCompileShader(VertexShaderID);
-
-	// Check Vertex Shader
-	glGetShaderiv(VertexShaderID, GL_COMPILE_STATUS, &Result);
-	glGetShaderiv(VertexShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-
-	if (InfoLogLength > 0) {
-		char* VertexShaderErrorMessage = malloc(sizeof(char) * ((size_t)InfoLogLength + 1));
-		glGetShaderInfoLog(VertexShaderID, InfoLogLength, NULL, VertexShaderErrorMessage);
-		printf("%s\n", VertexShaderErrorMessage);
-
-		free(VertexShaderErrorMessage);
-
-		errors_occurred = GL_TRUE;
-	}
-
-	// Compile Fragment Shader
-	printf("Compiling shader : %s\n", fragment_shader_path);
-	char const* FragmentSourcePointer = FragmentShaderCode;
-	glShaderSource(FragmentShaderID, 1, &FragmentSourcePointer, NULL);
-	glCompileShader(FragmentShaderID);
-
-	// Check Fragment Shader
-	glGetShaderiv(FragmentShaderID, GL_COMPILE_STATUS, &Result);
-	glGetShaderiv(FragmentShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-
-	if (InfoLogLength > 0) {
-		char* FragmentShaderErrorMessage = malloc(sizeof(char) * ((size_t)InfoLogLength + 1));
-		glGetShaderInfoLog(FragmentShaderID, InfoLogLength, NULL, FragmentShaderErrorMessage);
-		printf("%s\n", FragmentShaderErrorMessage);
-
-		free(FragmentShaderErrorMessage);
-
-		errors_occurred = GL_TRUE;
-	}
-
-	// Link the program
-	printf("Linking program\n");
-	GLuint ProgramID = glCreateProgram();
-	glAttachShader(ProgramID, VertexShaderID);
-	glAttachShader(ProgramID, FragmentShaderID);
-	glLinkProgram(ProgramID);
-
-	// Check the program
-	glGetProgramiv(ProgramID, GL_LINK_STATUS, &Result);
-	glGetProgramiv(ProgramID, GL_INFO_LOG_LENGTH, &InfoLogLength);
-
-	if (InfoLogLength > 0) {
-		char* ProgramErrorMessage = malloc(sizeof(char) * ((size_t)InfoLogLength + 1));
-		glGetProgramInfoLog(ProgramID, InfoLogLength, NULL, &ProgramErrorMessage[0]);
-		printf("%s\n", ProgramErrorMessage);
-
-		free(ProgramErrorMessage);
-
-		errors_occurred = GL_TRUE;
-	}
-
-	glDetachShader(ProgramID, VertexShaderID);
-	glDetachShader(ProgramID, FragmentShaderID);
-
-	glDeleteShader(VertexShaderID);
-	glDeleteShader(FragmentShaderID);
-
-	assert(!errors_occurred);
-
-	return ProgramID;
-}
-
-Material* material_create(GLuint shader, char** uniforms_position, uint uniforms_count) {
-	Material* new_material = malloc(sizeof(Material) + sizeof(Uniform) * uniforms_count);
-	
-	assert(new_material != NULL);
-
-	new_material->program_id = shader;
-
-	new_material->uniforms_count = uniforms_count;
-
-	new_material->view_position_matrix_location = glGetUniformLocation(shader, "view_position");
-	new_material->model_matrix_location = glGetUniformLocation(shader, "model");
-
-	for (uint i = 0; i < uniforms_count; i++) {
-		new_material->uniforms[i].location = glGetUniformLocation(shader, uniforms_position[i]);
-		new_material->uniforms[i].is_set = GL_FALSE;
-
-		assert(new_material->uniforms[i].location >= 0);
-	}
-
-	return new_material;
-}
-
-void material_set_uniform_vec3(Material* material, uint uniform_id, Vector3 vec) {
-	assert(uniform_id < material->uniforms_count);
-
-	material->uniforms[uniform_id].type = UNIFORM_VEC3;
-	material->uniforms[uniform_id].data.vec3 = vec;
-	material->uniforms[uniform_id].is_set = GL_TRUE;
-}
-
-void material_set_uniform_vec2(Material* material, uint uniform_id, Vector2 vec) {
-	assert(uniform_id < material->uniforms_count);
-
-	material->uniforms[uniform_id].type = UNIFORM_VEC2;
-	material->uniforms[uniform_id].data.vec2 = vec;
-	material->uniforms[uniform_id].is_set = GL_TRUE;
-}
-
-void material_set_uniform_float(Material* material, uint uniform_id, float f) {
-	assert(uniform_id < material->uniforms_count);
-
-	material->uniforms[uniform_id].type = UNIFORM_FLOAT;
-	material->uniforms[uniform_id].data.f = f;
-	material->uniforms[uniform_id].is_set = GL_TRUE;
-}
-
-void material_set_uniform_bool(Material* material, uint uniform_id, uint b) {
-	assert(uniform_id < material->uniforms_count);
-
-	material->uniforms[uniform_id].type = UNIFORM_BOOL;
-	material->uniforms[uniform_id].data.b = b;
-	material->uniforms[uniform_id].is_set = GL_TRUE;
-}
-
-void material_uniform_vec2(Material* material, uint uniform_id, Vector2 vec) {
-	glUniform2f(material->uniforms[uniform_id].location, vec.x, vec.y);
-}
-
-void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec) {
-	glUniform3f(material->uniforms[uniform_id].location, vec.x, vec.y, vec.z);
-}
-
-void material_use(Material* material, float* model_matrix, float* view_position_matrix) {
-	glUseProgram(material->program_id);
-
-	if (view_position_matrix)
-		glUniformMatrix4fv(material->view_position_matrix_location, 1, GL_FALSE, view_position_matrix);
-	if (model_matrix)
-		glUniformMatrix4fv(material->model_matrix_location, 1, GL_FALSE, model_matrix);
-
-	Uniform* uniforms = material->uniforms;
-
-	for (uint i = 0; i < material->uniforms_count; i++) {
-		if (uniforms[i].is_set) {
-			GLuint uniform_id = uniforms[i].location;
-
-			switch (material->uniforms[i].type) {
-			case UNIFORM_VEC3:
-				glUniform3f(uniform_id, uniforms[i].data.vec3.x, uniforms[i].data.vec3.y, uniforms[i].data.vec3.z);
-				break;
-			case UNIFORM_VEC2:
-				glUniform2f(uniform_id, uniforms[i].data.vec2.x, uniforms[i].data.vec2.y);
-				break;
-			case UNIFORM_FLOAT:
-				glUniform1f(uniform_id, uniforms[i].data.f);
-				break;
-			case UNIFORM_BOOL:
-				glUniform1i(uniform_id, uniforms[i].data.b);
-				break;
-			}
-		}
-	}
-}
-
 void text_set_color(Text* text, Vector3 color) {
-	material_set_uniform_vec3(text->drawable->material, 1, color);
+	material_set_uniform_vec3(drawable_material(text->drawable), 1, color);
 }
 
 void text_set_transparency(Text* text, float transparency) {
-	material_set_uniform_float(text->drawable->material, 4, transparency);
+	material_set_uniform_float(drawable_material(text->drawable), 4, transparency);
 }
 
 void text_set_angle(Text* text, float angle) {
 	text->angle = angle;
 
-	material_set_uniform_float(text->drawable->material, 2, text->angle);
+	material_set_uniform_float(drawable_material(text->drawable), 2, text->angle);
 }
 
 void text_set_position(Text* text, Vector2 position) {
@@ -881,11 +480,11 @@ Text* text_create(char* string, GLuint font_texture, float size, Vector2 positio
 		}
 	}
 
-	text->drawable = malloc(sizeof(Drawable) + sizeof(Buffer) * 2);
+	text->drawable = drawable_allocate(2);
 
 	ArrayBufferDeclaration declarations[] = {
-		{drawable_vertices, sizeof(float) * 12 * text_length, 2, 0},
-		{drawable_uvs, sizeof(float) * 12 * text_length, 2, 1}
+		{drawable_vertices, sizeof(float) * 12 * text_length, 2, 0, GL_STATIC_DRAW},
+		{drawable_uvs, sizeof(float) * 12 * text_length, 2, 1, GL_STATIC_DRAW}
 	};
 
 	drawable_init(text->drawable, NULL, 6 * text_length, declarations, ARRAY_SIZE(declarations), glyph_material, GL_TRIANGLES, NULL, &text->font_texture, 1, 0x0);
@@ -894,8 +493,8 @@ Text* text_create(char* string, GLuint font_texture, float size, Vector2 positio
 }
 
 void text_destroy(Text* text) {
-	free(text->drawable->buffers[0].data);
-	free(text->drawable->buffers[1].data);
+	free(drawable_buffer_data(text->drawable, 0));
+	free(drawable_buffer_data(text->drawable, 1));
 
 	drawable_destroy(text->drawable);
 
@@ -905,13 +504,15 @@ void text_destroy(Text* text) {
 void text_draw(Text* text, Vector2* shadow_displacement, float max_width, float max_height, Vector2 anchor, Mat4 view_position_matrix) {
 	Vector2 text_position = text->position;
 
-	material_set_uniform_float(text->drawable->material, 5, max_width);		// Max width
-	material_set_uniform_float(text->drawable->material, 6, max_height);	// Max height
-	
-	material_set_uniform_vec2(text->drawable->material, 3, text_position);	// Position
-	material_set_uniform_vec2(text->drawable->material, 7, anchor);			// Anchor position
+	Material* text_material = drawable_material(text->drawable);
 
-	material_use(text->drawable->material, NULL, view_position_matrix);		// Using the text's material
+	material_set_uniform_float(text_material, 5, max_width);		// Max width
+	material_set_uniform_float(text_material, 6, max_height);	// Max height
+	
+	material_set_uniform_vec2(text_material, 3, text_position);	// Position
+	material_set_uniform_vec2(text_material, 7, anchor);			// Anchor position
+
+	material_use(text_material, NULL, view_position_matrix);		// Using the text's material
 
 	if (shadow_displacement) {
 		Vector3 shadow_color = { 0.f, 0.f, 0.f };
@@ -919,15 +520,14 @@ void text_draw(Text* text, Vector2* shadow_displacement, float max_width, float 
 
 		vector2_add(&shadow_drawable_position, text_position, *shadow_displacement);	// Setting the shadow's position
 
-		material_uniform_vec3(text->drawable->material, 2, shadow_color);				// Color
-		material_uniform_vec2(text->drawable->material, 0, shadow_drawable_position);	// Model position
+		material_uniform_vec3(text_material, 2, shadow_color);				// Color
+		material_uniform_vec2(text_material, 0, shadow_drawable_position);	// Model position
 
 		drawable_draw(text->drawable);	// Drawing the shadow
-
 	}
 
-	material_uniform_vec3(text->drawable->material, 2, text->color);				// Color
-	material_uniform_vec2(text->drawable->material, 0, text_position);				// Model position
+	material_uniform_vec3(text_material, 2, text->color);				// Color
+	material_uniform_vec2(text_material, 0, text_position);				// Model position
 
 	drawable_draw(text->drawable);	// Drawing the text
 }
@@ -977,27 +577,28 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 
 	for (uint i = 0; i < scene->drawables.size; i++) {
 		Drawable* drawable = *(Drawable**)dynamic_array_at(&scene->drawables, i);
+		uint flags = drawable_flags(drawable);
 
 		Mat4 position_matrix;
-		mat4_create_translation(position_matrix, *drawable->position);
+		mat4_create_translation(position_matrix, drawable_position(drawable));
 
 		// Drawing the elements added to the scene
-		if (drawable->flags & DRAWABLE_NO_DEPTH_TEST) {
+		if (flags & DRAWABLE_NO_DEPTH_TEST) {
 			glDisable(GL_DEPTH_TEST);
 		}
 		else {
 			glEnable(GL_DEPTH_TEST);
 		}
 
-		material_use(drawable->material, position_matrix, camera_final_matrix);
+		material_use(drawable_material(drawable), position_matrix, camera_final_matrix);
 		drawable_draw(drawable);
 
-		if (drawable->flags & DRAWABLE_SHOW_AXIS) {
+		if (flags & DRAWABLE_SHOW_AXIS) {
 			// Drawing the elements axis
 			glDisable(GL_DEPTH_TEST);
 
-			material_use(axis_drawable.material, position_matrix, camera_final_matrix);
-			drawable_draw(&axis_drawable);
+			material_use(drawable_material(axis_drawable), position_matrix, camera_final_matrix);
+			drawable_draw(axis_drawable);
 		}
 	}
 
@@ -1086,9 +687,9 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 		camera_get_direction(&scene->camera, &camera_direction, CAMERA_SPEED);
 
 		// Keyboard input handling 
-		if (glfwGetKey(window, GLFW_KEY_W)) {
+		if (glfwGetKey(window, GLFW_KEY_W))
 			camera_translate(&scene->camera, camera_direction);
-		}
+
 		if (glfwGetKey(window, GLFW_KEY_S)) {
 			vector3_neg(&camera_direction);
 			camera_translate(&scene->camera, camera_direction);
@@ -1125,10 +726,10 @@ void window_set_position(Window* window, float x, float y) {
 
 	window_update(window);
 
-	Material* background_material = window->drawables[0]->material;
+	Material* background_material = drawable_material(window->drawables[0]);
 	material_set_uniform_vec2(background_material, 2, window->position);
 
-	material_set_uniform_vec2(window->drawables[1]->material, 1, window->position);
+	material_set_uniform_vec2(drawable_material(window->drawables[1]), 1, window->position);
 }
 
 void window_set_size(Window* window, float width, float height) {
@@ -1139,7 +740,7 @@ void window_set_size(Window* window, float width, float height) {
 
 	drawable_rectangle_set_size(window->drawables[0], window->width, window->height);
 
-	float* text_bar_vertices = window->drawables[1]->buffers[0].data;
+	float* text_bar_vertices = drawable_buffer_data(window->drawables[1], 0);
 	text_bar_vertices[0] = window->title->size + 6.f; text_bar_vertices[1] = window->height;
 	text_bar_vertices[2] = window->title->size + 6.f; text_bar_vertices[3] = 0.f;
 
@@ -1148,7 +749,7 @@ void window_set_size(Window* window, float width, float height) {
 
 void window_set_transparency(Window* window, float transparency) {
 	window->transparency = transparency;
-	material_set_uniform_float(window->drawables[0]->material, 1, window->transparency);
+	material_set_uniform_float(drawable_material(window->drawables[0]), 1, window->transparency);
 
 	for (uint i = 0; i < window->widgets_count; i++)
 		widget_set_transparency(window->widgets[i], transparency);
@@ -1168,7 +769,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	Vector3 title_color = { 0.6f, 0.6f, 0.6f };
 	window->title = text_create(title, monospaced_font_texture, 15.f, window->position, ((float) M_PI) * 3 / 2, title_color);
 
-	Drawable* background_drawable = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
+	Drawable* background_drawable = drawable_allocate(1);
 	assert(background_drawable != NULL);
 
 	drawable_rectangle_init(background_drawable, window->width, window->height, material_create(ui_background_shader, ui_background_uniforms, ARRAY_SIZE(ui_background_uniforms)), GL_TRIANGLES, NULL, 0x0);
@@ -1177,16 +778,16 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	// #ECE8D9
 	Vector3 backgroud_color = rgb_to_vec(0x1d, 0x23, 0x86);
 
-	material_set_uniform_vec3(background_drawable->material, 0, backgroud_color);
+	material_set_uniform_vec3(drawable_material(background_drawable), 0, backgroud_color);
 
-	Drawable* text_bar_drawable = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);
+	Drawable* text_bar_drawable = drawable_allocate(1);
 
 	assert(text_bar_drawable != NULL);
 
 	float* line_vertices = malloc(sizeof(float) * 4);
 
 	ArrayBufferDeclaration text_bar_declarations[] = {
-		{line_vertices, sizeof(float) * 4, 2, 0}
+		{line_vertices, sizeof(float) * 4, 2, 0, GL_DYNAMIC_DRAW}
 	};
 
 	static Vector3 bar_color = {
@@ -1196,7 +797,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	drawable_init(text_bar_drawable, NULL, 2, text_bar_declarations, 1, material_create(color_shader, color_uniforms, ARRAY_SIZE(color_uniforms)), GL_LINES, NULL, NULL, 0, 0x0);
 	window->drawables[1] = text_bar_drawable;
 
-	material_set_uniform_vec3(window->drawables[1]->material, 0, bar_color);
+	material_set_uniform_vec3(drawable_material(window->drawables[1]), 0, bar_color);
 
 	window_set_size(window, width, height);
 	window_set_position(window, position[0], position[1]);
@@ -1221,12 +822,12 @@ void window_draw(Window* window, Mat4 view_position_matrix) {
 
 	Drawable* background_drawable = window->drawables[0];
 
-	material_use(background_drawable->material, NULL, view_position_matrix);
+	material_use(drawable_material(background_drawable), NULL, view_position_matrix);
 	drawable_draw(background_drawable);
 
 	Drawable* line_drawable = window->drawables[1];
 
-	material_use(line_drawable->material, NULL, view_position_matrix);
+	material_use(drawable_material(line_drawable), NULL, view_position_matrix);
 	drawable_draw(line_drawable);
 
 	Vector3 shadow_displacement = { 0.01f, 0.f };
@@ -1252,8 +853,8 @@ Vector2 window_get_max_position(Window* window) {
 void window_destroy(Scene* scene, uint id) {
 	Window* window = dynamic_array_at(&scene->windows, id);
 
-	free(window->drawables[0]->buffers[0].data);
-	free(window->drawables[1]->buffers[0].data);
+	free(drawable_buffer_data(window->drawables[0], 0));
+	free(drawable_buffer_data(window->drawables[1], 0));
 
 	// Freeing memory resources
 	for (uint i = 0; i < ARRAY_SIZE(window->drawables); i++)
@@ -1439,13 +1040,13 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 	
 	button->header.height = text_height;	// Setting widget height
 
-	button->button_background = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);	// Background of the button
+	button->button_background = drawable_allocate(1);	// Background of the button
 
 	Material* button_material = material_create(ui_button_shader, ui_button_uniforms, ARRAY_SIZE(ui_button_uniforms));	// Background's material
 
 	drawable_rectangle_init(button->button_background,	// Initializing the background drawable
-		text_width + button->padding * 2,
-		text_height + button->padding * 2, 
+		text_width + button->padding * 2.f,
+		text_height + button->padding * 2.f, 
 		button_material, GL_TRIANGLES, NULL, 0x0);
 	
 	material_set_uniform_float(button_material, 5, border_size);			// Border size
@@ -1476,7 +1077,7 @@ void widget_button_draw(Window* window, Widget* widget, Vector2 position, Mat4 v
 
 	Vector2 window_max_position = window_get_max_position(window);	// Max position before fading
 
-	Material* button_material = button->button_background->material;
+	Material* button_material = drawable_material(button->button_background);
 
 	material_set_uniform_vec2(button_material, 0, background_position);			// Position
 	material_set_uniform_vec2(button_material, 4, window_get_anchor(window));	// Anchor
@@ -1495,7 +1096,6 @@ void widget_button_draw(Window* window, Widget* widget, Vector2 position, Mat4 v
 		button->text->color = button_text_color;
 		material_set_uniform_vec3(button_material, 8, button_background_color);
 	}
-
 
 	material_use(button_material, NULL, view_position_matrix);	// Drawing the background using the material
 	drawable_draw(button->button_background);
@@ -1516,7 +1116,7 @@ void widget_button_set_transparency(Widget* widget, float transparency) {
 	Button* button = widget;
 	
 	text_set_transparency(button->text, transparency);
-	material_set_uniform_float(button->button_background->material, 1, transparency);
+	material_set_uniform_float(drawable_material(button->button_background), 1, transparency);
 }
 
 void widget_label_destroy(Widget* widget) {
@@ -1531,7 +1131,7 @@ void widget_button_destroy(Widget* widget) {
 
 	text_destroy(button->text);
 
-	free(button->button_background->buffers[0].data);
+	free(drawable_buffer_data(button->button_background, 0));
 
 	drawable_destroy(button->button_background);
 	free(button);
@@ -1581,7 +1181,7 @@ void render_initialize(void) {
 	};
 
 	static ArrayBufferDeclaration axis_buffers[] = {
-		{axis, sizeof(axis), 3, 0}
+		{axis, sizeof(axis), 3, 0, GL_STATIC_DRAW}
 	};
 
 	static Vector3 axis_position = { 0.f, 0.f, 0.f };
@@ -1595,7 +1195,8 @@ void render_initialize(void) {
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
 	material_set_uniform_vec3(axis_material, 0, blue);
 
-	drawable_init(&axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
+	axis_drawable = drawable_allocate(1);
+	drawable_init(axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
 
 	Image font_image;
 	if (image_load_bmp(&font_image, "./fonts/monospace.bmp") >= 0)

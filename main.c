@@ -156,11 +156,11 @@ int main(void) {
 	Material* texture_material1 = material_create(texture_shader, NULL, 0);
 
 	ArrayBufferDeclaration triangle1_buffers[] = {
-		{triangle1_vertices, sizeof(triangle1_vertices), 3, 0},
-		{texture_coords, sizeof(texture_coords), 2, 1}
+		{triangle1_vertices, sizeof(triangle1_vertices), 3, 0, GL_STATIC_DRAW},
+		{texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW}
 	};
 
-	Drawable* triangle1_drawable = drawable_create(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
+	Drawable* triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	GLuint copland_os_texture = texture_create(&copland_os_image, 1);
 	image_destroy(&copland_os_image);
@@ -168,33 +168,32 @@ int main(void) {
 	Material* texture_material2 = material_create(texture_shader, NULL, 0);
 
 	ArrayBufferDeclaration triangle2_buffers[] = {
-		{triangle2_vertices, sizeof(triangle2_vertices), 3, 0},
-		{texture_coords, sizeof(texture_coords), 2, 1}
+		{triangle2_vertices, sizeof(triangle2_vertices), 3, 0, GL_STATIC_DRAW},
+		{texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW}
 	};
 
-	Drawable* triangle2_drawable = drawable_create(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
+	Drawable* triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	Material* terrain_material = material_create(color_shader, NULL, 0);
 
 	ArrayBufferDeclaration terrain_buffers[] = {
-		{terrain_vertices, sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE, 3, 0},
-		{terrain_color, sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, 3, 1}
+		{terrain_vertices, sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE, 3, 0, GL_STATIC_DRAW},
+		{terrain_color, sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, 3, 1, GL_STATIC_DRAW}
 	};
 
 	Vector3 terrain_position = { 0.f, -5.f, 0.f };
 
-	Drawable* terrain_drawable = drawable_create(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
-
+	Drawable* terrain_drawable = scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
 	Material* hopalong_material = material_create(color_shader, NULL, 0);
 
 	ArrayBufferDeclaration hopalong_buffers[] = {
-		{hopalong_points, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 0},
-		{hopalong_color, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 1}
+		{hopalong_points, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 0, GL_STATIC_DRAW},
+		{hopalong_color, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 1, GL_STATIC_DRAW}
 	};
 
 	Vector3	hopalong_position = { 10.f, 0.f, 5.f };
 
-	Drawable* hopalong_drawable = drawable_create(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
+	Drawable* hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
 	float window1_position[] = {
 		0.5f, 0.2f
