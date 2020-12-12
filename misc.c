@@ -48,7 +48,7 @@ Vector3 rgb_to_vec(uchar r, uchar g, uchar b) {
 	return result;
 }
 
-#define DYNAMIC_ARRAY_DEFAULT_CAPACITY ((size_t)2)
+#define DYNAMIC_ARRAY_DEFAULT_CAPACITY ((size_t)16)
 
 void dynamic_array_create_fn(DynamicArray* arr, size_t element_size) {
 	arr->size = 0;
@@ -71,6 +71,19 @@ void* dynamic_array_at(DynamicArray* arr, uint index) {
 	assert(index < arr->size);
 
 	return (uchar*)arr->data + (size_t)index * arr->element_size;
+}
+
+void* dynamic_array_last(DynamicArray* arr) {
+	return (uchar*)arr->data + (arr->size - 1) * arr->element_size;
+}
+
+int dynamic_array_pop(DynamicArray* arr, uint count) {
+	if (count > arr->size)
+		return -1;
+
+	arr->size -= count;
+
+	return 0;
 }
 
 void dynamic_array_swap(DynamicArray* arr, uint src, uint dst) {
@@ -131,23 +144,6 @@ void* list_map(List* list, void (*function)(void*)) {
 	for (; list != NULL; list = list->next) {
 		function(list->data);
 	}
-}
-
-#undef malloc
-#undef free
-
-void* debug_malloc(size_t size, const char* file, const uint line) {
-	void* return_value = malloc(size);
-
-	printf("Malloc %p at %s:%d\n", return_value, file, line);
-
-	return return_value;
-}
-
-void* debug_free(void* ptr, const char* file, const uint line) {
-	printf("Free %p at %s:%d\n", ptr, file, line);
-
-	free(ptr);
 }
 
 uint str_hash(char* str, uint maxval) {
@@ -235,10 +231,29 @@ void* hash_table_get(HashTable* table, char* key) {
 	if (entry == NULL)
 		return NULL;
 
-	if (entry->next_entry == NULL)	// Sole entry in list
+	if (entry->next_entry == NULL && strcmp(key, entry->key) == 0)	// Sole entry in list
 		return entry->data;
+	else if (entry->next_entry == NULL)
+		return NULL;
 
 	for (; strcmp(entry->key, key) != 0; entry = entry->next_entry);
 
 	return entry->data;
+}
+
+#undef malloc
+#undef free
+
+void* debug_malloc(size_t size, const char* file, const uint line) {
+	void* return_value = malloc(size);
+
+	printf("Malloc %p at %s:%d\n", return_value, file, line);
+
+	return return_value;
+}
+
+void* debug_free(void* ptr, const char* file, const uint line) {
+	printf("Free %p at %s:%d\n", ptr, file, line);
+
+	free(ptr);
 }

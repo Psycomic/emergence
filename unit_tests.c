@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 void execute_tests(void) {
 	// Hash table test
@@ -29,17 +30,21 @@ void execute_tests(void) {
 	assert(*(uint*)hash_table_get(table, "five") == value_five);
 
 	// forth tests
-	DynamicArray forth_words;
-	DYNAMIC_ARRAY_CREATE(&forth_words, EForthObject);
+	eforth_initialize();
+	
+	char buffer[2048];
 
-	eforth_parse("  swap   3 2  hello  3  + *   ", &forth_words);
+	DynamicArray stack;
+	DYNAMIC_ARRAY_CREATE(&stack, int);
 
-	printf("%lld { ", forth_words.size);
-	for (uint i = 0; i < forth_words.size; i++) {
-		eforth_object_print(dynamic_array_at(&forth_words, i));
+	do {
+		DynamicArray forth_words;
+		DYNAMIC_ARRAY_CREATE(&forth_words, EForthObject);
 
-		printf(" ");
-	}
+		printf("? ");
 
-	printf("}\n");
+		fgets(buffer, sizeof(buffer), stdin);
+
+		eforth_eval(buffer, &stack);
+	} while (strcmp(buffer, "bye\n") != 0);
 }

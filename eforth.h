@@ -15,7 +15,20 @@ typedef struct {
 	} data;
 } EForthObject;
 
+typedef enum {
+	EFORTH_NO_ERROR,
+	EFORTH_STACK_UNDERFLOW,
+	EFORTH_UNKNOWN_WORD,
+	EFORTH_PANIC
+} EForthException;
+
+void eforth_initialize(void);
+
 void eforth_object_print(EForthObject* obj);
-void eforth_parse(char* stream, DynamicArray* words);
+
+EForthException eforth_parse(char* stream, DynamicArray* words);
+EForthException eforth_execute(DynamicArray* program, DynamicArray* stack);
+
+EForthException eforth_eval(char* stream, DynamicArray* stack);
 
 #endif // !FORTH_HEADER

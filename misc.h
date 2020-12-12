@@ -64,6 +64,8 @@ void memory_multiple_copy_f(float* src, float* dst, uint repeat, uint size);
 void dynamic_array_create_fn(DynamicArray* arr, size_t element_size);
 void* dynamic_array_push_back(DynamicArray* arr);
 void* dynamic_array_at(DynamicArray* arr, uint index);
+void* dynamic_array_last(DynamicArray* arr);
+int dynamic_array_pop(DynamicArray* arr, uint count);
 void dynamic_array_swap(DynamicArray* arr, uint src, uint dst);
 void dynamic_array_remove(DynamicArray* arr, uint id);
 

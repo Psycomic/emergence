@@ -75,9 +75,9 @@ void click_callback(Widget* widget, Event* evt) {
 int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
 
-#ifdef _DEBUG
+// #ifdef _DEBUG
 	execute_tests();			// Unit tests
-#endif
+// #endif
 
 	Image copland_os_image;
 	if (image_load_bmp(&copland_os_image, "./images/copland_os_enterprise.bmp") >= 0)
