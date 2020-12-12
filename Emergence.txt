@@ -1,0 +1,52 @@
+# Emergence
+## Naming
+
+Emergence is a bad name. That's a fact. The name is one of the most important things there is to a software. The 
+name decides if the user will use it. 
+
+So, I have to change the name. The right question to ask is: what will the game be about? It's about evolution, 
+planet exploration and species descoveries.
+
+### Evolution
+
+Let's look for synonyms of evolution:
+	+ change
+    + enlargement
+    + expansion
+    + growth
+    + progression
+    + transformation
+    + flowering
+    + increase
+    + maturation
+    + unfolding
+    + evolvement
+    + natural process
+    + working out 
+
+Seems alright. I will exclude some, which would definitively be bad names, and i have:
+    + expansion
+    + growth
+    + transformation
+    + maturation
+    + evolvement
+    + natural process
+
+### Cosmic
+
+Synonyms of Cosmic:
+    + global
+    + grandiose
+    + huge
+    + immense
+    + infinite
+    + planetary
+    + catholic
+    + cosmogonal
+    + cosmogonic
+    + cosmopolitan
+    + ecumenical
+    + empyrean
+    + measureless
+    + vast
+    + worldwide 

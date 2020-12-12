@@ -128,4 +128,7 @@
       <Filter>shaders\fragment\UI</Filter>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="Emergence.txt" />
+  </ItemGroup>
 </Project>

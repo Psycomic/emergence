@@ -187,6 +187,9 @@
     <None Include="shaders\vertex_uniform_color.glsl" />
     <None Include="shaders\vertex_ui_background.glsl" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="Emergence.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

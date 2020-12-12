@@ -47,17 +47,29 @@ float terrain_noise(float x, float y) {
 	return voronoi_noise(2, points, POINTS_COUNT, positon, &cave_noise);
 }
 
+static WindowID confirm_window = -1;
+
+void confirm_on_close() {
+	confirm_window = -1;
+}
+
 void click_callback(Widget* widget, Event* evt) {
-	float window_position[] = {
-		random_float() * 800.f - 400.f, 
-		random_float() * 600.f - 300.f
-	};
+	if (confirm_window < 0) {
+		float window_position[] = {
+			random_float() * 800.f - 400.f,
+			random_float() * 600.f - 300.f
+		};
 
-	WindowID confirm_window = window_create(scene, 200.f, 100.f, window_position, "CONFIRM");
+		confirm_window = window_create(scene, 367.91f, 140.31f, window_position, "CONFIRM");
+		window_set_on_close(scene, confirm_window, &confirm_on_close);
 
-	widget_label_create(confirm_window, scene, NULL, "DO YOU WANT TO CONFIRM", 14.f, 5.f, red, LAYOUT_PACK);
-	widget_button_create(confirm_window, scene, NULL, "YES", 10.f, 5.f, 5.f, LAYOUT_PACK);
-	widget_button_create(confirm_window, scene, NULL, "NO", 10.f, 5.f, 5.f, LAYOUT_PACK);
+		widget_label_create(confirm_window, scene, NULL, "DO YOU WANT TO CONFIRM", 14.f, 5.f, black, LAYOUT_PACK);
+		widget_button_create(confirm_window, scene, NULL, "YES", 10.f, 5.f, 5.f, LAYOUT_PACK);
+		widget_button_create(confirm_window, scene, NULL, "NO", 10.f, 5.f, 5.f, LAYOUT_PACK);
+	}
+	else {
+		window_switch_to(scene, confirm_window);
+	}
 }
 
 int main(void) {
@@ -203,13 +215,13 @@ int main(void) {
 		0.1f, 0.2f
 	};
 
-	WindowID terrain_window = window_create(scene, 0.5f, 0.5f, window1_position, "EDIT TERRAIN");
+	WindowID terrain_window = window_create(scene, 478.f, 237.f, window1_position, "EDIT TERRAIN");
 
 	// Window 1's widgets
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL, "EDIT TERRAIN\n", 20.f, 0.f, black, LAYOUT_PACK);
 	
-	Widget* terrain_presentation_width = widget_label_create(terrain_window, scene, terrain_presentation, "WIDTH\n", 10.f, 0.f, red, LAYOUT_PACK);
-	Widget* terrain_presentation_height = widget_label_create(terrain_window, scene, terrain_presentation, "HEIGHT\n", 10.f, 0.f, red, LAYOUT_PACK);
+	Widget* terrain_presentation_width = widget_label_create(terrain_window, scene, terrain_presentation, "WIDTH\n", 10.f, 0.f, green, LAYOUT_PACK);
+	Widget* terrain_presentation_height = widget_label_create(terrain_window, scene, terrain_presentation, "HEIGHT\n", 10.f, 0.f, green, LAYOUT_PACK);
 
 	Widget* button = widget_button_create(terrain_window, scene, terrain_presentation, "CONFIRM", 12.f, 0.f, 5.f, LAYOUT_PACK);
 

@@ -9,8 +9,14 @@
 #define CONS(A, B)							cons(&A, sizeof(A), B)
 
 #ifdef _DEBUG
+
 #define malloc(size)	debug_malloc(size, __FILE__, __LINE__)
 #define free(ptr)		debug_free(ptr, __FILE__, __LINE__)
+
+#else
+
+#include <stdlib.h>
+
 #endif // _DEBUG
 
 

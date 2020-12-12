@@ -95,6 +95,7 @@ typedef struct {
 // every drawable has its own container, differing from the original scene.
 typedef struct {
 	Vector2 position;
+	void (*on_close)();
 
 	float width;
 	float height;
@@ -202,7 +203,7 @@ void window_draw(Window* window, Mat4 view_position_matrix);
 void window_set_position(Window* window, float x, float y);
 void window_set_size(Window* window, float width, float height);
 void window_set_transparency(Window* window, float transparency);
-void window_destroy(Scene* scene, uint id);
+void window_destroy(Scene* scene, WindowID id);
 
 void material_use(Material* material, float* model_matrix, float* view_position_matrix);
 
@@ -214,6 +215,9 @@ GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y);
 void widget_on_hover(Widget* widget, Event* evt);
 void widget_on_click(Widget* widget, Event* evt);
 void widget_destroy(Widget* widget);
+
+Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout);
+Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, float padding, Layout layout);
 
 void scene_set_size(Scene* scene, float width, float height);
 
@@ -736,6 +740,12 @@ void window_set_size(Window* window, float width, float height) {
 	window->width = max(width, window->min_width);
 	window->height = max(height, window->min_height);
 	
+#ifdef _DEBUG
+	printf("Set window size to %.2f %.2f\n", window->width, window->height);
+	// 478.00 237.00 confirm
+	// 367.91 140.31 edit
+#endif
+
 	window_update(window);
 
 	drawable_rectangle_set_size(window->drawables[0], window->width, window->height);
@@ -765,6 +775,8 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 
 	window->widgets_count = 0;
 	window->layout = LAYOUT_PACK;
+
+	window->on_close = NULL;
 
 	Vector3 title_color = { 0.6f, 0.6f, 0.6f };
 	window->title = text_create(title, monospaced_font_texture, 15.f, window->position, ((float) M_PI) * 3 / 2, title_color);
@@ -806,6 +818,10 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	scene->selected_window = scene->windows.size - 1;
 
 	return scene->windows.size - 1;
+}
+
+void window_set_on_close(Scene* scene, WindowID id, void (*on_close)()) {
+	((Window*)dynamic_array_at(&scene->windows, id))->on_close = on_close;
 }
 
 Vector2 window_get_anchor(Window* window) {
@@ -850,25 +866,42 @@ Vector2 window_get_max_position(Window* window) {
 	return max_positon;
 }
 
-void window_destroy(Scene* scene, uint id) {
-	Window* window = dynamic_array_at(&scene->windows, id);
+void window_destroy(Scene* scene, WindowID id) {
+	if (scene->windows.size <= 1) {
+		float position[] = {
+			0.f, 0.f
+		};
 
-	free(drawable_buffer_data(window->drawables[0], 0));
-	free(drawable_buffer_data(window->drawables[1], 0));
+		WindowID error_window = window_create(scene, 400.f, 100.f, position, "ERROR");
+		widget_label_create(error_window, scene, NULL, "ATTEMPTED TO DELETE\nSOLE WINDOW", 14.f, 5.f, red, LAYOUT_PACK);
+	}
+	else {
+		Window* window = dynamic_array_at(&scene->windows, id);
 
-	// Freeing memory resources
-	for (uint i = 0; i < ARRAY_SIZE(window->drawables); i++)
-		drawable_destroy(window->drawables[i]);
-	
-	for (uint i = 0; i < window->widgets_count; i++)
-		widget_destroy(window->widgets[i]);
+		if (window->on_close != NULL)
+			window->on_close();
 
-	text_destroy(window->title);
+		free(drawable_buffer_data(window->drawables[0], 0));
+		free(drawable_buffer_data(window->drawables[1], 0));
 
-	// Reajusting the windows array
-	dynamic_array_remove(&scene->windows, id);
+		// Freeing memory resources
+		for (uint i = 0; i < ARRAY_SIZE(window->drawables); i++)
+			drawable_destroy(window->drawables[i]);
 
-	scene->selected_window = scene->selected_window % scene->windows.size;
+		for (uint i = 0; i < window->widgets_count; i++)
+			widget_destroy(window->widgets[i]);
+
+		text_destroy(window->title);
+
+		// Reajusting the windows array
+		dynamic_array_remove(&scene->windows, id);
+
+		scene->selected_window = scene->selected_window % scene->windows.size;
+	}
+}
+
+void window_switch_to(Scene* scene, WindowID id) {
+	scene->selected_window = id;
 }
 
 Vector2 widget_get_real_position(Widget* widget, Window* window) {
