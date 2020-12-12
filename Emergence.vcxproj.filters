@@ -60,6 +60,9 @@
     <ClCompile Include="drawable.c">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="eforth.c">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="linear_algebra.h">
@@ -84,6 +87,9 @@
       <Filter>Fichiers sources</Filter>
     </ClInclude>
     <ClInclude Include="drawable.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="eforth.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
   </ItemGroup>

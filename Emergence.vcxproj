@@ -147,6 +147,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="drawable.c" />
+    <ClCompile Include="eforth.c" />
     <ClCompile Include="linear_algebra.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="misc.c" />
@@ -164,6 +165,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="drawable.h" />
+    <ClInclude Include="eforth.h" />
     <ClInclude Include="linear_algebra.h" />
     <ClInclude Include="misc.h" />
     <ClInclude Include="noise.h" />

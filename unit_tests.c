@@ -1,9 +1,10 @@
-#include "misc.h"
+#include "eforth.h"
 
 #include <assert.h>
 #include <stdio.h>
 
 void execute_tests(void) {
+	// Hash table test
 	HashTable* table = hash_table_create(4);
 
 	uint value_one = 10,
@@ -26,4 +27,19 @@ void execute_tests(void) {
 	assert(*(uint*)hash_table_get(table, "three") == value_three);
 	assert(*(uint*)hash_table_get(table, "four") == value_four);
 	assert(*(uint*)hash_table_get(table, "five") == value_five);
+
+	// forth tests
+	DynamicArray forth_words;
+	DYNAMIC_ARRAY_CREATE(&forth_words, EForthObject);
+
+	eforth_parse("  swap   3 2  hello  3  + *   ", &forth_words);
+
+	printf("%lld { ", forth_words.size);
+	for (uint i = 0; i < forth_words.size; i++) {
+		eforth_object_print(dynamic_array_at(&forth_words, i));
+
+		printf(" ");
+	}
+
+	printf("}\n");
 }

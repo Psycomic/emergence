@@ -19,7 +19,7 @@
 
 #endif // _DEBUG
 
-
+#include <stddef.h>
 #include <GL/glew.h>
 
 #include "linear_algebra.h"
@@ -29,7 +29,8 @@ typedef unsigned char uchar;
 
 typedef struct {
 	void* data;
-	size_t size, capacity;
+	size_t size;
+	size_t capacity;
 	uint element_size;
 } DynamicArray;
 
