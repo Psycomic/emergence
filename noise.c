@@ -25,12 +25,10 @@ float llerp(float a, float b, float w) {
 }
 
 float sign(float x) {
-	if (x > 0.f) {
+	if (x > 0.f)
 		return 1.f;
-	}
-	else {
+	else
 		return -1.f;
-	}
 }
 
 float random_float() {
@@ -153,10 +151,9 @@ void hopalong_fractal(Vector3* destination, uint iterations_number, float a, flo
 
 	for (uint i = 0; i < iterations_number; i++) {
 		float temp_x = y - sign(x) * sqrtf(abs(b * x - c));
-		float temp_y = a - x;
+		y = a - x;
 
 		x = temp_x;
-		y = temp_y;
 
 		destination[i].x = x * scale;
 		destination[i].y = y * scale;

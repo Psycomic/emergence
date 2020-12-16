@@ -1,4 +1,4 @@
-#include "eforth.h"
+#include "misc.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -28,23 +28,4 @@ void execute_tests(void) {
 	assert(*(uint*)hash_table_get(table, "three") == value_three);
 	assert(*(uint*)hash_table_get(table, "four") == value_four);
 	assert(*(uint*)hash_table_get(table, "five") == value_five);
-
-	// forth tests
-	eforth_initialize();
-	
-	char buffer[2048];
-
-	DynamicArray stack;
-	DYNAMIC_ARRAY_CREATE(&stack, int);
-
-	do {
-		DynamicArray forth_words;
-		DYNAMIC_ARRAY_CREATE(&forth_words, EForthObject);
-
-		printf("? ");
-
-		fgets(buffer, sizeof(buffer), stdin);
-
-		eforth_eval(buffer, &stack);
-	} while (strcmp(buffer, "bye\n") != 0);
 }

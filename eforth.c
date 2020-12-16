@@ -23,7 +23,10 @@ GLboolean is_blank(char c) {
 }
 
 GLboolean is_number(char* stream) {
-	while (*stream >= '1' && *stream <= '9') {
+	if (*stream == '-')
+		stream++;
+
+	while (*stream >= '0' && *stream <= '9') {
 		if (*(++stream) == '\0')
 			return GL_TRUE;
 	}
@@ -38,10 +41,70 @@ void eforth_object_print(EForthObject* obj) {
 		printf("%s", obj->data.word);
 }
 
+EForthException eforth_lex(DynamicArray* parsed_strings, DynamicArray* words) {
+	// Filling words
+	
+	for (uint i = 0; i < parsed_strings->size; i++) {
+		char* str = *((char**)dynamic_array_at(parsed_strings, i));
+
+		if (strcmp(str, ":") == 0) {
+			uint j;
+			for (j = i; strcmp(*((char**)dynamic_array_at(parsed_strings, j)), ";") != 0; j++) {
+				if (j >= parsed_strings->size - 1)
+					return EFORTH_NO_CLOSING_DELIMITER;
+			}
+
+			DynamicArray* new_word = malloc(sizeof(DynamicArray));
+			DYNAMIC_ARRAY_CREATE(new_word, EForthObject);
+
+			uint word_size = (j - 1) - i;
+
+			DynamicArray word_strings;
+			word_strings.element_size = sizeof(char*);
+			word_strings.size = word_size;
+			word_strings.capacity = word_size;
+			word_strings.data = malloc(sizeof(char*) * word_size);
+
+			memcpy(word_strings.data, (char**)parsed_strings->data + i, word_size);
+
+			EForthException exception;
+			if ((exception = eforth_lex(&word_strings, new_word)) != EFORTH_NO_ERROR)
+				return exception;
+
+			dynamic_array_destroy(&word_strings);
+
+			i = j;
+		}
+		else if (is_number(str)) {
+			EForthObject* obj = dynamic_array_push_back(words);
+
+			obj->type = FORTH_TYPE_INT;
+			obj->data.integer = atoi(str);
+		}
+		else {
+			EForthObject* obj = dynamic_array_push_back(words);
+
+			if (hash_table_get(eforth_dictionnary, str) == NULL) {
+				printf(" %s ?\n", str);
+				return EFORTH_UNKNOWN_WORD;
+			}
+
+			obj->type = FORTH_TYPE_WORD;
+			obj->data.word = str;
+		}
+	}
+
+	return EFORTH_NO_ERROR;
+}
+
 EForthException eforth_parse(char* stream, DynamicArray* words) {
+	DynamicArray parsed_strings;
+	DYNAMIC_ARRAY_CREATE(&parsed_strings, char*);
+
 	char* new_stream = _strdup(stream);
 	char* stream_end = new_stream + strlen(new_stream);
 
+	// Parsing the text
 	while (new_stream < stream_end) {
 		while (is_blank(*(new_stream++)));
 		new_stream--;
@@ -54,24 +117,20 @@ EForthException eforth_parse(char* stream, DynamicArray* words) {
 
 		new_stream[i] = '\0';
 
-		EForthObject* obj = dynamic_array_push_back(words);
-		
-		if (is_number(new_stream)) {
-			obj->type = FORTH_TYPE_INT;
-			obj->data.integer = atoi(new_stream);
-		}
-		else {
-			if (hash_table_get(eforth_dictionnary, new_stream) == NULL) {
-				printf(" %s ?\n", new_stream);
-				return EFORTH_UNKNOWN_WORD;
-			}
-
-			obj->type = FORTH_TYPE_WORD;
-			obj->data.word = new_stream;
-		}
+		char** str = dynamic_array_push_back(&parsed_strings);
+		*str = new_stream;
 
 		new_stream += (size_t)i + 1;
 	}
+
+	EForthException exception;
+	if ((exception = eforth_lex(&parsed_strings, words)) != EFORTH_NO_ERROR) {
+		dynamic_array_destroy(&parsed_strings);
+		
+		return exception;
+	}
+
+	dynamic_array_destroy(&parsed_strings);
 
 	return EFORTH_NO_ERROR;
 } 
@@ -116,8 +175,6 @@ EForthException eforth_mul(DynamicArray* stack) {
 }
 
 EForthException eforth_execute(DynamicArray* program, DynamicArray* stack) {
-	EForthException exception = EFORTH_NO_ERROR;
-	
 	for (uint i = 0; i < program->size; i++) {
 		EForthObject* current_word = dynamic_array_at(program, i);
 		
@@ -128,19 +185,18 @@ EForthException eforth_execute(DynamicArray* program, DynamicArray* stack) {
 		else {
 			EForthWord* word = hash_table_get(eforth_dictionnary, current_word->data.word);
 
+			EForthException exception;
 			if (word->is_build_in)
 				exception = word->data.build_in(stack);
 			else
 				exception = eforth_execute(word->data.defined_function, stack);
+
+			if (exception != EFORTH_NO_ERROR)
+				return exception;
 		}
 	}
 
-	if (exception != EFORTH_NO_ERROR)
-		printf(" Raised an exception of type %d\n", exception);
-	else
-		printf(" ok\n");
-
-	return exception;
+	return EFORTH_NO_ERROR;
 }
 
 EForthException eforth_eval(char* stream, DynamicArray* stack) {
@@ -149,12 +205,19 @@ EForthException eforth_eval(char* stream, DynamicArray* stack) {
 
 	EForthException exception;
 	if ((exception = eforth_parse(stream, &forth_words)) != EFORTH_NO_ERROR)
-		return exception;
+		goto error;
 
 	if ((exception = eforth_execute(&forth_words, stack)) != EFORTH_NO_ERROR)
-		return exception;
+		goto error;
 
+	printf(" ok\n");
 	return EFORTH_NO_ERROR;
+
+error:
+	printf("Raised exception of type %d\n", exception);
+	dynamic_array_clear(stack);
+
+	return exception;
 }
 
 void eforth_initialize(void) {

@@ -97,6 +97,21 @@ void dynamic_array_remove(DynamicArray* arr, uint id) {
 	arr->size--;
 }
 
+void dynamic_array_clear(DynamicArray* arr) {
+	arr->size = 0;
+	arr->capacity = DYNAMIC_ARRAY_DEFAULT_CAPACITY;
+
+	arr->data = realloc(arr->data, arr->element_size * arr->capacity);
+}
+
+void dynamic_array_destroy(DynamicArray* arr) {
+	free(arr->data);
+
+	arr->size = 0;
+	arr->capacity = 0;
+	arr->data = NULL;
+}
+
 List* cons(void* data, size_t data_size, List* next) {
 	List* list = malloc(sizeof(List) + data_size);
 	assert(list != NULL);

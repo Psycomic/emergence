@@ -33,6 +33,10 @@ void usleep(clock_t time) {
 
 #define POINTS_COUNT 100
 
+#define ITERATIONS_NUMBER 10000
+#define SUBSET_NUMBER 7
+#define RINGS_NUMBER 3
+
 float points[POINTS_COUNT * 2];
 
 static Scene* scene;
@@ -75,9 +79,9 @@ void click_callback(Widget* widget, Event* evt) {
 int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
 
-// #ifdef _DEBUG
+ #ifdef _DEBUG
 	execute_tests();			// Unit tests
-// #endif
+ #endif
 
 	Image copland_os_image;
 	if (image_load_bmp(&copland_os_image, "./images/copland_os_enterprise.bmp") >= 0)
@@ -137,21 +141,21 @@ int main(void) {
 		terrain_color[terrain_indexes[i]].z = 1.f;
 	}
 
-#define ITERATIONS_NUMBER 10000
-
 	Vector3* hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 	Vector3* hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 
-	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
-		float c = (i % ITERATIONS_NUMBER) / (float)ITERATIONS_NUMBER;
-		float c2 = 1.f - c;
+	Vector3 color;
 
-		hopalong_color[i].x = c;
-		hopalong_color[i].y = c2;
-		hopalong_color[i].z = 0.f;
+	uint rate = (ITERATIONS_NUMBER / SUBSET_NUMBER);
+
+	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
+		if (i % rate == 0)
+			random_arrayf(&color, 3);
+
+		hopalong_color[i] = color;
 	}
 
-	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, -1.5f, 2.2f, -1.4f, 0.1f);
+	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, 3.1f, -1.2f, 3.4f, 0.1f);
 
 	// Creating a window and initialize an opengl context
 	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");

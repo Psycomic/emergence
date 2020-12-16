@@ -68,6 +68,8 @@ void* dynamic_array_last(DynamicArray* arr);
 int dynamic_array_pop(DynamicArray* arr, uint count);
 void dynamic_array_swap(DynamicArray* arr, uint src, uint dst);
 void dynamic_array_remove(DynamicArray* arr, uint id);
+void dynamic_array_clear(DynamicArray* arr);
+void dynamic_array_destroy(DynamicArray* arr);
 
 List* cons(void* data, size_t data_size, List* next);
 
