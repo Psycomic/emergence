@@ -66,6 +66,7 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 
 void widget_set_on_hover(Widget* widget, EventCallback on_hover);
 void widget_set_on_click(Widget* widget, EventCallback on_click);
+void widget_set_on_click_up(Widget* widget, EventCallback on_click_up);
 
 #endif // RENDER_INTERNAL
 #endif // RENDER_HEADER

@@ -26,6 +26,15 @@ int read_file(char* buffer, const char* filename) {
 	return 0;
 }
 
+float gaussian_random() {
+	float sum = 0.f;
+
+	for (uint i = 0; i < 12; i++)
+		sum += random_float();
+
+	return sum - 6.f;
+}
+
 void random_arrayf(float* destination, uint size) {
 	for (uint i = 0; i < size; ++i) {
 		destination[i] = random_float();
@@ -203,7 +212,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 		entry->key = key;
 		entry->next_entry = NULL;
 
-		if (memcpy_s(entry->data, value_size, value, value_size) != 0)
+		if (memcpy(entry->data, value, value_size) != 0)
 			return -1;
 	}
 	else {	// Collision
@@ -211,7 +220,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 
 		for (; entry->next_entry != NULL; entry = entry->next_entry) {
 			if (strcmp(entry->key, key) == 0) {	// If already exists
-				if (memcpy_s(entry->data, value_size, value, value_size) != 0)
+				if (memcpy(entry->data, value, value_size) != 0)
 					return -1;
 
 				return 0;
@@ -219,7 +228,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 		}
 
 		if (strcmp(entry->key, key) == 0) {
-			if (memcpy_s(entry->data, value_size, value, value_size) != 0)
+			if (memcpy(entry->data, value, value_size) != 0)
 				return -1;
 
 			return 0;
@@ -231,7 +240,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 		entry->next_entry->key = key;
 		entry->next_entry->next_entry = NULL;
 
-		if (memcpy_s(entry->next_entry->data, value_size, value, value_size))
+		if (memcpy(entry->next_entry->data, value, value_size))
 			return -1;
 	}
 

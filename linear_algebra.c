@@ -12,6 +12,7 @@
 #include <math.h>
 
 #include "linear_algebra.h"
+#include "misc.h"
 
 void vector2_add(Vector2* dest, Vector2 a, Vector2 b) {
 	dest->x = a.x + b.x;
@@ -276,11 +277,11 @@ void vertices_normals(Vector3* normals, Vector3* vertices, uint vertices_size, u
 	}
 }
 
-bool in_interval(float a, float x, float y) {
+BOOL in_interval(float a, float x, float y) {
 	return a >= x && a <= y;
 }
 
-bool interval_intersect(float a_min, float a_max, float b_min, float b_max) {
+BOOL interval_intersect(float a_min, float a_max, float b_min, float b_max) {
 	return in_interval(a_min, b_min, b_max) || in_interval(a_max, b_min, b_max) || in_interval(b_min, a_min, a_max) || in_interval(b_max, a_min, a_max);
 }
 

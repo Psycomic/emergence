@@ -33,7 +33,7 @@ void usleep(clock_t time) {
 
 #define POINTS_COUNT 100
 
-#define ITERATIONS_NUMBER 10000
+#define ITERATIONS_NUMBER 32000
 #define SUBSET_NUMBER 7
 #define RINGS_NUMBER 3
 
@@ -48,32 +48,39 @@ float terrain_noise(float x, float y) {
 		x, y
 	};
 
-	return voronoi_noise(2, points, POINTS_COUNT, positon, &cave_noise);
+	return voronoi_noise(2, points, POINTS_COUNT, positon, &cellular_noise);
 }
 
-static WindowID confirm_window = -1;
+static Vector3* hopalong_points;
+static Vector3* hopalong_color;
+static Drawable* hopalong_drawable;
+static Widget* terrain_presentation_label;
 
-void confirm_on_close() {
-	confirm_window = -1;
+void update_fractal(void) {
+	float a = 2.1f,
+		b = gaussian_random(),
+		c = -4.1f;
+	
+	printf("A %.2f; B %.2f; C %.2f;\n", a, b, c);
+
+	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, a, b, c, 0.1f);
+
+	Vector3 color;
+
+	uint rate = (ITERATIONS_NUMBER / SUBSET_NUMBER);
+
+	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
+		if (i % rate == 0)
+			random_arrayf(&color, 3);
+
+		hopalong_color[i] = color;
+	}
 }
 
-void click_callback(Widget* widget, Event* evt) {
-	if (confirm_window < 0) {
-		float window_position[] = {
-			random_float() * 800.f - 400.f,
-			random_float() * 600.f - 300.f
-		};
+void update_callback(Widget* widget, Event* evt) {
+	update_fractal();
 
-		confirm_window = window_create(scene, 367.91f, 140.31f, window_position, "CONFIRM");
-		window_set_on_close(scene, confirm_window, &confirm_on_close);
-
-		widget_label_create(confirm_window, scene, NULL, "DO YOU WANT TO CONFIRM", 14.f, 5.f, black, LAYOUT_PACK);
-		widget_button_create(confirm_window, scene, NULL, "YES", 10.f, 5.f, 5.f, LAYOUT_PACK);
-		widget_button_create(confirm_window, scene, NULL, "NO", 10.f, 5.f, 5.f, LAYOUT_PACK);
-	}
-	else {
-		window_switch_to(scene, confirm_window);
-	}
+	drawable_update_buffer(hopalong_drawable, 0);
 }
 
 int main(void) {
@@ -130,7 +137,7 @@ int main(void) {
 
 	random_arrayf(points, 2 * POINTS_COUNT);
 
-	terrain_create(terrain_vertices, TERRAIN_SIZE, 10.f, 20.f, &terrain_noise);
+	terrain_create(terrain_vertices, TERRAIN_SIZE, 20.f, 20.f, &terrain_noise);
 	terrain_elements(terrain_indexes, TERRAIN_SIZE);
 
 	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
@@ -141,21 +148,10 @@ int main(void) {
 		terrain_color[terrain_indexes[i]].z = 1.f;
 	}
 
-	Vector3* hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
-	Vector3* hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
+	hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
+	hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 
-	Vector3 color;
-
-	uint rate = (ITERATIONS_NUMBER / SUBSET_NUMBER);
-
-	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
-		if (i % rate == 0)
-			random_arrayf(&color, 3);
-
-		hopalong_color[i] = color;
-	}
-
-	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, 3.1f, -1.2f, 3.4f, 0.1f);
+	update_fractal();
 
 	// Creating a window and initialize an opengl context
 	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");
@@ -209,7 +205,7 @@ int main(void) {
 
 	Vector3	hopalong_position = { 10.f, 0.f, 5.f };
 
-	Drawable* hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
+	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
 	float window1_position[] = {
 		0.5f, 0.2f
@@ -219,17 +215,18 @@ int main(void) {
 		0.1f, 0.2f
 	};
 
-	WindowID terrain_window = window_create(scene, 478.f, 237.f, window1_position, "EDIT TERRAIN");
+	WindowID terrain_window = window_create(scene, 478.f, 237.f, window1_position, "EDIT FRACTAL");
 
 	// Window 1's widgets
-	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL, "EDIT TERRAIN\n", 20.f, 0.f, black, LAYOUT_PACK);
+	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
+		"EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, black, LAYOUT_PACK);
+
+	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation, 
+		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, black, LAYOUT_PACK);
 	
-	Widget* terrain_presentation_width = widget_label_create(terrain_window, scene, terrain_presentation, "WIDTH\n", 10.f, 0.f, green, LAYOUT_PACK);
-	Widget* terrain_presentation_height = widget_label_create(terrain_window, scene, terrain_presentation, "HEIGHT\n", 10.f, 0.f, green, LAYOUT_PACK);
+	Widget* button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f, 0.f, 5.f, LAYOUT_PACK);
 
-	Widget* button = widget_button_create(terrain_window, scene, terrain_presentation, "CONFIRM", 12.f, 0.f, 5.f, LAYOUT_PACK);
-
-	widget_set_on_click(button, &click_callback);
+	widget_set_on_click_up(button, &update_callback);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 	printf("Seconds per frame: %ld\n", spf);

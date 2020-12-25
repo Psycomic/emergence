@@ -35,7 +35,7 @@ void material_uniform_vec2(Material* material, uint uniform_id, Vector2 vec);
 void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec);
 void material_use(Material* material, float* model_matrix, float* position_view_matrix);
 
-GLuint texture_create(Image* image, bool generate_mipmap);
+GLuint texture_create(Image* image, BOOL generate_mipmap);
 
 void drawable_update(Drawable* drawable);
 void drawable_update_buffer(Drawable* drawable, uint buffer_id);

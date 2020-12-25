@@ -68,6 +68,7 @@ typedef struct Widget {
 
 	EventCallback on_hover;
 	EventCallback on_click;
+	EventCallback on_click_up;
 
 	Layout layout;
 
@@ -186,9 +187,11 @@ static char* axis_uniforms[] = {
 
 static Vector3 button_background_color = { 0.5f, 0.5f, 0.5f };
 static Vector3 button_background_hover_color = { 0.9f, 0.9f, 1.f };
+static Vector3 button_background_click_color = { 0.2f, 0.2f, 0.4f };
 
 static Vector3 button_text_color = { 0.f, 0.f, 0.f };
 static Vector3 button_text_hover_color = { 0.2f, 0.2f, 0.4f };
+static Vector3 button_text_click_color = { 0.8f, 0.8f, 0.9f };
 
 static Drawable* axis_drawable;
 
@@ -211,9 +214,13 @@ void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix);
 Vector2 widget_get_real_position(Widget* widget, Window* window);
 void widget_set_transparency(Widget* widget, float transparency);
 float widget_get_margin_height(Widget* widget);
+
 GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y);
+
 void widget_on_hover(Widget* widget, Event* evt);
 void widget_on_click(Widget* widget, Event* evt);
+void widget_on_click_up(Widget* widget, Event* evt);
+
 void widget_destroy(Widget* widget);
 
 Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout);
@@ -655,6 +662,9 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 					widget->state |= WIDGET_STATE_CLICKED;
 				}
 				else {
+					if (widget->state & WIDGET_STATE_CLICKED)
+						widget_on_click_up(widget, &evt);
+
 					widget->state &= ~WIDGET_STATE_CLICKED;
 				}
 			}
@@ -742,8 +752,6 @@ void window_set_size(Window* window, float width, float height) {
 	
 #ifdef _DEBUG
 	printf("Set window size to %.2f %.2f\n", window->width, window->height);
-	// 478.00 237.00 confirm
-	// 367.91 140.31 edit
 #endif
 
 	window_update(window);
@@ -971,6 +979,7 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 
 	widget->on_hover = NULL;
 	widget->on_click = NULL;
+	widget->on_click_up = NULL;
 
 	widget->state = 0x0;
 
@@ -1012,15 +1021,18 @@ GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y) 
 }
 
 void widget_on_hover(Widget* widget, Event* evt) {
-	if (widget->on_hover != NULL) {
+	if (widget->on_hover != NULL)
 		widget->on_hover(widget, evt);
-	}
 }
 
 void widget_on_click(Widget* widget, Event* evt) {
-	if (widget->on_click != NULL) {
+	if (widget->on_click != NULL)
 		widget->on_click(widget, evt);
-	}
+}
+
+void widget_on_click_up(Widget* widget, Event* evt) {
+	if (widget->on_click_up != NULL)
+		widget->on_click_up(widget, evt);
 }
 
 void widget_set_on_hover(Widget* widget, EventCallback on_hover) {
@@ -1029,6 +1041,10 @@ void widget_set_on_hover(Widget* widget, EventCallback on_hover) {
 
 void widget_set_on_click(Widget* widget, EventCallback on_click) {
 	widget->on_click = on_click;
+}
+
+void widget_set_on_click_up(Widget* widget, EventCallback on_click_up) {
+	widget->on_click_up = on_click_up;
 }
 
 Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout) {
@@ -1121,7 +1137,11 @@ void widget_button_draw(Window* window, Widget* widget, Vector2 position, Mat4 v
 	material_set_uniform_float(button_material, 6, widget_get_width(button));	// Width
 	material_set_uniform_float(button_material, 7, widget_get_height(button));	// Height
 
-	if (widget->state & WIDGET_STATE_HOVERED) {		// Setting the background color
+	if (widget->state & WIDGET_STATE_CLICKED) {
+		button->text->color = button_text_click_color;
+		material_set_uniform_vec3(button_material, 8, button_background_click_color);
+	}
+	else if (widget->state & WIDGET_STATE_HOVERED) {		// Setting the background color
 		button->text->color = button_text_hover_color;
 		material_set_uniform_vec3(button_material, 8, button_background_hover_color);
 	}
@@ -1150,6 +1170,12 @@ void widget_button_set_transparency(Widget* widget, float transparency) {
 	
 	text_set_transparency(button->text, transparency);
 	material_set_uniform_float(drawable_material(button->button_background), 1, transparency);
+}
+
+void widget_label_set_text(Widget* widget, const char* text) { // TODO
+	Label* label = widget;
+
+//	text_set_text(...)
 }
 
 void widget_label_destroy(Widget* widget) {

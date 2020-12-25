@@ -92,7 +92,7 @@ void array_buffer_destroy(Buffer* buffer) {
 	glDeleteBuffers(1, &buffer->buffer);
 }
 
-GLuint texture_create(Image* image, bool generate_mipmap) {
+GLuint texture_create(Image* image, GLboolean generate_mipmap) {
 	GLuint texture;
 	glGenTextures(1, &texture);
 

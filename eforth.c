@@ -101,7 +101,7 @@ EForthException eforth_parse(char* stream, DynamicArray* words) {
 	DynamicArray parsed_strings;
 	DYNAMIC_ARRAY_CREATE(&parsed_strings, char*);
 
-	char* new_stream = _strdup(stream);
+	char* new_stream = strdup(stream);
 	char* stream_end = new_stream + strlen(new_stream);
 
 	// Parsing the text

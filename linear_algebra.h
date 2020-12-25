@@ -2,7 +2,7 @@
 #define LINEAR_ALGEBRA_HEADER
 
 typedef unsigned int uint;
-typedef unsigned char bool;
+typedef unsigned char BOOL;
 
 /// A collection of 3 floats for linear algebra
 typedef union {

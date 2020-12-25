@@ -8,6 +8,9 @@
 #define DYNAMIC_ARRAY_AT(ARR, INDEX, TYPE)	((TYPE*)dynamic_array_at(ARR, INDEX))
 #define CONS(A, B)							cons(&A, sizeof(A), B)
 
+#define max(a, b) (a) > (b) ? (a) : (b)
+#define min(a, b) (a) < (b) ? (a) : (b)
+
 #ifdef _DEBUG
 
 #define malloc(size)	debug_malloc(size, __FILE__, __LINE__)
@@ -56,6 +59,7 @@ int read_file(char* buffer, const char* filename);
 
 float random_float(void);
 void random_arrayf(float* destination, uint size);
+float gaussian_random(void);
 
 Vector3 rgb_to_vec(uchar r, uchar g, uchar b);
 

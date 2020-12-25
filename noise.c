@@ -165,8 +165,8 @@ void hopalong_fractal(Vector3* destination, uint iterations_number, float a, flo
 void terrain_create(Vector3* terrain_vertices, uint size, float height, float width, float (*noise_function)(float x, float y)) {
 	for (uint x = 0; x < size; ++x) {
 		for (uint y = 0; y < size; ++y) {
-			float real_x = ((float)x) / size,
-				real_y = ((float)y) / size;
+			float real_x = (float)x / size,
+				real_y = (float)y / size;
 
 			float height_at_point = noise_function(real_x, real_y);
 
