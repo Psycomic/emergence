@@ -37,7 +37,7 @@ static Vector3 blue = { 0, 0, 1 };
 static Vector3 black = { 0, 0, 0 };
 static Vector3 green = { 0, 1, 0 };
 
-typedef void (*EventCallback)(struct Widget*, Event*);
+typedef void (*EventCallback)(void*, void*);
 
 #ifndef RENDER_INTERNAL
 

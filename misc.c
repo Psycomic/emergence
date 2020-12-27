@@ -154,7 +154,7 @@ void* list_nth(List* list, uint index) {
 	return list->data;
 }
 
-void* list_destroy(List* list) {
+void list_destroy(List* list) {
 	while (list != NULL) {
 		List* next = list->next;
 
@@ -164,7 +164,7 @@ void* list_destroy(List* list) {
 	}
 }
 
-void* list_map(List* list, void (*function)(void*)) {
+void list_map(List* list, void (*function)(void*)) {
 	for (; list != NULL; list = list->next) {
 		function(list->data);
 	}

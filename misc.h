@@ -80,9 +80,9 @@ List* cons(void* data, size_t data_size, List* next);
 void* list_first(List* list);
 void* list_rest(List* list);
 void* list_nth(List* list, uint index);
-void* list_destroy(List* list);
+void list_destroy(List* list);
 
-void* list_map(List* list, void (*function)(void*));
+void list_map(List* list, void (*function)(void*));
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void* debug_free(void* ptr, const char* file, const uint line);

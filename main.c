@@ -39,8 +39,6 @@ void usleep(clock_t time) {
 
 float points[POINTS_COUNT * 2];
 
-static Scene* scene;
-
 void execute_tests(void);
 
 float terrain_noise(float x, float y) {
@@ -51,10 +49,13 @@ float terrain_noise(float x, float y) {
 	return voronoi_noise(2, points, POINTS_COUNT, positon, &cellular_noise);
 }
 
+static Scene* scene;
+static GLFWwindow* window;
 static Vector3* hopalong_points;
 static Vector3* hopalong_color;
 static Drawable* hopalong_drawable;
 static Widget* terrain_presentation_label;
+static GLboolean window_close = GL_FALSE;
 
 void update_fractal(void) {
 	float a = 2.1f,
@@ -81,6 +82,10 @@ void update_callback(Widget* widget, Event* evt) {
 	update_fractal();
 
 	drawable_update_buffer(hopalong_drawable, 0);
+}
+
+void quit_callback(Widget* widget, Event* evt) {
+	window_close = GL_TRUE;
 }
 
 int main(void) {
@@ -224,9 +229,11 @@ int main(void) {
 	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation, 
 		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, black, LAYOUT_PACK);
 	
-	Widget* button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f, 0.f, 5.f, LAYOUT_PACK);
+	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f, 5.f, 5.f, LAYOUT_PACK);
+	Widget* quit_button = widget_button_create(terrain_window, scene, terrain_presentation, "QUIT GAME", 12.f, 5.f, 5.f, LAYOUT_PACK);
 
-	widget_set_on_click_up(button, &update_callback);
+	widget_set_on_click_up(randomize_button, &update_callback);
+	widget_set_on_click_up(quit_button, &quit_callback);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 	printf("Seconds per frame: %ld\n", spf);
@@ -234,7 +241,7 @@ int main(void) {
 	glfwPollEvents();
 
 	clock_t start = clock();
-	while (!glfwWindowShouldClose(window)) {
+	while (!glfwWindowShouldClose(window) && !window_close) {
 
 		scene_draw(scene, background_color);
 		scene_handle_events(scene, window);

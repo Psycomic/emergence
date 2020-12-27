@@ -854,7 +854,7 @@ void window_draw(Window* window, Mat4 view_position_matrix) {
 	material_use(drawable_material(line_drawable), NULL, view_position_matrix);
 	drawable_draw(line_drawable);
 
-	Vector3 shadow_displacement = { 0.01f, 0.f };
+	Vector2 shadow_displacement = { 0.01f, 0.f };
 
 	text_draw(window->title, &shadow_displacement, window->height * 0.8f - 0.05f, window->title->size, window->title->position, view_position_matrix);
 
@@ -1166,27 +1166,27 @@ void widget_label_set_transparency(Widget* widget, float transparency) {
 }
 
 void widget_button_set_transparency(Widget* widget, float transparency) {
-	Button* button = widget;
+	Button* button = (Button*)widget;
 	
 	text_set_transparency(button->text, transparency);
 	material_set_uniform_float(drawable_material(button->button_background), 1, transparency);
 }
 
-void widget_label_set_text(Widget* widget, const char* text) { // TODO
-	Label* label = widget;
+void widget_label_set_text(Widget* widget, const char* text) { // TODO: Add support for dynamic text changing
+	Label* label = (Label*)widget;
 
 //	text_set_text(...)
 }
 
 void widget_label_destroy(Widget* widget) {
-	Label* label = widget;
+	Label* label = (Label*)widget;
 	
 	text_destroy(label->text);
 	free(label);
 }
 
 void widget_button_destroy(Widget* widget) {
-	Button* button = widget;
+	Button* button = (Button*)widget;
 
 	text_destroy(button->text);
 
