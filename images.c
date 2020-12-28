@@ -172,3 +172,4 @@ int image_load_png(Image* image, const char* path) {
 void image_destroy(Image* image) {
 	free(image->data);
 }
+

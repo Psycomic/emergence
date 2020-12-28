@@ -68,7 +68,7 @@ void dynamic_array_create_fn(DynamicArray* arr, size_t element_size) {
 
 void* dynamic_array_push_back(DynamicArray* arr) {
 	if (arr->size == arr->capacity) {
-		arr->capacity += DYNAMIC_ARRAY_DEFAULT_CAPACITY;
+		arr->capacity *= 2;
 
 		arr->data = realloc(arr->data, arr->capacity * arr->element_size);
 	}

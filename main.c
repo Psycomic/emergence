@@ -58,9 +58,11 @@ static Widget* terrain_presentation_label;
 static GLboolean window_close = GL_FALSE;
 
 void update_fractal(void) {
-	float a = 2.1f,
-		b = gaussian_random(),
-		c = -4.1f;
+	static const float scale = 4.f;
+
+	float a = gaussian_random() * scale,
+		b = gaussian_random() * scale,
+		c = gaussian_random() * scale;
 	
 	printf("A %.2f; B %.2f; C %.2f;\n", a, b, c);
 

@@ -2,6 +2,7 @@
 #define DRAWABLE_HEADER
 
 #include "linear_algebra.h"
+#include "images.h"
 
 #include <GL/glew.h>
 

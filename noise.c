@@ -150,7 +150,7 @@ void hopalong_fractal(Vector3* destination, uint iterations_number, float a, flo
 		y = 0.f;
 
 	for (uint i = 0; i < iterations_number; i++) {
-		float temp_x = y - sign(x) * sqrtf(abs(b * x - c));
+		float temp_x = y - sign(x) * sqrtf(fabsf(b * x - c));
 		y = a - x;
 
 		x = temp_x;

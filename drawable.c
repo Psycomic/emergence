@@ -145,7 +145,7 @@ void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_n
 			GL_FALSE,									// Normalized?
 			declarations[i].stride * sizeof(float),		// Stride
 			NULL										// Pointer
-		);
+			);
 	}
 
 	drawable->elements_count = elements_number;
