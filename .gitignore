@@ -12,6 +12,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 
+Emergence_Debug
+Emergence_Release
+
 # User files
 *.user
 .ccls-cache/

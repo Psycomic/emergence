@@ -1,5 +1,5 @@
-TARGET_DEBUG = x64/Debug/Emergence
-TARGET_RELEASE = x64/Release/Emergence
+TARGET_DEBUG = Emergence_Debug
+TARGET_RELEASE = Emergence_Release
 
 LFLAGS = -lglfw -lGL -lGLEW -ldl -lpthread -lX11 -lXrandr -lXinerama -lXi -lm
 

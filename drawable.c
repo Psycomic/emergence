@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <assert.h>
+#include <stdio.h>
 
 // Shader's uniform abstraction. 
 typedef struct {

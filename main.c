@@ -244,7 +244,6 @@ int main(void) {
 
 	clock_t start = clock();
 	while (!glfwWindowShouldClose(window) && !window_close) {
-
 		scene_draw(scene, background_color);
 		scene_handle_events(scene, window);
 
