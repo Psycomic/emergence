@@ -34,7 +34,7 @@ void usleep(clock_t time) {
 #define POINTS_COUNT 100
 
 #define ITERATIONS_NUMBER 32000
-#define SUBSET_NUMBER 7
+#define SUBSET_NUMBER 10
 #define RINGS_NUMBER 3
 
 float points[POINTS_COUNT * 2];
@@ -83,7 +83,7 @@ void update_fractal(void) {
 void update_callback(Widget* widget, Event* evt) {
 	update_fractal();
 
-	drawable_update_buffer(hopalong_drawable, 0);
+	drawable_update(hopalong_drawable);
 }
 
 void quit_callback(Widget* widget, Event* evt) {

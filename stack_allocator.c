@@ -2,8 +2,8 @@
 
 #define STACK_ALLOCATOR_DATA_SIZE 4096
 
-char stack_allocator_data[STACK_ALLOCATOR_DATA_SIZE];
-char* stack_allocator_ptr = stack_allocator_data;
+static char stack_allocator_data[STACK_ALLOCATOR_DATA_SIZE];
+static char* stack_allocator_ptr = stack_allocator_data;
 
 void* stack_allocator_malloc(size_t size) {
 	printf("Allocating 0x%llx bytes of memory !\n", size);

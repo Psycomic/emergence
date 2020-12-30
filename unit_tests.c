@@ -57,28 +57,53 @@ void execute_tests(void) {
 	Material* batch_material = material_create(batch_shader, batch_uniforms, ARRAY_SIZE(batch_uniforms));
 	material_set_uniform_vec3(batch_material, 0, triangle_color);
 
+	uint64_t batch_attributes_sizes[] = {3};
+
 	Batch test_batch;
-	batch_init(&test_batch, batch_material, 16 * sizeof(float), 16 * sizeof(uint32_t));
+	batch_init(&test_batch, batch_material, 64 * sizeof(float), 64 * sizeof(uint32_t), batch_attributes_sizes, 1);
+
+	Vector3 rect_position = {
+		0.f, 0.f, 0.f
+	};
+
+	float rect_vertices[] = {
+		0.f, 0.f, 0.f,
+		0.5f, 0.f, 0.f,
+		0.f, 0.5f, 0.f,
+		0.5f, 0.5f, 0.f
+	};
+
+	for (uint i = 0; i < ARRAY_SIZE(rect_vertices); i++) {
+		rect_vertices[i] += -1.f;
+	}
+
+	uint32_t rect_elements[] = {
+		0, 1, 2, 1, 3, 2
+	};
+
+	BatchDrawable rect_batch_drawable;
+	batch_drawable_init(&test_batch, &rect_batch_drawable, &rect_position, rect_vertices, 4,
+						rect_elements, ARRAY_SIZE(rect_elements));
 
 	Vector3 triangle_position = {
 		0.f, 0.f, 0.f
 	};
 
 	float triangle_vertices[] = {
-		1.f, 0.f, 0.f,
-		-1.f, 0.f, 0.f,
-		0.f, 1.f, 0.f
+		0.5f, 0.f, 0.f,
+		0.f, 0.5f, 0.f,
+		-0.5f, 0.f, 0.f
 	};
-
-	uint64_t triangle_attributes_sizes[] = {3};
 
 	uint32_t triangle_elements[] = {
 		0, 1, 2
 	};
 
 	BatchDrawable triangle_batch_drawable;
-	batch_drawable_init(&test_batch, &triangle_batch_drawable, &triangle_position,
-						triangle_vertices, 3, triangle_attributes_sizes, 1, triangle_elements, 3);
+	batch_drawable_init(&test_batch, &triangle_batch_drawable, &triangle_position, triangle_vertices, 3,
+						triangle_elements, ARRAY_SIZE(triangle_elements));
+
+	batch_pre_drawing(&test_batch);
 
 	while (!glfwWindowShouldClose(window)) {
 		glClearColor(0.f, 0.f, 1.f, 1.f);
@@ -91,4 +116,5 @@ void execute_tests(void) {
 	}
 
 	glfwTerminate();
+	exit(0);
 }

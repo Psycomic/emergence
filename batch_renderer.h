@@ -13,9 +13,6 @@ typedef struct {
 
 	Vector3* position;
 
-	uint64_t* vertex_attributes_sizes;
-	uint64_t vertex_attributes_count;
-
 	uint64_t vertices_count;
 	uint64_t elements_count;
 
@@ -28,6 +25,11 @@ typedef struct {
 
 	GLuint vao;
 
+	uint64_t* vertex_attributes_sizes;
+	uint64_t vertex_attributes_count;
+
+	uint64_t vertex_size;
+
 	GLuint vertex_buffer;
 	GLuint index_buffer;
 
@@ -38,11 +40,12 @@ typedef struct {
 	size_t index_buffer_size;
 } Batch;
 
-void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity, size_t index_buffer_capacity);
+void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity, size_t index_buffer_capacity,
+				uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count);
 void batch_drawable_init(
 	Batch* batch, BatchDrawable* batch_drawable, Vector3* position,
-	void* vertices, uint64_t vertices_count, uint64_t* vertex_attributes_sizes,
-	uint64_t vertex_attributes_count, uint32_t* elements, uint64_t elements_count);
+	void* vertices, uint64_t vertices_count, uint32_t* elements, uint64_t elements_count);
+void batch_pre_drawing(Batch* batch);
 void batch_draw(Batch* batch);
 
 #endif // __BATCH_RENDERER_H_
