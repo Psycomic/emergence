@@ -48,34 +48,27 @@ void execute_tests(void) {
 
 	GLuint batch_shader = shader_create("./shaders/vertex_batch_shader.glsl", "./shaders/fragment_batch_shader.glsl");
 
-	char* batch_uniforms[] = {
-		"color"
+	Material* batch_material = material_create(batch_shader, NULL, 0);
+
+	uint64_t batch_attributes_sizes[] = {
+		2, 3
 	};
 
-	Vector3 triangle_color = {1.f, 0.5f, 0.f};
-
-	Material* batch_material = material_create(batch_shader, batch_uniforms, ARRAY_SIZE(batch_uniforms));
-	material_set_uniform_vec3(batch_material, 0, triangle_color);
-
-	uint64_t batch_attributes_sizes[] = {3};
-
 	Batch test_batch;
-	batch_init(&test_batch, batch_material, 64 * sizeof(float), 64 * sizeof(uint32_t), batch_attributes_sizes, 1);
+	batch_init(&test_batch, batch_material, 512 * sizeof(float), 512 * sizeof(uint32_t),
+			   batch_attributes_sizes, ARRAY_SIZE(batch_attributes_sizes));
 
 	Vector3 rect_position = {
 		0.f, 0.f, 0.f
 	};
 
 	float rect_vertices[] = {
-		0.f, 0.f, 0.f,
-		0.5f, 0.f, 0.f,
-		0.f, 0.5f, 0.f,
-		0.5f, 0.5f, 0.f
+	// Position       Color
+		1.f, 0.f,     0.5f, 0.0f, 0.7f,
+		0.5, 0.f,     0.5f, 0.0f, 0.7f,
+		1.f, 0.5f,    0.5f, 0.0f, 0.7f,
+		0.5f, 0.5f,   0.5f, 0.0f, 0.7f,
 	};
-
-	for (uint i = 0; i < ARRAY_SIZE(rect_vertices); i++) {
-		rect_vertices[i] += -1.f;
-	}
 
 	uint32_t rect_elements[] = {
 		0, 1, 2, 1, 3, 2
@@ -90,9 +83,10 @@ void execute_tests(void) {
 	};
 
 	float triangle_vertices[] = {
-		0.5f, 0.f, 0.f,
-		0.f, 0.5f, 0.f,
-		-0.5f, 0.f, 0.f
+	//  Position    Color
+		0.f, 0.f,   0.1f, 0.2f, 0.9f,
+		0.f, 0.5f,  0.1f, 0.2f, 0.9f,
+		-0.5f, 0.f, 0.1f, 0.2f, 0.9f,
 	};
 
 	uint32_t triangle_elements[] = {
@@ -102,8 +96,6 @@ void execute_tests(void) {
 	BatchDrawable triangle_batch_drawable;
 	batch_drawable_init(&test_batch, &triangle_batch_drawable, &triangle_position, triangle_vertices, 3,
 						triangle_elements, ARRAY_SIZE(triangle_elements));
-
-	batch_pre_drawing(&test_batch);
 
 	while (!glfwWindowShouldClose(window)) {
 		glClearColor(0.f, 0.f, 1.f, 1.f);
@@ -116,5 +108,4 @@ void execute_tests(void) {
 	}
 
 	glfwTerminate();
-	exit(0);
 }

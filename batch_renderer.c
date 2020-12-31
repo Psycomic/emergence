@@ -25,14 +25,28 @@ void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity,
 
 	glGenVertexArrays(1, &batch->vao);
 
+	glBindVertexArray(batch->vao);
+
+	uint64_t offset = 0;
+
 	// Allocating the buffers
 	glGenBuffers(1, &batch->vertex_buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, batch->vertex_buffer);
 	glBufferData(GL_ARRAY_BUFFER, batch->vertex_buffer_capacity, NULL, GL_STREAM_DRAW);
 
+	for (uint i = 0; i < batch->vertex_attributes_count; i++) {
+		glEnableVertexAttribArray(i);
+		glVertexAttribPointer(i, batch->vertex_attributes_sizes[i], GL_FLOAT, GL_FALSE,
+							  batch->vertex_size * sizeof(float), (void*)offset);
+
+		offset += batch->vertex_attributes_sizes[i] * sizeof(float);
+	}
+
 	glGenBuffers(1, &batch->index_buffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->index_buffer);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, batch->index_buffer_capacity, NULL, GL_STREAM_DRAW);
+
+	glBindVertexArray(0);
 }
 
 void batch_drawable_init(
@@ -51,7 +65,7 @@ void batch_drawable_init(
 	batch_drawable->index_buffer_offset = batch->index_buffer_size;
 	batch_drawable->vertex_buffer_offset = batch->vertex_buffer_size;
 
-	uint64_t elements_offset = batch_drawable->vertex_buffer_offset / (sizeof(float) * batch->vertex_attributes_sizes[0]);
+	uint64_t elements_offset = batch_drawable->vertex_buffer_offset / (sizeof(float) * batch->vertex_size);
 
 	for (uint64_t i = 0; i < elements_count; i++)
 		elements[i] += elements_offset;
@@ -68,26 +82,6 @@ void batch_drawable_init(
 	// Initializing the index buffer
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->index_buffer);
 	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, batch_drawable->index_buffer_offset, elements_count * sizeof(uint32_t), elements);
-}
-
-void batch_pre_drawing(Batch* batch) {
-	glBindVertexArray(batch->vao);
-
-	uint64_t offset = 0;
-
-	glBindBuffer(GL_ARRAY_BUFFER, batch->vertex_buffer);
-
-	for (uint i = 0; i < batch->vertex_attributes_count; i++) {
-		glEnableVertexAttribArray(i);
-		glVertexAttribPointer(i, batch->vertex_attributes_sizes[i], GL_FLOAT, GL_FALSE,
-							  batch->vertex_size * sizeof(float), (void*)offset);
-
-		offset += batch->vertex_attributes_sizes[i] * sizeof(float);
-	}
-
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batch->index_buffer);
-
-	glBindVertexArray(0);
 }
 
 void batch_draw(Batch* batch) {
