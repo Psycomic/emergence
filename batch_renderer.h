@@ -11,7 +11,7 @@ typedef struct {
 	void* vertices;
 	uint32_t* elements;
 
-	Vector3* position;
+	uint64_t vertices_size;
 
 	uint64_t vertices_count;
 	uint64_t elements_count;
@@ -43,8 +43,9 @@ typedef struct {
 void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity, size_t index_buffer_capacity,
 				uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count);
 void batch_drawable_init(
-	Batch* batch, BatchDrawable* batch_drawable, Vector3* position,
-	void* vertices, uint64_t vertices_count, uint32_t* elements, uint64_t elements_count);
-void batch_draw(Batch* batch);
+	Batch* batch, BatchDrawable* batch_drawable, void* vertices,
+	uint64_t vertices_count, uint32_t* elements, uint64_t elements_count);
+void batch_draw(Batch* batch, float* view_matrix);
+void batch_drawable_update(Batch* batch, BatchDrawable* batch_drawable);
 
 #endif // __BATCH_RENDERER_H_

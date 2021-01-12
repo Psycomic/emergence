@@ -50,11 +50,10 @@ void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity,
 }
 
 void batch_drawable_init(
-	Batch* batch, BatchDrawable* batch_drawable, Vector3* position,
-	void* vertices, uint64_t vertices_count, uint32_t* elements, uint64_t elements_count)
+	Batch* batch, BatchDrawable* batch_drawable, void* vertices, uint64_t vertices_count,
+	uint32_t* elements, uint64_t elements_count)
 {
 	batch_drawable->vertices = vertices;
-	batch_drawable->position = position;
 
 	batch_drawable->vertices = vertices;
 	batch_drawable->vertices_count = vertices_count;
@@ -75,6 +74,8 @@ void batch_drawable_init(
 	batch->index_buffer_size += elements_count * sizeof(uint32_t);
 	batch->vertex_buffer_size += vertices_size * sizeof(float);
 
+	batch_drawable->vertices_size = vertices_size * sizeof(float);
+
 	// Initializing the array buffer
 	glBindBuffer(GL_ARRAY_BUFFER, batch->vertex_buffer);
 	glBufferSubData(GL_ARRAY_BUFFER, batch_drawable->vertex_buffer_offset, vertices_size * sizeof(float), vertices);
@@ -84,10 +85,16 @@ void batch_drawable_init(
 	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, batch_drawable->index_buffer_offset, elements_count * sizeof(uint32_t), elements);
 }
 
-void batch_draw(Batch* batch) {
+void batch_drawable_update(Batch* batch, BatchDrawable* batch_drawable) {
+	glBindBuffer(GL_ARRAY_BUFFER, batch->vertex_buffer);
+	glBufferSubData(GL_ARRAY_BUFFER, batch_drawable->vertex_buffer_offset,
+					batch_drawable->vertices_size, batch_drawable->vertices);
+}
+
+void batch_draw(Batch* batch, float* view_matrix) {
 	size_t elements_size = batch->index_buffer_size / sizeof(uint32_t);
 
-	material_use(batch->material, NULL, NULL);
+	material_use(batch->material, NULL, view_matrix);
 
 	glBindVertexArray(batch->vao);
 	glDrawElements(GL_TRIANGLES, elements_size, GL_UNSIGNED_INT, NULL);

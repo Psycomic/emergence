@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-// Shader's uniform abstraction. 
+// Shader's uniform abstraction.
 typedef struct {
 	enum {
 		UNIFORM_VEC3, UNIFORM_VEC2,
@@ -109,11 +109,11 @@ GLuint texture_create(Image* image, GLboolean generate_mipmap) {
 	return texture;
 }
 
-void rectangle_vertices_set(float* rectangle_vertices, float width, float height) {
-	rectangle_vertices[0] = 0.f; rectangle_vertices[1] = 0.f;
-	rectangle_vertices[2] = width; rectangle_vertices[3] = 0.f;
-	rectangle_vertices[4] = 0.f; rectangle_vertices[5] = height;
-	rectangle_vertices[6] = width; rectangle_vertices[7] = height;
+void rectangle_vertices_set(float* rectangle_vertices, float width, float height, uint32_t stride, float x, float y) {
+	rectangle_vertices[0] = x; rectangle_vertices[1] = y;
+	rectangle_vertices[stride] = width + x; rectangle_vertices[stride + 1] = y;
+	rectangle_vertices[stride * 2] = x; rectangle_vertices[stride * 2 + 1] = height + y;
+	rectangle_vertices[stride * 3] = width + x; rectangle_vertices[stride * 3 + 1] = height + y;
 }
 
 Drawable* drawable_allocate(uint buffer_count) {
@@ -140,7 +140,7 @@ void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_n
 		glEnableVertexAttribArray(declarations[i].data_layout);
 
 		glVertexAttribPointer(
-			declarations[i].data_layout,				// Index 
+			declarations[i].data_layout,				// Index
 			declarations[i].stride,						// Size
 			GL_FLOAT,									// Type
 			GL_FALSE,									// Normalized?
@@ -201,7 +201,7 @@ void drawable_update(Drawable* drawable) {
 
 void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, uint flags) {
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
-	rectangle_vertices_set(rectangle_vertices, width, height);
+	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
 	ArrayBufferDeclaration rectangle_buffers[] = {
 		{rectangle_vertices, sizeof(float) * 8, 2, 0, GL_DYNAMIC_DRAW},
@@ -212,7 +212,7 @@ void drawable_rectangle_init(Drawable* drawable, float width, float height, Mate
 
 void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags) {
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
-	rectangle_vertices_set(rectangle_vertices, width, height);
+	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
 	ArrayBufferDeclaration rectangle_buffers[] = {
 		{rectangle_vertices, sizeof(float) * 8, 2, 0, GL_DYNAMIC_DRAW},
@@ -224,7 +224,7 @@ void drawable_rectangle_texture_init(Drawable* drawable, float width, float heig
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height) {
 	float* rectangle_vertices = rectangle->buffers[0].data;
-	rectangle_vertices_set(rectangle_vertices, width, height);
+	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
 	drawable_update_buffer(rectangle, 0);
 }

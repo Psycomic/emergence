@@ -1,11 +1,13 @@
 #version 330 core
 
 layout(location = 0) in vec2 VertexPos;
-layout(location = 1) in vec3 VertexColor;
+layout(location = 1) in float VertexTransparency;
 
-out vec3 color;
+out float transparency;
+
+uniform mat4 view_position;
 
 void main() {
-	color = VertexColor;
-	gl_Position = vec4(VertexPos, 0, 1);
+	transparency = VertexTransparency;
+	gl_Position = view_position * vec4(VertexPos, -1, 1);
 }

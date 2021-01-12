@@ -8,13 +8,13 @@
 #include <string.h>
 #include <assert.h>
 
-#ifdef _WIN32 
+#ifdef _WIN32
 #include <windows.h>
 
 void usleep(clock_t time) {
 	Sleep(time);
 }
-#endif // _WIN32 
+#endif // _WIN32
 #ifdef __linux__
 
 #include <unistd.h>
@@ -38,15 +38,12 @@ void usleep(clock_t time) {
 #define RINGS_NUMBER 3
 
 float points[POINTS_COUNT * 2];
+float* octaves[7];
 
 void execute_tests(void);
 
 float terrain_noise(float x, float y) {
-	float positon[2] = {
-		x, y
-	};
-
-	return voronoi_noise(2, points, POINTS_COUNT, positon, &cellular_noise);
+	return octavien_noise(octaves, 7, 4, x, y, 2.f, 0.7);
 }
 
 static Scene* scene;
@@ -63,7 +60,7 @@ void update_fractal(void) {
 	float a = gaussian_random() * scale,
 		b = gaussian_random() * scale,
 		c = gaussian_random() * scale;
-	
+
 	printf("A %.2f; B %.2f; C %.2f;\n", a, b, c);
 
 	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, a, b, c, 0.1f);
@@ -144,11 +141,13 @@ int main(void) {
 
 	random_arrayf(points, 2 * POINTS_COUNT);
 
-	terrain_create(terrain_vertices, TERRAIN_SIZE, 20.f, 20.f, &terrain_noise);
+	octavien_initialize_gradient(octaves, 4, TERRAIN_SIZE, 2.f);
+
+	terrain_create(terrain_vertices, TERRAIN_SIZE, 10.f, 40.f, &terrain_noise);
 	terrain_elements(terrain_indexes, TERRAIN_SIZE);
 
 	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
-		float height = terrain_vertices[terrain_indexes[i]].y / 5.f;
+		float height = (terrain_vertices[terrain_indexes[i]].y + 2.f) / 7.f;
 
 		terrain_color[terrain_indexes[i]].x = height;
 		terrain_color[terrain_indexes[i]].y = 0.f;
@@ -171,7 +170,7 @@ int main(void) {
 
 	GLuint lain_texture = texture_create(&lain_image, 1);
 	image_destroy(&lain_image);
-	
+
 	Material* texture_material1 = material_create(texture_shader, NULL, 0);
 
 	ArrayBufferDeclaration triangle1_buffers[] = {
@@ -228,14 +227,16 @@ int main(void) {
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
 		"EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, black, LAYOUT_PACK);
 
-	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation, 
+	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
 		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, black, LAYOUT_PACK);
-	
+
 	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f, 5.f, 5.f, LAYOUT_PACK);
 	Widget* quit_button = widget_button_create(terrain_window, scene, terrain_presentation, "QUIT GAME", 12.f, 5.f, 5.f, LAYOUT_PACK);
 
 	widget_set_on_click_up(randomize_button, &update_callback);
 	widget_set_on_click_up(quit_button, &quit_callback);
+
+	WindowID test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 	printf("Seconds per frame: %ld\n", spf);

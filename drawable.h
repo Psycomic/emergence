@@ -52,7 +52,7 @@ Drawable* drawable_allocate(uint buffer_count);
 void drawable_destroy(Drawable* drawable);
 
 void drawable_init(Drawable* drawable, unsigned short* elements,
-	uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, 
+	uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
 	Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
 void drawable_rectangle_texture_init(Drawable* drawable, float width, float height,
 	Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count,
@@ -61,5 +61,7 @@ void drawable_rectangle_init(Drawable* drawable, float width, float height,
 	Material* material, GLenum mode, Vector3* position, uint flags);
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height);
+void rectangle_vertices_set(float* rectangle_vertices, float width, float height,
+							uint32_t stride, float x, float y);
 
 #endif // !DRAWABLE_HEADER
