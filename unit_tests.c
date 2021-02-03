@@ -1,6 +1,7 @@
 #include "misc.h"
 #include "batch_renderer.h"
 #include "render.h"
+#include "ulisp.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -30,4 +31,15 @@ void execute_tests(void) {
 	assert(*(uint*)hash_table_get(table, "three") == value_three);
 	assert(*(uint*)hash_table_get(table, "four") == value_four);
 	assert(*(uint*)hash_table_get(table, "five") == value_five);
+
+	char buffer[2048];
+	ulisp_init();
+
+	while (strcmp(buffer, ":q\n") != 0) {
+		printf("\n> ");
+		fgets(buffer, sizeof(buffer), stdin);
+
+		LispObject* obj = ulisp_eval(ulisp_read_list(buffer));
+		ulisp_print(obj, stdout);
+ 	}
 }

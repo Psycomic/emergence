@@ -3,18 +3,27 @@
 
 #include "misc.h"
 
-typedef struct {
-	enum {
-		LISP_LIST,
-		LISP_SYMBOL
-	} type;
+#include <stdio.h>
 
-	union {
-		List* list;
-		char* symbol;
-	} data;
+enum ObjectType {
+	LISP_CONS,
+	LISP_SYMBOL,
+	LISP_PROC,
+	LISP_PROC_BUILTIN
+};
+
+typedef struct {
+	enum ObjectType type;
+	char data[];
 } LispObject;
 
-LispObject* ulisp_read(const char* stream);
+typedef struct {
+	LispObject *car, *cdr;
+} ConsCell;
+
+LispObject* ulisp_read_list(const char* string);
+LispObject* ulisp_eval(LispObject* expression);
+void ulisp_init(void);
+void ulisp_print(LispObject* obj, FILE* stream);
 
 #endif // __ULISP_H_

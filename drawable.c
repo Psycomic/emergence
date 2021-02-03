@@ -120,6 +120,7 @@ Drawable* drawable_allocate(uint buffer_count) {
 	return malloc(sizeof(Drawable) + buffer_count * sizeof(Buffer));
 }
 
+/* Create an abstraction over basic openGL calls */
 void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
 	drawable->buffer_count = declarations_count;
 	drawable->material = material;

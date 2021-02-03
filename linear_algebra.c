@@ -124,7 +124,7 @@ void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, flo
 	float lr = 1.f / (left - right);
 	float bt = 1.f / (bottom - top);
 	float nf = 1.f / (near - far);
-	
+
 	out[0] = -2 * lr;
 	out[1] = 0;
 	out[2] = 0;
@@ -142,7 +142,6 @@ void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, flo
 	out[14] = (far + near) * nf;
 	out[15] = 1;
 }
-
 
 void mat4_create_rotation_x(Mat4 destination, float angle) {
 	for (uint i = 0; i < 4; ++i) {
