@@ -85,7 +85,7 @@ void list_destroy(List* list);
 void list_map(List* list, void (*function)(void*));
 
 void* debug_malloc(size_t size, const char* file, const uint line);
-void* debug_free(void* ptr, const char* file, const uint line);
+void debug_free(void* ptr, const char* file, const uint line);
 
 HashTable* hash_table_create(uint size);
 int hash_table_set(HashTable* table, char* key, void* value, uint value_size);

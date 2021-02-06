@@ -276,7 +276,7 @@ void* debug_malloc(size_t size, const char* file, const uint line) {
 	return return_value;
 }
 
-void* debug_free(void* ptr, const char* file, const uint line) {
+void debug_free(void* ptr, const char* file, const uint line) {
 	printf("Free %p at %s:%d\n", ptr, file, line);
 
 	free(ptr);
