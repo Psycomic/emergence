@@ -63,12 +63,19 @@ LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
 }
 
 LispObject* ulisp_nreverse(LispObject* obj) {
-	LispObject* acc = nil;
-	for (; obj != nil; obj = ((ConsCell*)obj->data)->cdr) {
-		acc = ulisp_cons(((ConsCell*)obj->data)->car, acc);
+	LispObject *current = obj,
+		*next, *previous = nil, *last;
+
+	while (current != nil) {
+		ConsCell* cell = current->data;
+		next = cell->cdr;
+		cell->cdr = previous;
+		previous = current;
+		last = current;
+		current = next;
 	}
 
-	return acc;
+	return last;
 }
 
 LispObject* ulisp_builtin_proc(void* function) {

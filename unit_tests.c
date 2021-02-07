@@ -35,9 +35,11 @@ void execute_tests(void) {
 	char buffer[2048];
 	ulisp_init();
 
-	while (strcmp(buffer, ":q\n") != 0) {
+	while (1) {
 		printf("\n> ");
 		fgets(buffer, sizeof(buffer), stdin);
+		if (strcmp(buffer, ":q\n") == 0)
+			break;
 
 		LispObject* obj = ulisp_eval(ulisp_read_list(buffer));
 		ulisp_print(obj, stdout);
