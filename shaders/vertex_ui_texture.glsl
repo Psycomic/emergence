@@ -19,7 +19,7 @@ mat2 rotate2d(float _angle) {
 
 void main() {
 	vec2 relative_position = model_position - center_position;
-	gl_Position = view_position * vec4(rotate2d(angle) * (vertexPos + relative_position) + center_position, 0.1, 1);
+	gl_Position = view_position * vec4(rotate2d(angle) * (vertexPos + relative_position) + center_position, 1, 1);
 
 	fragPos = vertexPos + model_position;
 	TexCoord = texPos;

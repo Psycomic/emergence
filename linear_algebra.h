@@ -67,6 +67,7 @@ void mat4_print(Mat4 m);
 void triangle_normal_from_vertices(Vector3* n, Vector3 A, Vector3 B, Vector3 C);
 float triangle_point_collide(Vector3 normal, Vector3 point, Vector3 p);
 float triangle_line_distance(Vector3 triangle_normal, Vector3 triangle_point, Vector3 line_normal, Vector3 line_point);
+
 Collision triangle_triangle_collide(Vector3* triangle1, Vector3* triangle2);
 Collision shape_shape_collide(Shape* shape1, Shape* shape2);
 

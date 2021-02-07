@@ -49,9 +49,8 @@ void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity,
 	glBindVertexArray(0);
 }
 
-void batch_drawable_init(
-	Batch* batch, BatchDrawable* batch_drawable, void* vertices, uint64_t vertices_count,
-	uint32_t* elements, uint64_t elements_count)
+void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vertices, uint64_t vertices_count,
+						 uint32_t* elements, uint64_t elements_count)
 {
 	batch_drawable->vertices = vertices;
 

@@ -3,18 +3,20 @@
 
 #define M_PI 3.1415926535897932384626433832795
 
-#define ARRAY_SIZE(A)						sizeof(A) / (sizeof *A)
-#define DYNAMIC_ARRAY_CREATE(ARR, TYPE)		dynamic_array_create_fn(ARR, sizeof(TYPE))
-#define DYNAMIC_ARRAY_AT(ARR, INDEX, TYPE)	((TYPE*)dynamic_array_at(ARR, INDEX))
-#define CONS(A, B)							cons(&A, sizeof(A), B)
+#define ARRAY_SIZE(A) sizeof(A) / (sizeof *A)
+#define DYNAMIC_ARRAY_CREATE(ARR, TYPE)	dynamic_array_create_fn(ARR, sizeof(TYPE))
+#define DYNAMIC_ARRAY_AT(ARR, INDEX, TYPE) ((TYPE*)dynamic_array_at(ARR, INDEX))
+#define CONS(A, B) cons(&A, sizeof(A), B)
+
+#define SUPER(INSTANCE) &INSTANCE->header
 
 #define max(a, b) (a) > (b) ? (a) : (b)
 #define min(a, b) (a) < (b) ? (a) : (b)
 
 #ifdef _DEBUG
 
-#define malloc(size)	debug_malloc(size, __FILE__, __LINE__)
-#define free(ptr)		debug_free(ptr, __FILE__, __LINE__)
+#define malloc(size) debug_malloc(size, __FILE__, __LINE__)
+#define free(ptr) debug_free(ptr, __FILE__, __LINE__)
 
 #else
 

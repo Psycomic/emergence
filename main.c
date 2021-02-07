@@ -47,12 +47,10 @@ float terrain_noise(float x, float y) {
 }
 
 static Scene* scene;
-static GLFWwindow* window;
 static Vector3* hopalong_points;
 static Vector3* hopalong_color;
 static Drawable* hopalong_drawable;
 static Widget* terrain_presentation_label;
-static GLboolean window_close = GL_FALSE;
 
 void update_fractal(void) {
 	static const float scale = 4.f;
@@ -84,11 +82,14 @@ void update_callback(Widget* widget, Event* evt) {
 }
 
 void quit_callback(Widget* widget, Event* evt) {
-	window_close = GL_TRUE;
+	scene_quit(scene);
 }
 
 int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
+
+	if (initialize_everything() != 0)
+		return -1;
 
  #ifdef _DEBUG
 	execute_tests();			// Unit tests
@@ -160,8 +161,8 @@ int main(void) {
 	update_fractal();
 
 	// Creating a window and initialize an opengl context
-	GLFWwindow* window = opengl_window_create(1200, 900, "Hello world");
-	scene = scene_create(camera_position, window);
+	if ((scene = scene_create(camera_position, 800, 600, "Emergence")) == NULL)
+		return -1;
 
 	Vector3 background_color = { 0, 0, 0.2f };
 
@@ -225,26 +226,27 @@ int main(void) {
 
 	// Window 1's widgets
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
-		"EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, black, LAYOUT_PACK);
+		"EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, red, LAYOUT_PACK);
 
 	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
-		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, black, LAYOUT_PACK);
+		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, red, LAYOUT_PACK);
 
 	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f, 5.f, 5.f, LAYOUT_PACK);
 	Widget* quit_button = widget_button_create(terrain_window, scene, terrain_presentation, "QUIT GAME", 12.f, 5.f, 5.f, LAYOUT_PACK);
 
-	widget_set_on_click_up(randomize_button, &update_callback);
-	widget_set_on_click_up(quit_button, &quit_callback);
+	widget_set_on_click_up(randomize_button, update_callback);
+	widget_set_on_click_up(quit_button, quit_callback);
 
 	WindowID test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
-	printf("Seconds per frame: %ld\n", spf);
 
 	glfwPollEvents();
 
+	GLFWwindow* window = scene_context(scene);
+
 	clock_t start = clock();
-	while (!glfwWindowShouldClose(window) && !window_close) {
+	while (!scene_should_close(scene)) {
 		scene_draw(scene, background_color);
 		scene_handle_events(scene, window);
 

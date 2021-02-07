@@ -15,6 +15,10 @@ bld/
 Emergence_Debug
 Emergence_Release
 
+GPATH
+GRTAGS
+GTAGS
+
 # User files
 *.user
 .ccls-cache/

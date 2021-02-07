@@ -20,6 +20,8 @@
 #define CAMERA_SPEED 0.1f
 #define MOUSE_SENSIBILLITY 0.01f
 
+#define TEXT_VERTEX_SIZE 5		/* 2 + 2 + 1 */
+
 /// A camera, that holds a position and a rotation to render
 /// a scene correctly
 typedef struct {
@@ -42,17 +44,17 @@ typedef struct {
 	Vector2 position;
 	Vector3 color;
 
-	Drawable* drawable;
+	BatchDrawable drawable;
 	char* string;
 
 	float size;
 	float angle;
-
-	GLuint font_texture;
 } Text;
 
 #define WIDGET_STATE_HOVERED	(1 << 0)
 #define WIDGET_STATE_CLICKED	(1 << 1)
+
+typedef void (*EventCallback)(void*, void*);
 
 typedef struct Widget {
 	Vector2 position;
@@ -101,8 +103,11 @@ typedef struct {
 
 	float width;
 	float height;
+
 	float min_width;
 	float min_height;
+
+	float depth;
 
 	float transparency;
 	float pack_last_size;
@@ -121,10 +126,10 @@ typedef struct {
 
 #define SCENE_MAX_WINDOWS 4
 
-#define SCENE_GUI_MODE (1 << 0)
-
-#define SCENE_EVENT_MOUSE_RIGHT	(1 << 0)
-#define SCENE_EVENT_MOUSE_LEFT	(1 << 1)
+#define SCENE_GUI_MODE			(1 << 0)
+#define SCENE_EVENT_MOUSE_RIGHT	(1 << 1)
+#define SCENE_EVENT_MOUSE_LEFT	(1 << 2)
+#define SCENE_EVENT_QUIT		(1 << 3)
 
 // What you see on the screen. It is basically the container of every
 // graphical aspect of the game : the 3D view and the 2D UI.
@@ -135,6 +140,9 @@ typedef struct {
 	Camera camera;
 
 	Batch windows_batch;
+	Batch text_batch;
+
+	GLFWwindow* context;
 
 	uint glfw_last_character;
 	uint flags;
@@ -142,7 +150,7 @@ typedef struct {
 } Scene;
 
 static GLuint ui_background_shader;
-static GLuint ui_texture_shader;
+static GLuint ui_text_shader;
 static GLuint ui_button_shader;
 static GLuint color_shader;
 static GLuint axis_shader;
@@ -167,17 +175,6 @@ static char* ui_button_uniforms[] = {
 	"width",
 	"height",
 	"color"
-};
-
-static char* ui_texture_uniforms[] = {
-	"model_position",
-	"color",
-	"angle",
-	"center_position",
-	"transparency",
-	"max_width",
-	"max_height",
-	"anchor_position"
 };
 
 static char* axis_uniforms[] = {
@@ -286,98 +283,43 @@ void camera_rotate(Camera* camera, float rx, float ry) {
 	camera->ry += ry;
 }
 
-void character_callback(GLFWwindow* window, unsigned int codepoint) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
-	scene->glfw_last_character = codepoint;
-}
-
-void opengl_window_resize_callback(GLFWwindow* window, int width, int height) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
-	scene_set_size(scene, width, height);
-}
-
-GLFWwindow* opengl_window_create(uint width, uint height, const char* title) {
-	// Initialize GLFW and the opengl context
+int initialize_everything() {
 	glewExperimental = 1;
 
 	if (!glfwInit()) {
 		fprintf(stderr, "GLFW not initialized correctly !\n");
-		return NULL;
+		return -1;
 	}
 
 	glfwWindowHint(GLFW_SAMPLES, 4); // 4x antialiasing
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // We want OpenGL 3.3
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // We don't want the old OpenGL
 
-	GLFWwindow* window;
-	window = glfwCreateWindow(width, height, title, NULL, NULL);
-
-	if (window == NULL) {
-		fprintf(stderr, "Failed to open GLFW window.");
-		glfwTerminate();
-
-		return NULL;
-	}
-
-	glfwSetCharCallback(window, character_callback);
-	glfwSetWindowSizeCallback(window, opengl_window_resize_callback);
-
-	glfwMakeContextCurrent(window);
-
-	if (glewInit() != GLEW_OK) {
-		fprintf(stderr, "Failed to initialize GLEW\n");
-		glfwTerminate();
-
-		return NULL;
-	}
-
-	// Disable double buffering
-	glfwSwapInterval(1);
-
-	// OpenGL settings
-	glEnable(GL_BLEND);
-
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-	glViewport(0, 0, width, height);
-
-	// Initialize scene.
-	render_initialize();
-
-	return window;
-}
-
-Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
-	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
-
-	*drawable_pos = drawable_allocate(declarations_count);
-
-	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
-	return *drawable_pos;
+	return 0;
 }
 
 void text_set_color(Text* text, Vector3 color) {
-	material_set_uniform_vec3(drawable_material(text->drawable), 1, color);
+	/* TODO */
 }
 
 void text_set_transparency(Text* text, float transparency) {
-	material_set_uniform_float(drawable_material(text->drawable), 4, transparency);
+	/* TODO */
 }
 
 void text_set_angle(Text* text, float angle) {
-	text->angle = angle;
-
-	material_set_uniform_float(drawable_material(text->drawable), 2, text->angle);
+	/* TODO */
 }
 
 void text_set_position(Text* text, Vector2 position) {
+	Vector2 translation;
+	vector2_sub(&translation, position, text->position);
+
+	for (uint i = 0; i < text->drawable.vertices_count; i += TEXT_VERTEX_SIZE) {
+		float* vertices = text->drawable.vertices;
+		vector2_add((Vector2*)(vertices + i), *(Vector2*)(vertices + i), translation);
+	}
+
 	text->position = position;
 }
 
@@ -412,29 +354,26 @@ float text_get_height(Text* text) {
 	return text->size * (count + 1);
 }
 
+void text_update(Batch* batch, Text* text) {
+	batch_drawable_update(batch, &text->drawable);
+}
+
 // Every glyph will be a 32 x 32 texture. This means the image is 64 x 416
-Text* text_create(char* string, GLuint font_texture, float size, Vector2 position, float angle, Vector3 color) {
+Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vector3 color) {
 	Text* text = malloc(sizeof(Text));
 	assert(text != NULL);
 
 	text->string = string;
-	text->font_texture = font_texture;
-	text->position = position;
 	text->size = size;
-	text->angle = angle;
 	text->color = color;
 
 	uint text_length = strlen(string);
 
-	Material* glyph_material = material_create(ui_texture_shader, ui_texture_uniforms, ARRAY_SIZE(ui_texture_uniforms));
-	material_set_uniform_vec3(glyph_material, 1, text->color);
-	material_set_uniform_float(glyph_material, 2, text->angle);
-	material_set_uniform_float(glyph_material, 4, 1.f);
+	const uint vertex_size = 2 + 2 + 1,
+		vertices_number = vertex_size * 4 * text_length;
 
-	float* drawable_uvs = malloc(sizeof(float) * 12 * text_length);
-	float* drawable_vertices = malloc(sizeof(float) * 12 * text_length);
-
-	assert(drawable_uvs != NULL && drawable_vertices != NULL);
+	float* drawable_vertices = malloc(sizeof(float) * vertices_number);
+	uint* drawable_elements = malloc(sizeof(uint) * 6 * text_length);
 
 	const float height = 512,
 		half_height = height / 32,
@@ -466,23 +405,29 @@ Text* text_create(char* string, GLuint font_texture, float size, Vector2 positio
 			float vertex_down_left[2] = { i * size, y_stride * size };
 			float vertex_down_right[2] = { i * size + size, y_stride * size };
 
-#define GET_INDEX(arr, index) arr[j * 12 + index]
+#define GET_INDEX(arr, index) arr[j * vertex_size * 4 + index]
 
-			GET_INDEX(drawable_uvs, 0) = uv_up_left[0]; GET_INDEX(drawable_uvs, 1) = uv_up_left[1];
-			GET_INDEX(drawable_uvs, 2) = uv_down_left[0]; GET_INDEX(drawable_uvs, 3) = uv_down_left[1];
-			GET_INDEX(drawable_uvs, 4) = uv_up_right[0]; GET_INDEX(drawable_uvs, 5) = uv_up_right[1];
+			// Initializing vertices: two triangles
+			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0]; GET_INDEX(drawable_vertices, 1) = vertex_up_left[1]; // Set position
+			GET_INDEX(drawable_vertices, 2) = uv_up_left[0]; GET_INDEX(drawable_vertices, 3) = uv_up_left[1];
+			GET_INDEX(drawable_vertices, 4) = 1.f;
 
-			GET_INDEX(drawable_uvs, 6) = uv_down_right[0]; GET_INDEX(drawable_uvs, 7) = uv_down_right[1];
-			GET_INDEX(drawable_uvs, 8) = uv_up_right[0]; GET_INDEX(drawable_uvs, 9) = uv_up_right[1];
-			GET_INDEX(drawable_uvs, 10) = uv_down_left[0]; GET_INDEX(drawable_uvs, 11) = uv_down_left[1];
+			GET_INDEX(drawable_vertices, 5) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 6) = vertex_down_left[1];
+			GET_INDEX(drawable_vertices, 7) = uv_down_left[0]; GET_INDEX(drawable_vertices, 8) = uv_down_left[1];
+			GET_INDEX(drawable_vertices, 9) = 1.f;
 
-			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0]; GET_INDEX(drawable_vertices, 1) = vertex_up_left[1];
-			GET_INDEX(drawable_vertices, 2) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 3) = vertex_down_left[1];
-			GET_INDEX(drawable_vertices, 4) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 5) = vertex_up_right[1];
+			GET_INDEX(drawable_vertices, 10) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 11) = vertex_down_right[1];
+			GET_INDEX(drawable_vertices, 12) = uv_down_right[0]; GET_INDEX(drawable_vertices, 13) = uv_down_right[1];
+			GET_INDEX(drawable_vertices, 14) = 1.f;
 
-			GET_INDEX(drawable_vertices, 6) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 7) = vertex_down_right[1];
-			GET_INDEX(drawable_vertices, 8) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 9) = vertex_up_right[1];
-			GET_INDEX(drawable_vertices, 10) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 11) = vertex_down_left[1];
+			GET_INDEX(drawable_vertices, 15) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 16) = vertex_up_right[1];
+			GET_INDEX(drawable_vertices, 17) = uv_up_right[0]; GET_INDEX(drawable_vertices, 18) = uv_up_right[1];
+			GET_INDEX(drawable_vertices, 19) = 1.f;
+
+			// Initializing elements
+			drawable_elements[j * 6 + 0] = j * 4 + 0; drawable_elements[j * 6 + 1] = j * 4 + 3;
+			drawable_elements[j * 6 + 2] = j * 4 + 1; drawable_elements[j * 6 + 3] = j * 4 + 3;
+			drawable_elements[j * 6 + 4] = j * 4 + 2; drawable_elements[j * 6 + 5] = j * 4 + 1;
 
 #undef GET_INDEX
 
@@ -490,67 +435,84 @@ Text* text_create(char* string, GLuint font_texture, float size, Vector2 positio
 		}
 	}
 
-	text->drawable = drawable_allocate(2);
+	batch_drawable_init(batch, &text->drawable, drawable_vertices, vertices_number,	drawable_elements, 6 * text_length);
 
-	ArrayBufferDeclaration declarations[] = {
-		{drawable_vertices, sizeof(float) * 12 * text_length, 2, 0, GL_STATIC_DRAW},
-		{drawable_uvs, sizeof(float) * 12 * text_length, 2, 1, GL_STATIC_DRAW}
-	};
-
-	drawable_init(text->drawable, NULL, 6 * text_length, declarations, ARRAY_SIZE(declarations), glyph_material, GL_TRIANGLES, NULL, &text->font_texture, 1, 0x0);
+	text_set_position(text, position);
+	text_update(batch, text);
 
 	return text;
 }
 
+/* Free resources associated with a text object */
 void text_destroy(Text* text) {
-	free(drawable_buffer_data(text->drawable, 0));
-	free(drawable_buffer_data(text->drawable, 1));
-
-	drawable_destroy(text->drawable);
-
 	free(text);
 }
 
-void text_draw(Text* text, Vector2* shadow_displacement, float max_width, float max_height, Vector2 anchor, Mat4 view_position_matrix) {
-	Vector2 text_position = text->position;
+void character_callback(GLFWwindow* window, unsigned int codepoint) {
+	Scene* scene = glfwGetWindowUserPointer(window);
 
-	Material* text_material = drawable_material(text->drawable);
-
-	material_set_uniform_float(text_material, 5, max_width); // Max width
-	material_set_uniform_float(text_material, 6, max_height); // Max height
-
-	material_set_uniform_vec2(text_material, 3, text_position);	// Position
-	material_set_uniform_vec2(text_material, 7, anchor); // Anchor position
-
-	material_use(text_material, NULL, view_position_matrix); // Using the text's material
-
-	if (shadow_displacement) {
-		Vector3 shadow_color = { 0.f, 0.f, 0.f };
-		Vector2 shadow_drawable_position;
-
-		vector2_add(&shadow_drawable_position, text_position, *shadow_displacement); // Setting the shadow's position
-
-		material_uniform_vec3(text_material, 2, shadow_color); // Color
-		material_uniform_vec2(text_material, 0, shadow_drawable_position); // Model position
-
-		drawable_draw(text->drawable); // Drawing the shadow
-	}
-
-	material_uniform_vec3(text_material, 2, text->color); // Color
-	material_uniform_vec2(text_material, 0, text_position);				// Model position
-
-	drawable_draw(text->drawable);	// Drawing the text
+	scene->glfw_last_character = codepoint;
 }
 
-Scene* scene_create(Vector3 camera_position, GLFWwindow* window) {
-	Scene* scene = malloc(sizeof(Scene));
+void resize_callback(GLFWwindow* window, int width, int height) {
+	Scene* scene = glfwGetWindowUserPointer(window);
+
+	scene_set_size(scene, width, height);
+}
+
+GLFWwindow* scene_context(Scene* scene) {
+	return scene->context;
+}
+
+int scene_should_close(Scene* scene) {
+	return glfwWindowShouldClose(scene->context) ||
+		scene->flags & SCENE_EVENT_QUIT;
+}
+
+void scene_quit(Scene* scene) {
+	scene->flags |= SCENE_EVENT_QUIT;
+}
+
+/* Create a scene instance */
+Scene* scene_create(Vector3 camera_position, int width, int height, const char* title) {
+	Scene* scene = malloc(sizeof(Scene)); /* Allocating the scene object */
 	assert(scene != NULL);
 
-	int width, height;
+	/* Creating window and OpenGL context */
+	scene->context = glfwCreateWindow(width, height, title, NULL, NULL);
 
-	glfwGetWindowSize(window, &width, &height);
+	if (scene->context == NULL) {
+		fprintf(stderr, "Failed to open a window\n");
+		return NULL;
+	}
 
-	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height);
+	glfwSetCharCallback(scene->context, character_callback);
+	glfwSetWindowSizeCallback(scene->context, resize_callback);
+
+	glfwSetWindowUserPointer(scene->context, scene);
+	glfwGetWindowSize(scene->context, &width, &height);
+
+	glfwMakeContextCurrent(scene->context); /* Make window the current context */
+
+	if (glewInit() != GLEW_OK) {
+		fprintf(stderr, "Failed to initialize GLEW\n");
+		return NULL;
+	}
+
+	glfwSwapInterval(1);			/* Disable double buffering */
+
+	// OpenGL settings
+	glEnable(GL_BLEND);			/* Enable blend */
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); /* Set blend func */
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); /* Texture parameters */
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	glViewport(0, 0, width, height); /* Viewport size */
+
+	render_initialize();		/* Initialize scene */
+
+	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height); /* Initalize player camera */
 
 	scene->flags = 0x0;
 	scene->selected_window = 0;
@@ -559,19 +521,26 @@ Scene* scene_create(Vector3 camera_position, GLFWwindow* window) {
 	DYNAMIC_ARRAY_CREATE(&scene->drawables, Drawable*);
 	DYNAMIC_ARRAY_CREATE(&scene->windows, Window);
 
-	glfwSetWindowUserPointer(window, scene);
-
-	Material* batch_material = material_create(ui_background_shader, NULL, 0);
+	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
 	uint64_t windows_attributes_sizes[] = {
-		2, 1 // Position, transparency
+		3, 1 // Position, transparency
 	};
 
-	batch_init(&scene->windows_batch, batch_material, sizeof(float) * 512, sizeof(uint32_t) * 512,
+	batch_init(&scene->windows_batch, window_batch_material, sizeof(float) * 512, sizeof(uint32_t) * 512,
 			   windows_attributes_sizes, ARRAY_SIZE(windows_attributes_sizes));
+
+	Material* text_batch_material = material_create(ui_text_shader, NULL, 0);
+	uint64_t text_attributes_sizes[] = {
+		2, 2, 1 // Position, texture postion, transparency
+	};
+
+	batch_init(&scene->text_batch, text_batch_material, sizeof(float) * 8192, sizeof(uint32_t) * 8192,
+			   text_attributes_sizes, ARRAY_SIZE(text_attributes_sizes));
 
 	return scene;
 }
 
+/* Change size of scene viewport */
 void scene_set_size(Scene* scene, float width, float height) {
 	scene->camera.width = width;
 	scene->camera.height = height;
@@ -586,6 +555,7 @@ void scene_set_size(Scene* scene, float width, float height) {
 	glViewport(0, 0, scene->camera.width, scene->camera.height);
 }
 
+/* The main function of the whole renderer logic */
 void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -616,16 +586,49 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	}
 
 	if (scene->flags & SCENE_GUI_MODE) {
-		// Drawing the windows
+		glEnable(GL_DEPTH_TEST);
+
 		batch_draw(&scene->windows_batch, scene->camera.ortho_matrix);
+
 		for (uint i = 0; i < scene->windows.size; i++) {
 			Window* win = dynamic_array_at(&scene->windows, i);
 
 			window_draw(win, scene->camera.ortho_matrix);
 		}
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, monospaced_font_texture);
+		batch_draw(&scene->text_batch, scene->camera.ortho_matrix);
 	}
 }
 
+/* Set windows' depth correspondingly to their priority rank */
+void scene_update_window_depths(Scene* scene) {
+	for (uint i = 0; i < scene->windows.size; i++) {
+		size_t index = ((size_t)scene->selected_window + i) % scene->windows.size;
+		Window* window = dynamic_array_at(&scene->windows, index);
+		window->depth = -((float)i / scene->windows.size + 1.f);
+
+		printf("Window %lu has depth %.2f\n", index, window->depth);
+
+		for (uint j = 0; j < window->background_drawable.vertices_count; j++) {
+			float* vertex = (float*)window->background_drawable.vertices + scene->windows_batch.vertex_size * j;
+			vertex[2] = window->depth;
+		}
+	}
+}
+
+/* Add drawable to scene */
+Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
+
+	*drawable_pos = drawable_allocate(declarations_count);
+
+	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
+	return *drawable_pos;
+}
+
+/* Handle every event happening in the scene. TODO: Cleanup */
 void scene_handle_events(Scene* scene, GLFWwindow* window) {
 	if (scene->glfw_last_character == 'e')
 		scene->flags ^= SCENE_GUI_MODE;
@@ -639,7 +642,7 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 	if ((scene->flags & SCENE_GUI_MODE) && scene->windows.size > 0) {
 		for (uint i = 0; i < scene->windows.size; i++) {
 			if (i == scene->selected_window)
-				window_set_transparency(scene, dynamic_array_at(&scene->windows, i), 0.9f);
+				window_set_transparency(scene, dynamic_array_at(&scene->windows, i), 1.f);
 			else
 				window_set_transparency(scene, dynamic_array_at(&scene->windows, i), 0.3f);
 		}
@@ -677,6 +680,7 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 		switch (scene->glfw_last_character) {
 		case ' ':
 			scene->selected_window = ((size_t)scene->selected_window + 1) % scene->windows.size;
+			scene_update_window_depths(scene);
 			break;
 		case 'c':
 			window_destroy(scene, scene->selected_window);
@@ -745,16 +749,16 @@ void window_set_position(Scene* scene, Window* window, float x, float y) {
 		vector2_add(vertex, *((Vector2*)vertex), translation);
 	}
 
-	batch_drawable_update(&scene->windows_batch, &window->background_drawable);
-
 	window->position.x = x;
 	window->position.y = y;
 
-	/* 	"./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl" */
+	window_update(window);
+	batch_drawable_update(&scene->windows_batch, &window->background_drawable);
+
 	material_set_uniform_vec2(drawable_material(window->text_bar_drawable), 1, window->position);
 	drawable_update(window->text_bar_drawable);
 
-	window_update(window);
+	text_update(&scene->text_batch, window->title);
 }
 
 void window_set_size(Scene* scene, Window* window, float width, float height) {
@@ -774,7 +778,8 @@ void window_set_size(Scene* scene, Window* window, float width, float height) {
 	window_update(window);
 
 	rectangle_vertices_set((float*)window->background_drawable.vertices,
-						   window->width, window->height, 3,  window->position.x, window->position.y);
+						   window->width, window->height, 4,
+						   window->position.x, window->position.y);
 
 	batch_drawable_update(&scene->windows_batch, &window->background_drawable);
 }
@@ -784,7 +789,7 @@ void window_set_transparency(Scene* scene, Window* window, float transparency) {
 
 	for (uint i = 0; i < window->background_drawable.vertices_count; i++) {
 		float* vertex = (float*)window->background_drawable.vertices + scene->windows_batch.vertex_size * i;
-		vertex[2] = transparency;
+		vertex[3] = transparency;
 	}
 
 	batch_drawable_update(&scene->windows_batch, &window->background_drawable);
@@ -800,16 +805,14 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 
 	window->min_width = 200.f;
 	window->min_height = 100.f;
-
+	window->depth = -1.f;
 	window->pack_last_size = 0.f;
-
 	window->widgets_count = 0;
 	window->layout = LAYOUT_PACK;
-
 	window->on_close = NULL;
 
 	Vector3 title_color = { 0.6f, 0.6f, 0.6f };
-	window->title = text_create(title, monospaced_font_texture, 15.f, window->position, ((float) M_PI) * 3 / 2, title_color);
+	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
 	float* background_drawable_vertices = malloc(sizeof(float) * 4 * 5);
 	batch_drawable_init(&scene->windows_batch, &window->background_drawable, background_drawable_vertices, 4,
@@ -822,7 +825,6 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	ArrayBufferDeclaration text_bar_declarations[] = {
 		{text_bar_vertices, sizeof(float) * 4, 2, 0, GL_DYNAMIC_DRAW}
 	};
-
 	static Vector3 bar_color = {
 		0.7f, 0.7f, 0.7f
 	};
@@ -837,6 +839,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window_set_transparency(scene, window, 0.9f);
 
 	scene->selected_window = scene->windows.size - 1;
+	scene_update_window_depths(scene);
 
 	return scene->windows.size - 1;
 }
@@ -861,10 +864,6 @@ void window_draw(Window* window, Mat4 view_position_matrix) {
 
 	material_use(drawable_material(text_bar_drawable), NULL, view_position_matrix);
 	drawable_draw(text_bar_drawable);
-
-	Vector2 shadow_displacement = { 0.01f, 0.f };
-
-	text_draw(window->title, &shadow_displacement, window->height * 0.8f - 0.05f, window->title->size, window->title->position, view_position_matrix);
 
 	if (window->layout == LAYOUT_PACK) {
 		for (uint i = 0; i < window->widgets_count; i++)
@@ -1055,24 +1054,20 @@ void widget_set_on_click_up(Widget* widget, EventCallback on_click_up) {
 
 Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout) {
 	Window* window = dynamic_array_at(&scene->windows, window_id);
-
 	Vector2 text_position = { 0.f, 0.f };
-
 	Label* label = malloc(sizeof(Label));
 
 	assert(label != NULL);
 
 	label->header.type = WIDGET_TYPE_LABEL;
-	// Setting the widget's type
-
 	label->color = color;
-	label->text = text_create(text, monospaced_font_texture, text_size, text_position, 0.f, label->color);	// Initializing the text
+	label->text = text_create(&scene->text_batch, text, text_size, text_position, label->color);	// Initializing the text
 
 	label->header.height = text_get_height(label->text);	// Setting widget height
 
-	widget_init(label, window, parent, margin, layout);		// Intializing the widget
+	widget_init(SUPER(label), window, parent, margin, layout);		// Intializing the widget
 
-	return label;
+	return SUPER(label);
 }
 
 Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, float padding, Layout layout) {
@@ -1083,12 +1078,10 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 	Vector2 text_position = { 0.f, 0.f };
 
 	Button* button = malloc(sizeof(Button));	// Allocating the button widget
-	assert(button != NULL);
-
 	button->header.type = WIDGET_TYPE_BUTTON;	// Setting button type, padding and hover function
 
 	button->padding = padding + border_size * 2;
-	button->text = text_create(text, monospaced_font_texture, text_size, text_position, 0.f, button_text_color);	// Initializing the button's text
+	button->text = text_create(&scene->text_batch, text, text_size, text_position, button_text_color);	// Initializing the button's text
 
 	float text_width = text_get_width(button->text),
 		text_height = text_get_height(button->text);
@@ -1107,9 +1100,9 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 	material_set_uniform_float(button_material, 5, border_size);			// Border size
 	material_set_uniform_vec3(button_material, 8, button_background_color);	// Color
 
-	widget_init(button, window, parent, margin, layout);	// Intializing the widget
+	widget_init(SUPER(button), window, parent, margin, layout);	// Intializing the widget
 
-	return button;
+	return SUPER(button);
 }
 
 void widget_label_draw(Window* window, Widget* widget, Vector2 position, Mat4 view_position_matrix) {
@@ -1120,8 +1113,6 @@ void widget_label_draw(Window* window, Widget* widget, Vector2 position, Mat4 vi
 	text_set_position(label_widget->text, position);	// Setting the text's position
 
 	Vector2 window_max_position = window_get_max_position(window);
-
-	text_draw(label_widget->text, &label_shadow_displacement, window_max_position.x, window_max_position.y, window_get_anchor(window), view_position_matrix);
 }
 
 void widget_button_draw(Window* window, Widget* widget, Vector2 position, Mat4 view_position_matrix) {
@@ -1163,8 +1154,7 @@ void widget_button_draw(Window* window, Widget* widget, Vector2 position, Mat4 v
 	position.y -= button->padding;
 
 	text_set_position(button->text, position);
-
-	text_draw(button->text, NULL, window_max_position.x, window_max_position.y, window_get_anchor(window), view_position_matrix);
+	/* text_draw(button->text, NULL, window_max_position.x, window_max_position.y, window_get_anchor(window), view_position_matrix); */
 }
 
 void widget_label_set_transparency(Widget* widget, float transparency) {
@@ -1253,7 +1243,7 @@ void render_initialize(void) {
 
 	axis_shader = shader_create("./shaders/vertex_uniform_color.glsl", "./shaders/fragment_uniform_color.glsl");
 	ui_background_shader = shader_create("./shaders/vertex_batch_shader.glsl", "./shaders/fragment_batch_shader.glsl");
-	ui_texture_shader = shader_create("./shaders/vertex_ui_texture.glsl", "./shaders/fragment_ui_texture.glsl");
+	ui_text_shader = shader_create("./shaders/vertex_ui_text.glsl", "./shaders/fragment_ui_text.glsl");
 	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_button.glsl");
 	color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl");
 
