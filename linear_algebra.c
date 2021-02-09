@@ -266,7 +266,7 @@ float triangle_line_distance(Vector3 triangle_normal, Vector3 triangle_point, Ve
 	return f_dot_1 / f_dot_2;
 }
 
-void vertices_normals(Vector3* normals, Vector3* vertices, uint vertices_size, unsigned short* elements, uint elements_size) {
+void vertices_normals(Vector3* normals, Vector3* vertices, unsigned short* elements, uint elements_size) {
 	for (uint i = 0; i < elements_size; i += 3) {
 		triangle_normal_from_vertices(
 			normals + i / 3,
@@ -289,7 +289,7 @@ float point_line_intersect(float l1_projection, float l2_projection, float l1_di
 }
 
 Collision triangle_triangle_collide(Vector3* triangle1, Vector3* triangle2) {
-	Collision result = { -1.f, {0.f, 0.f, 0.f} };
+	Collision result = { -1.f, { { 0.f, 0.f, 0.f } } };
 
 	Vector3 plane1_normal;
 	Vector3 plane2_normal;
@@ -377,7 +377,7 @@ Collision triangle_triangle_collide(Vector3* triangle1, Vector3* triangle2) {
 }
 
 Collision shape_shape_collide(Shape* shape1, Shape* shape2) {
-	Collision result = { -1.f, { 0.f, 0.f, 0.f } };
+	Collision result = { -1.f, { { 0.f, 0.f, 0.f } } };
 
 	for (uint x = 0; x < shape1->elements_size; x += 3) {
 		Vector3 shape1_triangle[3];

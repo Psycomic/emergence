@@ -1,6 +1,7 @@
 #include "batch_renderer.h"
 
 #include <stdio.h>
+#include <assert.h>
 
 void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity, size_t index_buffer_capacity,
 				uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count)
@@ -52,6 +53,10 @@ void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity,
 void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vertices, uint64_t vertices_count,
 						 uint32_t* elements, uint64_t elements_count)
 {
+	assert(vertices_count * sizeof(float) < batch->vertex_buffer_capacity);
+	assert(elements_count * sizeof(uint) < batch->index_buffer_capacity);
+
+	batch_drawable->batch = batch;
 	batch_drawable->vertices = vertices;
 
 	batch_drawable->vertices = vertices;
@@ -84,8 +89,8 @@ void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vert
 	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, batch_drawable->index_buffer_offset, elements_count * sizeof(uint32_t), elements);
 }
 
-void batch_drawable_update(Batch* batch, BatchDrawable* batch_drawable) {
-	glBindBuffer(GL_ARRAY_BUFFER, batch->vertex_buffer);
+void batch_drawable_update(BatchDrawable* batch_drawable) {
+	glBindBuffer(GL_ARRAY_BUFFER, batch_drawable->batch->vertex_buffer);
 	glBufferSubData(GL_ARRAY_BUFFER, batch_drawable->vertex_buffer_offset,
 					batch_drawable->vertices_size, batch_drawable->vertices);
 }

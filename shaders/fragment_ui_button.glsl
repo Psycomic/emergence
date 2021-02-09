@@ -28,7 +28,7 @@ void main() {
 	vec3 final_color = mix(color, vec3(0.1, 0.1, 0.1), 1.0 - real_pos.y / height);
 
 	if (real_pos.y < border_size || real_pos.x < border_size ||
-		real_pos.y > height - border_size || real_pos.x > width - border_size) 
+		real_pos.y > height - border_size || real_pos.x > width - border_size)
 	{
 		final_color = rgb_to_vec3(6, 18, 71);
 	}

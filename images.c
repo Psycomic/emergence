@@ -49,7 +49,7 @@ uint big_endian_uint(uint a) {
 	int j = 0, i;
 	for (i = 3; i >= 0; i--)
 		result[j++] = *(((uchar*)&a) + i);
-	
+
 	return *((uint*)result);
 }
 
@@ -67,7 +67,7 @@ typedef struct {
 	char chunk_type[4];
 	uchar* data;
 } PNGChunkHeader;
- 
+
 void image_read_png_chunk(PNGChunkHeader* chunk, FILE* file) {
 	fread(chunk, 1, 8, file);
 
@@ -116,7 +116,7 @@ int image_load_png(Image* image, const char* path) {
 	PNGChunkHeader idhr_chunk;
 	image_read_png_chunk(&idhr_chunk, png_file);
 
-	IDHRHeader* header = idhr_chunk.data;
+	IDHRHeader* header = (IDHRHeader*)idhr_chunk.data;
 
 	if (header->color_type != 2 || header->bit_depth != 8 || header->compression_method != 0 || header->filter_method != 0 || header->interlace_method != 0) {
 		printf("Format not supported !\n");
@@ -157,7 +157,7 @@ int image_load_png(Image* image, const char* path) {
 	free(idhr_chunk.data);
 	fclose(png_file);
 
-	PNGCompressedData* data = compressed_data;
+	PNGCompressedData* data = (PNGCompressedData*)compressed_data;
 
 	printf("==COMPRESSED DATA==\n"
 		"Flags\t0x%x\n"
@@ -172,4 +172,3 @@ int image_load_png(Image* image, const char* path) {
 void image_destroy(Image* image) {
 	free(image->data);
 }
-

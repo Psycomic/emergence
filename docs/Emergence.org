@@ -2,9 +2,9 @@
 #+AUTHOR: Phi
 
 * The Core Idea behind it
-Emergence is made of theses principles:
-+ Decentralization is good
-+ Intelligence can only be obtained with evolution
-+ Everyone is connected
+  Emergence is made of theses principles:
+  + Decentralization is good
+  + Intelligence can only be obtained with evolution
+  + Everyone is connected
 
-What I'm looking for
+  What I'm looking for is a large scale simulation of a virtual world

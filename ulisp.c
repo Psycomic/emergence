@@ -32,7 +32,7 @@ LispObject* ulisp_make_symbol(const char* string) {
 	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(char*));
 	new_object->type = LISP_SYMBOL;
 
-	char **data = &new_object->data;
+	char **data = (char**)&new_object->data;
 	*data = strdup(string);
 
 	return new_object;
@@ -67,7 +67,7 @@ LispObject* ulisp_nreverse(LispObject* obj) {
 		*next, *previous = nil, *last;
 
 	while (current != nil) {
-		ConsCell* cell = current->data;
+		ConsCell* cell = (ConsCell*)current->data;
 		next = cell->cdr;
 		cell->cdr = previous;
 		previous = current;
@@ -123,7 +123,7 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* arguments) {
 	assert(arguments->type == LISP_CONS);
 
 	if (proc->type == LISP_PROC_BUILTIN) {
-		LispObject* (**function)(LispObject*) = &proc->data;
+		LispObject* (**function)(LispObject*) = (LispObject *(**)(LispObject *))&proc->data;
 		return (*function)(arguments);
 	}
 	else {
@@ -215,7 +215,7 @@ void ulisp_print(LispObject* obj, FILE* stream) {
 		fprintf(stream, "%s", *((char**)obj->data));
 	}
 	else if (obj->type == LISP_CONS) {
-		ConsCell* cell = obj->data;
+		ConsCell* cell = (ConsCell*)obj->data;
 		printf("(");
 		ulisp_print(cell->car, stream);
 		printf(" . ");

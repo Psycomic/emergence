@@ -31,13 +31,13 @@ typedef union {
 
 typedef int WindowID;
 
-static Vector3 white = { 1, 1, 1 };
-static Vector3 red = { 1, 0, 0 };
-static Vector3 blue = { 0, 0, 1 };
-static Vector3 black = { 0, 0, 0 };
-static Vector3 green = { 0, 1, 0 };
-
 #ifndef RENDER_INTERNAL
+
+extern const Vector3 white;
+extern const Vector3 red;
+extern const Vector3 blue;
+extern const Vector3 black;
+extern const Vector3 green;
 
 typedef void Scene;
 typedef void Text;

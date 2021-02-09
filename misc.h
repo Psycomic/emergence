@@ -1,7 +1,9 @@
 #ifndef MISC_HEADER
 #define MISC_HEADER
 
+#ifndef M_PI
 #define M_PI 3.1415926535897932384626433832795
+#endif
 
 #define ARRAY_SIZE(A) sizeof(A) / (sizeof *A)
 #define DYNAMIC_ARRAY_CREATE(ARR, TYPE)	dynamic_array_create_fn(ARR, sizeof(TYPE))

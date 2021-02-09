@@ -32,7 +32,7 @@ float sign(float x) {
 }
 
 float random_float() {
-	return ((float)rand()) / RAND_MAX;
+	return ((float)rand()) / (float)RAND_MAX;
 }
 
 float random_uniform(float min, float max) {
@@ -236,8 +236,8 @@ beggining_of_loop:
 					uint c = 0;
 
 					for (uint i = 0; i < vertices_index; i++) {
-						if (vertices[i].x == (float)x / spacing && 
-							vertices[i].y == (float)y / spacing && 
+						if (vertices[i].x == (float)x / spacing &&
+							vertices[i].y == (float)y / spacing &&
 							vertices[i].z == (float)z / spacing)
 							break;
 						else

@@ -69,7 +69,7 @@ void update_fractal(void) {
 
 	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
 		if (i % rate == 0)
-			random_arrayf(&color, 3);
+			random_arrayf((float*)&color, 3);
 
 		hopalong_color[i] = color;
 	}
@@ -107,18 +107,18 @@ int main(void) {
 	else
 		printf("Error when loading image !\n");
 
-	Vector3 camera_position = { 0.f, 0.f, 0.f };
+	Vector3 camera_position = { { 0.f, 0.f, 0.f } };
 
 	Vector3 triangle1_vertices[] = {
-		2.f, 1.f, 0.f,
-		0.f, 0.f, 2.f,
-		0.f, 0.f, -2.f
+		{ { 2.f, 1.f, 0.f, } },
+		{ { 0.f, 0.f, 2.f, } },
+		{ { 0.f, 0.f, -2.f } },
 	};
 
 	Vector3 triangle2_vertices[] = {
-		1.f, 0.f, 0.f,
-		0.f, 1.f, 1.f,
-		-1.f, 0.f, 0.f
+		{ { 1.f, 0.f, 0.f, } },
+		{ { 0.f, 1.f, 1.f, } },
+		{ { -1.f, 0.f, 0.f } },
 	};
 
 	float texture_coords[] = {
@@ -127,14 +127,14 @@ int main(void) {
 		1.0f, 0.0f,
 	};
 
-	Vector3 gravity = { 0.f, -0.05f, 0.f };
+	Vector3 gravity = { { 0.f, -0.05f, 0.f } };
 	World* physic_world = world_create(gravity, 10);
 
-	Shape triangle1_shape = { {0.f, 0.f, 0.f}, triangle1_vertices, NULL, 3, 3, };
-	PhysicBody* triangle1_body = world_body_add(physic_world, &triangle1_shape, 0.f);
+	Shape triangle1_shape = { { { 0.f, 0.f, 0.f } }, triangle1_vertices, NULL, 3, 3, };
+	world_body_add(physic_world, &triangle1_shape, 0.f);
 
-	Shape triangle2_shape = { {0.f, 1.f, 0.5f}, triangle2_vertices, NULL, 3, 3 };
-	PhysicBody* triangle2_body = world_body_add(physic_world, &triangle2_shape, 1.f);
+	Shape triangle2_shape = { { { 0.f, 1.f, 0.5f } }, triangle2_vertices, NULL, 3, 3 };
+	world_body_add(physic_world, &triangle2_shape, 1.f);
 
 	Vector3* terrain_vertices = malloc(sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE);
 	unsigned short* terrain_indexes = malloc(sizeof(unsigned short) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
@@ -164,7 +164,7 @@ int main(void) {
 	if ((scene = scene_create(camera_position, 800, 600, "Emergence")) == NULL)
 		return -1;
 
-	Vector3 background_color = { 0, 0, 0.2f };
+	Vector3 background_color = { { 0, 0, 0.2f } };
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
@@ -200,9 +200,9 @@ int main(void) {
 		{terrain_color, sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, 3, 1, GL_STATIC_DRAW}
 	};
 
-	Vector3 terrain_position = { 0.f, -5.f, 0.f };
+	Vector3 terrain_position = { { 0.f, -5.f, 0.f } };
 
-	Drawable* terrain_drawable = scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
+	scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
 	Material* hopalong_material = material_create(color_shader, NULL, 0);
 
 	ArrayBufferDeclaration hopalong_buffers[] = {
@@ -210,7 +210,7 @@ int main(void) {
 		{hopalong_color, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 1, GL_STATIC_DRAW}
 	};
 
-	Vector3	hopalong_position = { 10.f, 0.f, 5.f };
+	Vector3	hopalong_position = { { 10.f, 0.f, 5.f } };
 
 	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
@@ -237,7 +237,7 @@ int main(void) {
 	widget_set_on_click_up(randomize_button, update_callback);
 	widget_set_on_click_up(quit_button, quit_callback);
 
-	WindowID test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
+	window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 
@@ -261,7 +261,8 @@ int main(void) {
 		}
 
 		clock_t end = clock();
-		usleep(max(spf - (end - start), 0));
+		clock_t wait_time = max(spf - (end - start), 0);
+		usleep(wait_time);
 
 		start = clock();
 	}

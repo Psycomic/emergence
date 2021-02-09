@@ -19,6 +19,9 @@ GPATH
 GRTAGS
 GTAGS
 
+analysis.txt
+gmon.out
+
 # User files
 *.user
 .ccls-cache/
