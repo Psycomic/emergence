@@ -36,9 +36,10 @@ void text_set_position(Text* text, Vector2 position) {
 	Vector2 translation;
 	vector2_sub(&translation, position, text->position);
 
-	for (uint i = 0; i < text->drawable.vertices_count; i += TEXT_VERTEX_SIZE) {
-		float* vertices = text->drawable.vertices;
-		vector2_add((Vector2*)(vertices + i), *(Vector2*)(vertices + i), translation);
+	/* vertices_count = 4 * text_length */
+	for (uint i = 0; i < text->drawable.vertices_count; i++) {
+		Vector2* vertex_position = (Vector2*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE);
+		vector2_add(vertex_position, *vertex_position, translation);
 	}
 
 	text->position = position;
@@ -87,7 +88,9 @@ float text_get_size(Text* text) {
 // Every glyph will be a 32 x 32 texture. This means the image is 64 x 416
 Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vector3 color) {
 	Text* text = malloc(sizeof(Text));
-	assert(text != NULL);
+	if (text == NULL) return text;
+
+	bzero(text, sizeof(Text));
 
 	text->string = string;
 	text->size = size;
@@ -161,7 +164,7 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 		}
 	}
 
-	batch_drawable_init(batch, &text->drawable, drawable_vertices, vertices_number / vertex_size,
+	batch_drawable_init(batch, &text->drawable, drawable_vertices, 4 * text_length,
 						drawable_elements, 6 * text_length);
 	text_set_position(text, position);
 

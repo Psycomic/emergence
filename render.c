@@ -301,7 +301,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 		2, 2, 1 // Position, texture postion, transparency
 	};
 
-	batch_init(&scene->text_batch, text_batch_material, sizeof(float) * 2048, sizeof(uint32_t) * 2048,
+	batch_init(&scene->text_batch, text_batch_material, sizeof(float) * 8192, sizeof(uint32_t) * 8192,
 			   text_attributes_sizes, ARRAY_SIZE(text_attributes_sizes));
 
 	return scene;
@@ -576,6 +576,9 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window->layout = LAYOUT_PACK;
 	window->on_close = NULL;
 
+	window->position.x = position[0];
+	window->position.y = position[1];
+
 	Vector3 title_color = { { 0.6f, 0.6f, 0.6f } };
 	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
@@ -599,10 +602,9 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 				  GL_LINES, NULL, NULL, 0, 0x0);
 
 	window->text_bar_drawable = text_bar_drawable;
-
 	material_set_uniform_vec3(drawable_material(window->text_bar_drawable), 0, bar_color);
 
-	window_set_position(window, position[0], position[1]);
+	window_set_position(window, window->position.x, window->position.y);
 	window_set_size(window, width, height);
 	window_set_transparency(window, 0.9f);
 

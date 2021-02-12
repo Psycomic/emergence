@@ -231,8 +231,10 @@ int main(void) {
 	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
 		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, red, LAYOUT_PACK);
 
-	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f, 5.f, 5.f, LAYOUT_PACK);
-	Widget* quit_button = widget_button_create(terrain_window, scene, terrain_presentation, "QUIT GAME", 12.f, 5.f, 5.f, LAYOUT_PACK);
+	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "RANDOMIZE", 12.f,
+													5.f, 5.f, LAYOUT_PACK);
+	Widget* quit_button = widget_button_create(terrain_window, scene, terrain_presentation, "QUIT GAME",
+											   12.f, 5.f, 5.f, LAYOUT_PACK);
 
 	widget_set_on_click_up(randomize_button, update_callback);
 	widget_set_on_click_up(quit_button, quit_callback);

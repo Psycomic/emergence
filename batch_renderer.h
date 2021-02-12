@@ -32,7 +32,7 @@ typedef struct {
 	uint32_t* elements;
 	Batch* batch;
 
-	uint64_t vertices_size;
+	uint64_t vertex_size;
 
 	uint64_t vertices_count;
 	uint64_t elements_count;
