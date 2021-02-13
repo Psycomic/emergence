@@ -53,8 +53,9 @@ void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity,
 void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vertices, uint64_t vertices_count,
 						 uint32_t* elements, uint64_t elements_count)
 {
-	assert(batch_drawable->vertex_buffer_offset + vertices_count * sizeof(float) < batch->vertex_buffer_capacity);
-	assert(batch_drawable->index_buffer_offset + elements_count * sizeof(uint) < batch->index_buffer_capacity);
+	assert(batch->vertex_buffer_size + vertices_count * batch->vertex_size
+		   * sizeof(float) <  batch->vertex_buffer_capacity);
+	assert(batch->index_buffer_size + elements_count * sizeof(uint) < batch->index_buffer_capacity);
 
 	batch_drawable->batch = batch;
 	batch_drawable->vertices = vertices;

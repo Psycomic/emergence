@@ -353,6 +353,9 @@ Material* material_create(GLuint shader, char** uniforms_position, uint uniforms
 		new_material->uniforms[i].location = glGetUniformLocation(shader, uniforms_position[i]);
 		new_material->uniforms[i].is_set = GL_FALSE;
 
+		if (new_material->uniforms[i].location < 0)
+			printf("Uniform %s doesn't exist!\n", uniforms_position[i]);
+
 		assert(new_material->uniforms[i].location >= 0);
 	}
 

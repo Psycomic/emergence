@@ -3,7 +3,7 @@
 
 #include "batch_renderer.h"
 
-#define TEXT_VERTEX_SIZE 5		/* 2 + 2 + 1 */
+#define TEXT_VERTEX_SIZE 8
 
 // Abstraction over text. Basically a collection of drawables, each with a
 // glyph texture, to end up with text
@@ -21,11 +21,23 @@ typedef struct {
 void text_update(Text* text);
 
 void text_set_color(Text* text, Vector3 color) {
-	/* TODO */
+	for (uint i = 0; i < text->drawable.vertices_count; i++) {
+		Vector3* vertex_transparency = (Vector3*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 5);
+		*vertex_transparency = color;
+	}
+
+	text->color = color;
+
+	text_update(text);
 }
 
 void text_set_transparency(Text* text, float transparency) {
-	/* TODO */
+	for (uint i = 0; i < text->drawable.vertices_count; i++) {
+		float* vertex_transparency = (float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 4;
+		*vertex_transparency = transparency;
+	}
+
+	text_update(text);
 }
 
 void text_set_angle(Text* text, float angle) {
@@ -94,11 +106,10 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 	text->string = string;
 	text->size = size;
-	text->color = color;
 
 	uint text_length = strlen(string);
 
-	const uint vertex_size = 2 + 2 + 1,
+	const uint vertex_size = TEXT_VERTEX_SIZE,
 		vertices_number = vertex_size * 4 * text_length;
 
 	float* drawable_vertices = malloc(sizeof(float) * vertices_number);
@@ -139,19 +150,15 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 			// Initializing vertices: two triangles
 			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0]; GET_INDEX(drawable_vertices, 1) = vertex_up_left[1]; // Set position
 			GET_INDEX(drawable_vertices, 2) = uv_up_left[0]; GET_INDEX(drawable_vertices, 3) = uv_up_left[1];
-			GET_INDEX(drawable_vertices, 4) = 1.f;
 
-			GET_INDEX(drawable_vertices, 5) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 6) = vertex_down_left[1];
-			GET_INDEX(drawable_vertices, 7) = uv_down_left[0]; GET_INDEX(drawable_vertices, 8) = uv_down_left[1];
-			GET_INDEX(drawable_vertices, 9) = 1.f;
+			GET_INDEX(drawable_vertices, 8) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 9) = vertex_down_left[1];
+			GET_INDEX(drawable_vertices, 10) = uv_down_left[0]; GET_INDEX(drawable_vertices, 11) = uv_down_left[1];
 
-			GET_INDEX(drawable_vertices, 10) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 11) = vertex_down_right[1];
-			GET_INDEX(drawable_vertices, 12) = uv_down_right[0]; GET_INDEX(drawable_vertices, 13) = uv_down_right[1];
-			GET_INDEX(drawable_vertices, 14) = 1.f;
+			GET_INDEX(drawable_vertices, 16) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 17) = vertex_down_right[1];
+			GET_INDEX(drawable_vertices, 18) = uv_down_right[0]; GET_INDEX(drawable_vertices, 19) = uv_down_right[1];
 
-			GET_INDEX(drawable_vertices, 15) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 16) = vertex_up_right[1];
-			GET_INDEX(drawable_vertices, 17) = uv_up_right[0]; GET_INDEX(drawable_vertices, 18) = uv_up_right[1];
-			GET_INDEX(drawable_vertices, 19) = 1.f;
+			GET_INDEX(drawable_vertices, 24) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 25) = vertex_up_right[1];
+			GET_INDEX(drawable_vertices, 26) = uv_up_right[0]; GET_INDEX(drawable_vertices, 27) = uv_up_right[1];
 
 			// Initializing elements
 			drawable_elements[j * 6 + 0] = j * 4 + 0; drawable_elements[j * 6 + 1] = j * 4 + 3;
@@ -166,7 +173,10 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 	batch_drawable_init(batch, &text->drawable, drawable_vertices, 4 * text_length,
 						drawable_elements, 6 * text_length);
+
 	text_set_position(text, position);
+	text_set_transparency(text, 1.f);
+	text_set_color(text, color);
 
 	return text;
 }

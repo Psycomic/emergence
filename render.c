@@ -143,15 +143,12 @@ static char* color_uniforms[] = {
 };
 
 static char* ui_button_uniforms[] = {
-	"model_position",
-	"transparency",
-	"max_width",
-	"max_height",
-	"anchor_position",
-	"border_size",
-	"width",
-	"height",
-	"color"
+	"model_position",			/* 0 */
+	"transparency",				/* 1 */
+	"border_size",				/* 2 */
+	"width",					/* 3 */
+	"height",					/* 4 */
+	"color"						/* 5 */
 };
 
 static char* axis_uniforms[] = {
@@ -293,12 +290,12 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 		3, 1 // Position, transparency
 	};
 
-	batch_init(&scene->windows_batch, window_batch_material, sizeof(float) * 512, sizeof(uint32_t) * 512,
+	batch_init(&scene->windows_batch, window_batch_material, sizeof(float) * 2048, sizeof(uint32_t) * 2048,
 			   windows_attributes_sizes, ARRAY_SIZE(windows_attributes_sizes));
 
 	Material* text_batch_material = material_create(ui_text_shader, NULL, 0);
 	uint64_t text_attributes_sizes[] = {
-		2, 2, 1 // Position, texture postion, transparency
+		2, 2, 1, 3 // Position, texture postion, transparency, color
 	};
 
 	batch_init(&scene->text_batch, text_batch_material, sizeof(float) * 8192, sizeof(uint32_t) * 8192,
@@ -567,6 +564,8 @@ static uint32_t rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 
 WindowID window_create(Scene* scene, float width, float height, float* position, char* title) {
 	Window* window = dynamic_array_push_back(&scene->windows);
+
+	bzero(window, sizeof(Window));
 
 	window->min_width = 200.f;
 	window->min_height = 100.f;
@@ -877,8 +876,8 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 		text_height + button->padding * 2.f,
 		button_material, GL_TRIANGLES, NULL, 0x0);
 
-	material_set_uniform_float(button_material, 5, border_size);			// Border size
-	material_set_uniform_vec3(button_material, 8, button_background_color);	// Color
+	material_set_uniform_float(button_material, 3, border_size);			// Border size
+	material_set_uniform_vec3(button_material, 5, button_background_color);	// Color
 
 	widget_init(SUPER(button), window, parent, margin, layout);	// Intializing the widget
 
@@ -896,30 +895,24 @@ void widget_button_draw(Window* window, void* widget, Vector2 position, Mat4 vie
 	Vector2 background_position = position;		// Calculating the button's background position
 	background_position.y -= button->header.height + button->padding * 2;
 
-	Vector2 window_max_position = window_get_max_position(window);	// Max position before fading
-
 	Material* button_material = drawable_material(button->button_background);
 
 	material_set_uniform_vec2(button_material, 0, background_position);			// Position
-	material_set_uniform_vec2(button_material, 4, window_get_anchor(window));	// Anchor
 
-	material_set_uniform_float(button_material, 2, window_max_position.x);		// Max Width
-	material_set_uniform_float(button_material, 3, window_max_position.y);		// Max Height
-
-	material_set_uniform_float(button_material, 6, widget_get_width(SUPER(button)));	// Width
-	material_set_uniform_float(button_material, 7, widget_get_height(SUPER(button)));	// Height
+	material_set_uniform_float(button_material, 3, widget_get_width(SUPER(button)));	// Width
+	material_set_uniform_float(button_material, 4, widget_get_height(SUPER(button)));	// Height
 
 	if (button->header.state & WIDGET_STATE_CLICKED) {
-		text_set_color(&button->text, button_text_click_color);
-		material_set_uniform_vec3(button_material, 8, button_background_click_color);
+		text_set_color(button->text, button_text_click_color);
+		material_set_uniform_vec3(button_material, 5, button_background_click_color);
 	}
 	else if (button->header.state & WIDGET_STATE_HOVERED) {		// Setting the background color
-		text_set_color(&button->text, button_text_hover_color);
-		material_set_uniform_vec3(button_material, 8, button_background_hover_color);
+		text_set_color(button->text, button_text_hover_color);
+		material_set_uniform_vec3(button_material, 5, button_background_hover_color);
 	}
 	else {
-		text_set_color(&button->text, button_text_color);
-		material_set_uniform_vec3(button_material, 8, button_background_color);
+		text_set_color(button->text, button_text_color);
+		material_set_uniform_vec3(button_material, 5, button_background_color);
 	}
 
 	material_use(button_material, NULL, view_position_matrix);	// Drawing the background using the material
