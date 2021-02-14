@@ -64,7 +64,8 @@ LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
 
 LispObject* ulisp_nreverse(LispObject* obj) {
 	LispObject *current = obj,
-		*next, *previous = nil, *last;
+		*next, *previous = nil,
+		*last = nil;
 
 	while (current != nil) {
 		ConsCell* cell = (ConsCell*)current->data;

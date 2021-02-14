@@ -7,6 +7,7 @@
 #include "misc.h"
 #include "drawable.h"
 
+// Batch of multiple objects
 typedef struct {
 	Material* material;
 
@@ -27,6 +28,8 @@ typedef struct {
 	size_t index_buffer_size;
 } Batch;
 
+// Element of a Batch, has vertices, elements
+// and information needed to modify its state
 typedef struct {
 	void* vertices;
 	uint32_t* elements;
