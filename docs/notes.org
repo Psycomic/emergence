@@ -1,0 +1,68 @@
+* DONE Batch renderer
+** TODO Batch drawable deletion
+*** Naive solution
+	Displace entire vertex buffer to overwrite where the drawable part
+	of the buffer was. This is very inefficient, because we have to
+	redisplace and entire array in GPU memory
+
+#+BEGIN_SRC
+									Initial configuration
+ +--------------------------------------------+-------------------------------+---------------------------+
+ | First batch drawable                       |  Second batch drawable        |  third batch drawable  	  |
+ +--------------------------------------------+-------------------------------+---------------------------+
+																										  |
+																										  |
+																									 Size of buffer
+																		     / 						   \
+													 		           		X---------------------------X
+																	         \      				   /
+																	Size of buffer
+									Deleting 2 drawables				  |
+ +--------------------------------------------+---------------------------+-------------------------------+
+ | First batch drawable                       |  third batch drawable  	  |         Junk                  |
+ +--------------------------------------------+--------------\------------+-------------------------------+
+															  ---\    		   ---/
+															      ------------/
+                                                                  Copy content
+
+#+END_SRC
+
+*** Advanced solution
+	I could try something using the index buffer: the drawable
+	vertices stay were they were, and only the element buffer
+	changes. A big hole in the buffer will be left, where new data
+	could be allocated.
+
+** TODO Per-batch drawable uniforms
+   *The problem*
+   With batch draw, I have to pass paramters in the
+   vertex attributes, but sometimes, like for a widget or for a text
+   object, I need different attributes not for the vertices, but for
+   the entire text.
+
+   *How to solve it*
+   I think the best solution would be to add an index to every vertex
+   attribute, like this:
+
+#+BEGIN_SRC glsl
+#version 330 core
+
+struct BatchDrawableUniforms {
+	vec3 position;
+	float width, height;
+};
+
+#define MAX_BATCH_DRAWABLES 256
+
+uniform BatchDrawableUniforms parameters[MAX_BATCH_DRAWABLES];
+
+layout(location = 0) in vec3 vertexPos; // 0 1 2
+layout(location = 1) in float index;
+
+void main() {
+	gl_Position = vec4(vertexPos, 1);
+
+	int i = (int)index;
+	BatchDrawableUniforms my_uniforms = parameters[i];
+}
+#+END_SRC

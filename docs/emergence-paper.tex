@@ -1,0 +1,56 @@
+\documentclass{article}
+
+\title{Accelerating Large Scale Simulations Using Peer-to-Peer Technology}
+\date{2021-02-07}
+\author{Ryuusuke Okuno}
+
+\begin{document}
+
+\maketitle
+\pagenumbering{gobble}
+\newpage
+\pagenumbering{arabic}
+
+\section{Abstract}
+This paper describes a new way to simulate large systems (i.e. a game
+simulating virtual evolution in complex environments) using
+distributed computing over a network. The simulation is concurrently
+run by many computers connected to each other which calculate a small
+part of the complete simulation. It will be shown that it is possible
+to create a very large scale simulation using this technique, and
+implementation of the ideas described here can be found in the game I
+am currently working on.
+
+\section{The Endless Loop of Video Game Development}
+\subsection{The Hardware Run}
+Modern video games developers assume that every player has the latest
+and greatest technology to play their games, and this forces the
+player to buy newer hardware for each game generation. This also
+reduces the game to a particular era in which it was popular, making
+it a simple fashion thing, until another brand new game comes out with
+amazing new graphics and even more hardware requirements than the
+previous one. Noticeable exceptions include ``Minecraft'', ``Roblox''
+and ``Tetris''. What distinguishes theses games from the enormous pile
+of ``Brand new AAA games'' is that they have very low hardware
+requirements: Minecraft, for example, only has one element to create
+everything from, pixelated blocks.
+
+\subsection{Moore's Law is Getting Weaker}
+Moore's Law, which stipulates that the computing power of
+microprocessors increases exponentially, is not valid anymore. We have
+reached the physical limit where we can't just add more
+transistors. Nowadays, CPU manufacturers are just adding more threads
+to their microprocessors, not making them more powerful. The hardware
+run cannot keep living longer under theses conditions. New games will
+need to find a way to be even more realistic and this also applies to
+supercomputers: the most powerful supercomputer as I am writing this
+is a combination of several computers working concurrently.
+
+\section{Network Architecture}
+\subsection{Small World theory}
+The peer-to-peer network architecture works because of the Small World
+Theory, which stipulates that, in a network, if you are connected to
+enough nodes which are themselves connected to enough nodes, everyone
+is connected.
+
+\end{document}
