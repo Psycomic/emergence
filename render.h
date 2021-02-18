@@ -8,6 +8,9 @@
 #include "images.h"
 #include "drawable.h"
 
+#define WIDGET_STATE_HOVERED	(1 << 0)
+#define WIDGET_STATE_CLICKED	(1 << 1)
+
 typedef enum {
 	LAYOUT_PACK,
 	LAYOUT_GRID,
@@ -50,9 +53,14 @@ int initialize_everything();
 GLFWwindow* scene_context(Scene* scene);
 void scene_quit(Scene *scene);
 int scene_should_close(Scene* scene);
+// Create a scene instance
 Scene* scene_create(Vector3 camera_position, int width, int height, const char* title);
-Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations,
-								uint declarations_number, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
+Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number,
+								ArrayBufferDeclaration* declarations,uint declarations_number,
+								Material* material, GLenum mode, Vector3* position, GLuint* textures,
+								uint textures_count, uint flags);
+
+// The main function of the whole renderer logic
 void scene_draw(Scene* scene, Vector3 clear_color);
 void scene_handle_events(Scene* scene, GLFWwindow* window);
 
@@ -68,9 +76,8 @@ void text_set_angle(Text* text, float angle);
 Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout);
 Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, float padding, Layout layout);
 
-void widget_set_on_hover(Widget* widget, EventCallback on_hover);
-void widget_set_on_click(Widget* widget, EventCallback on_click);
 void widget_set_on_click_up(Widget* widget, EventCallback on_click_up);
+BOOL widget_state(Widget* widget, uint state);
 
 #endif // RENDER_INTERNAL
 #endif // RENDER_HEADER

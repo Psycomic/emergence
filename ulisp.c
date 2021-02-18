@@ -151,6 +151,9 @@ LispObject* ulisp_eval(LispObject* expression) {
 			else
 				return nil;
 		}
+		else if (ulisp_eq(applied_symbol, begin))  {
+			ulisp_eval(ulisp_car(ulisp_cdr(expression)));
+		}
 
 		LispObject* proc = ulisp_eval(applied_symbol);
 

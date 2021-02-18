@@ -22,9 +22,6 @@
 #define CAMERA_SPEED 0.1f
 #define MOUSE_SENSIBILLITY 0.01f
 
-#define WIDGET_STATE_HOVERED	(1 << 0)
-#define WIDGET_STATE_CLICKED	(1 << 1)
-
 const Vector3 white = { { 1, 1, 1 } };
 const Vector3 red = { { 1, 0, 0 } };
 const Vector3 blue = { { 0, 0, 1 } };
@@ -33,23 +30,22 @@ const Vector3 green = { { 0, 1, 0 } };
 
 typedef void (*EventCallback)(void*, void*);
 
+// Parent "class" of every UI widget
 typedef struct Widget {
 	Vector2 position;
 
-	struct Widget* parent;
+	struct Widget* parent; 		// NULL if directly on a window
 
-	float height;
-	float margin;
-
+	float height;				// Used to align the widgets correcly
+	float margin;				// Distance between the widget and the previous
+								// widget
 	enum {
 		WIDGET_TYPE_LABEL = 0,
 		WIDGET_TYPE_BUTTON
 	} type;
 
-	EventCallback on_hover;
-	EventCallback on_click;
-	EventCallback on_click_up;
-
+	EventCallback on_click_up; // Callbacks for different events
+							   // ingored if NULL
 	Layout layout;
 
 	uint32_t state;
@@ -57,47 +53,46 @@ typedef struct Widget {
 } Widget;
 
 typedef struct {
-	Widget header;
+	Widget header; // Support for "object-oriented" inheritance
 
 	Vector3 color;
 	Text* text;
 } Label;
 
+// Simple clickable button
 typedef struct {
 	Widget header;
 
 	Text* text;
 	Drawable* button_background;
 
-	float padding;
+	float padding;  // Distance between the text and
+					// the button's edges
 } Button;
 
 // Window UI : a width, height, mininum width and transparency.
 // every drawable has its own container, differing from the original scene.
 typedef struct {
-	Vector2 position;
-	void (*on_close)();
+	Vector2 position;   // Position used to calculate vertex translation
+						// for every change of position
 
-	float width;
-	float height;
+	void (*on_close)();	// Called when the window is closed
 
-	float min_width;
-	float min_height;
+	float width, height; // Window dimensions
+	float min_width, min_height; // How much you can resize the window
 
 	float depth;
-
 	float transparency;
-	float pack_last_size;
 
+	float pack_last_size;		// Position of last widget added to
+								// the window
 	uint widgets_count;
-
 	Layout layout;
-
 	Text* title;
 
-// TODO: Change everything to batch drawable.
-	BatchDrawable background_drawable;
-	Drawable* text_bar_drawable;
+	BatchDrawable background_drawable; // Drawable element for the window's
+									   // frame
+	BatchDrawable text_bar_drawable;
 	Widget* widgets[64];
 } Window;
 
@@ -116,8 +111,10 @@ typedef struct {
 
 	Camera camera;
 
-	Batch windows_batch;
-	Batch text_batch;
+	Batch windows_batch;		// Respectively the batch to draw
+								// window backgrounds, the batch to
+	Batch text_batch;			// draw text and the batch to draw the
+	Batch window_text_bar_batch; // title bar of the windows
 
 	GLFWwindow* context;
 
@@ -131,6 +128,7 @@ static GLuint ui_text_shader;
 static GLuint ui_button_shader;
 static GLuint color_shader;
 static GLuint axis_shader;
+static GLuint text_bar_shader;
 
 static GLuint monospaced_font_texture;
 
@@ -143,12 +141,12 @@ static char* color_uniforms[] = {
 };
 
 static char* ui_button_uniforms[] = {
-	"model_position",			/* 0 */
-	"transparency",				/* 1 */
-	"border_size",				/* 2 */
-	"width",					/* 3 */
-	"height",					/* 4 */
-	"color"						/* 5 */
+	"model_position",			// 0
+	"transparency",				// 1
+	"border_size",				// 2
+	"width",					// 3
+	"height",					// 4
+	"color"						// 5
 };
 
 static char* axis_uniforms[] = {
@@ -182,17 +180,18 @@ void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix);
 Vector2 widget_get_real_position(Widget* widget, Window* window);
 void widget_set_transparency(Widget* widget, float transparency);
 float widget_get_margin_height(Widget* widget);
+void widget_set_depth(Widget* widget, float depth);
 
 GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y);
 
-void widget_on_hover(Widget* widget, Event* evt);
-void widget_on_click(Widget* widget, Event* evt);
 void widget_on_click_up(Widget* widget, Event* evt);
 
 void widget_destroy(Widget* widget);
 
-Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, Vector3 color, Layout layout);
-Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text, float text_size, float margin, float padding, Layout layout);
+Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
+							float text_size, float margin, Vector3 color, Layout layout);
+Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
+							 float text_size, float margin, float padding, Layout layout);
 
 void scene_set_size(Scene* scene, float width, float height);
 
@@ -237,12 +236,11 @@ void scene_quit(Scene* scene) {
 	scene->flags |= SCENE_EVENT_QUIT;
 }
 
-/* Create a scene instance */
 Scene* scene_create(Vector3 camera_position, int width, int height, const char* title) {
-	Scene* scene = malloc(sizeof(Scene)); /* Allocating the scene object */
+	Scene* scene = malloc(sizeof(Scene)); // Allocating the scene object
 	assert(scene != NULL);
 
-	/* Creating window and OpenGL context */
+	// Creating window and OpenGL context
 	scene->context = glfwCreateWindow(width, height, title, NULL, NULL);
 
 	if (scene->context == NULL) {
@@ -256,27 +254,27 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	glfwSetWindowUserPointer(scene->context, scene);
 	glfwGetWindowSize(scene->context, &width, &height);
 
-	glfwMakeContextCurrent(scene->context); /* Make window the current context */
+	glfwMakeContextCurrent(scene->context); // Make window the current context
 
 	if (glewInit() != GLEW_OK) {
 		fprintf(stderr, "Failed to initialize GLEW\n");
 		return NULL;
 	}
 
-	glfwSwapInterval(1);			/* Disable double buffering */
+	glfwSwapInterval(1);			// Disable double buffering
 
 	// OpenGL settings
-	glEnable(GL_BLEND);			/* Enable blend */
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); /* Set blend func */
+	glEnable(GL_BLEND);			// Enable blend
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); /* Texture parameters */
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Texture parameters
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glViewport(0, 0, width, height); /* Viewport size */
+	glViewport(0, 0, width, height); // Viewport size
 
-	render_initialize();		/* Initialize scene */
+	render_initialize();		// Initialize scene
 
-	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height); /* Initalize player camera */
+	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height); // Initalize player camera
 
 	scene->flags = 0x0;
 	scene->selected_window = 0;
@@ -290,26 +288,35 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 		3, 1 // Position, transparency
 	};
 
-	batch_init(&scene->windows_batch, window_batch_material, sizeof(float) * 2048, sizeof(uint32_t) * 2048,
-			   windows_attributes_sizes, ARRAY_SIZE(windows_attributes_sizes));
+	batch_init(&scene->windows_batch, GL_TRIANGLES, window_batch_material, sizeof(float) * 2048,
+			   sizeof(uint32_t) * 2048, windows_attributes_sizes, ARRAY_SIZE(windows_attributes_sizes));
 
 	Material* text_batch_material = material_create(ui_text_shader, NULL, 0);
 	uint64_t text_attributes_sizes[] = {
-		2, 2, 1, 3 // Position, texture postion, transparency, color
+		3, 2, 1, 3 // Position, texture postion, transparency, color
 	};
 
-	batch_init(&scene->text_batch, text_batch_material, sizeof(float) * 8192, sizeof(uint32_t) * 8192,
-			   text_attributes_sizes, ARRAY_SIZE(text_attributes_sizes));
+	batch_init(&scene->text_batch, GL_TRIANGLES, text_batch_material, sizeof(float) * 8192,
+			   sizeof(uint32_t) * 8192, text_attributes_sizes, ARRAY_SIZE(text_attributes_sizes));
+
+	Material* text_bar_material = material_create(text_bar_shader, NULL, 0);
+	uint64_t text_bar_attributes_sizes[] = {
+		3, 3 // Position, color
+	};
+
+	batch_init(&scene->window_text_bar_batch, GL_LINES, text_bar_material, sizeof(float) * 1024,
+			   sizeof(uint32_t) * 1024, text_bar_attributes_sizes, ARRAY_SIZE(text_bar_attributes_sizes));
 
 	return scene;
 }
 
-/* Change size of scene viewport */
+// Change size of scene viewport
 void scene_set_size(Scene* scene, float width, float height) {
 	scene->camera.width = width;
 	scene->camera.height = height;
 
-	mat4_create_perspective(scene->camera.perspective_matrix, 1000.f, 0.1f, 90.f, (float) scene->camera.width / scene->camera.height);
+	mat4_create_perspective(scene->camera.perspective_matrix, 1000.f, 0.1f, 90.f,
+							(float) scene->camera.width / scene->camera.height);
 
 	float half_width = (float)width / 2,
 		half_height = (float)height / 2;
@@ -319,7 +326,6 @@ void scene_set_size(Scene* scene, float width, float height) {
 	glViewport(0, 0, scene->camera.width, scene->camera.height);
 }
 
-/* The main function of the whole renderer logic */
 void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -353,6 +359,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		glEnable(GL_DEPTH_TEST);
 
 		batch_draw(&scene->windows_batch, scene->camera.ortho_matrix);
+		batch_draw(&scene->window_text_bar_batch, scene->camera.ortho_matrix);
 
 		for (uint i = 0; i < scene->windows.size; i++) {
 			Window* win = dynamic_array_at(&scene->windows, i);
@@ -365,7 +372,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	}
 }
 
-/* Set windows' depth correspondingly to their priority rank */
+// Set windows' depth correspondingly to their priority rank
 void scene_update_window_depths(Scene* scene) {
 	for (uint i = 0; i < scene->windows.size; i++) {
 		size_t index = ((size_t)scene->selected_window + i) % scene->windows.size;
@@ -378,20 +385,36 @@ void scene_update_window_depths(Scene* scene) {
 			float* vertex = (float*)window->background_drawable.vertices + scene->windows_batch.vertex_size * j;
 			vertex[2] = window->depth;
 		}
+
+		for (uint j = 0; j < window->text_bar_drawable.vertices_count; j++) {
+			float* vertex = (float*)window->text_bar_drawable.vertices + scene->window_text_bar_batch.vertex_size * j;
+			vertex[2] = window->depth + 0.1f;
+		}
+
+		text_set_depth(window->title, window->depth + 0.1f);
+		batch_drawable_update(&window->text_bar_drawable);
+
+		for (uint j = 0; j < window->widgets_count; j++)
+			widget_set_depth(window->widgets[j], window->depth + 0.1f);
 	}
 }
 
-/* Add drawable to scene */
-Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+// Add drawable to scene
+Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number,
+								ArrayBufferDeclaration* declarations, uint declarations_count,
+								Material* material, GLenum mode, Vector3* position, GLuint* textures,
+								uint textures_count, uint flags)
+{
 	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
 
 	*drawable_pos = drawable_allocate(declarations_count);
 
-	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode, position, textures, textures_count, flags);
+	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode,
+				  position, textures, textures_count, flags);
 	return *drawable_pos;
 }
 
-/* Handle every event happening in the scene. TODO: Cleanup */
+// Handle every event happening in the scene. TODO: Cleanup
 void scene_handle_events(Scene* scene, GLFWwindow* window) {
 	if (scene->glfw_last_character == 'e')
 		scene->flags ^= SCENE_GUI_MODE;
@@ -421,11 +444,9 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 				evt.mouse_info.screen_x = screen_x;
 				evt.mouse_info.screen_y = screen_y;
 
-				widget_on_hover(widget, &evt);
 				widget->state |= WIDGET_STATE_HOVERED;
 
 				if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-					widget_on_click(widget, &evt);
 					widget->state |= WIDGET_STATE_CLICKED;
 				}
 				else {
@@ -483,7 +504,8 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 		}
 
 		// Rotate the camera proporitionaly to the mouse position
-		camera_rotate(&scene->camera, ((float)ypos - last_ypos) * MOUSE_SENSIBILLITY, -((float)xpos - last_xpos) * MOUSE_SENSIBILLITY);
+		camera_rotate(&scene->camera, ((float)ypos - last_ypos) * MOUSE_SENSIBILLITY,
+					  -((float)xpos - last_xpos) * MOUSE_SENSIBILLITY);
 	}
 
 	last_xpos = xpos;
@@ -498,6 +520,32 @@ void window_update(Window* window) {
 	text_position.x += 6.f;
 
 	text_set_position(window->title, text_position);
+
+	batch_drawable_update(&window->background_drawable);
+
+	static Vector3 text_bar_color = {
+		{ 0.7f, 0.7f, 0.7f }
+	};
+
+	float* text_bar_vertices = window->text_bar_drawable.vertices;
+
+	text_bar_vertices[0] = text_get_size(window->title) + 6.f + window->position.x;
+	text_bar_vertices[1] = window->height + window->position.y;
+	text_bar_vertices[2] = window->depth + 0.1f;
+
+	text_bar_vertices[3] = text_bar_color.x;
+	text_bar_vertices[4] = text_bar_color.y;
+	text_bar_vertices[5] = text_bar_color.z;
+
+	text_bar_vertices[6] = text_get_size(window->title) + 6.f + window->position.x;
+	text_bar_vertices[7] = window->position.y;
+	text_bar_vertices[8] = window->depth + 0.1f;
+
+	text_bar_vertices[9] = text_bar_color.x;
+	text_bar_vertices[10] = text_bar_color.y;
+	text_bar_vertices[11] = text_bar_color.z;
+
+	batch_drawable_update(&window->text_bar_drawable);
 }
 
 void window_set_position(Window* window, float x, float y) {
@@ -518,10 +566,6 @@ void window_set_position(Window* window, float x, float y) {
 	window->position.y = y;
 
 	window_update(window);
-	batch_drawable_update(&window->background_drawable);
-
-	material_set_uniform_vec2(drawable_material(window->text_bar_drawable), 1, window->position);
-	drawable_update(window->text_bar_drawable);
 }
 
 void window_set_size(Window* window, float width, float height) {
@@ -532,18 +576,11 @@ void window_set_size(Window* window, float width, float height) {
 	printf("Set window size to %.2f %.2f\n", window->width, window->height);
 #endif
 
-	float* text_bar_vertices = drawable_buffer_data(window->text_bar_drawable, 0);
-	text_bar_vertices[0] = text_get_size(window->title) + 6.f; text_bar_vertices[1] = window->height;
-	text_bar_vertices[2] = text_get_size(window->title) + 6.f; text_bar_vertices[3] = 0.f;
-
-	drawable_update(window->text_bar_drawable);
-	window_update(window);
-
 	rectangle_vertices_set((float*)window->background_drawable.vertices,
 						   window->width, window->height, 4,
 						   window->position.x, window->position.y);
 
-	batch_drawable_update(&window->background_drawable);
+	window_update(window);
 }
 
 void window_set_transparency(Window* window, float transparency) {
@@ -578,30 +615,21 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window->position.x = position[0];
 	window->position.y = position[1];
 
-	Vector3 title_color = { { 0.6f, 0.6f, 0.6f } };
+	Vector3 title_color = {
+		{ 0.6f, 0.6f, 0.6f }
+	};
+
 	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
 	float* background_drawable_vertices = malloc(sizeof(float) * 4 * 5);
 	batch_drawable_init(&scene->windows_batch, &window->background_drawable, background_drawable_vertices, 4,
 						rectangle_elements, ARRAY_SIZE(rectangle_elements));
 
-	Drawable* text_bar_drawable = drawable_allocate(1);
-	assert(text_bar_drawable != NULL);
+	float* text_bar_vertices = malloc(sizeof(float) * 6 * 2);
+	static uint32_t text_bar_elements[] = { 0, 1 };
 
-	float* text_bar_vertices = malloc(sizeof(float) * 4);
-	ArrayBufferDeclaration text_bar_declarations[] = {
-		{text_bar_vertices, sizeof(float) * 4, 2, 0, GL_DYNAMIC_DRAW}
-	};
-	static Vector3 bar_color = {
-		{ 0.7f, 0.7f, 0.7f }
-	};
-
-	drawable_init(text_bar_drawable, NULL, 2, text_bar_declarations, 1,
-				  material_create(color_shader, color_uniforms, ARRAY_SIZE(color_uniforms)),
-				  GL_LINES, NULL, NULL, 0, 0x0);
-
-	window->text_bar_drawable = text_bar_drawable;
-	material_set_uniform_vec3(drawable_material(window->text_bar_drawable), 0, bar_color);
+	batch_drawable_init(&scene->window_text_bar_batch, &window->text_bar_drawable,
+						text_bar_vertices, 2, text_bar_elements, 2);
 
 	window_set_position(window, window->position.x, window->position.y);
 	window_set_size(window, width, height);
@@ -630,11 +658,6 @@ Vector2 window_get_anchor(Window* window) {
 
 void window_draw(Window* window, Mat4 view_position_matrix) {
 	assert(window->layout == LAYOUT_PACK);
-
-	Drawable* text_bar_drawable = window->text_bar_drawable;
-
-	material_use(drawable_material(text_bar_drawable), NULL, view_position_matrix);
-	drawable_draw(text_bar_drawable);
 
 	if (window->layout == LAYOUT_PACK) {
 		for (uint i = 0; i < window->widgets_count; i++)
@@ -667,16 +690,12 @@ void window_destroy(Scene* scene, WindowID id) {
 		if (window->on_close != NULL)
 			window->on_close();
 
-		free(drawable_buffer_data(window->text_bar_drawable, 0));
-
-		// Freeing memory resources
-		drawable_destroy(window->text_bar_drawable);
+		free(window->text_bar_drawable.vertices);
 
 		for (uint i = 0; i < window->widgets_count; i++)
 			widget_destroy(window->widgets[i]);
 
 		text_destroy(window->title);
-
 		// Reajusting the windows array
 		dynamic_array_remove(&scene->windows, id);
 
@@ -759,8 +778,6 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 	widget->layout = layout;
 	widget->margin = margin;
 
-	widget->on_hover = NULL;
-	widget->on_click = NULL;
 	widget->on_click_up = NULL;
 
 	widget->state = 0x0;
@@ -802,27 +819,13 @@ GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y) 
 	return (min_x <= x && max_x >= x && min_y <= y && max_y >= y);
 }
 
-void widget_on_hover(Widget* widget, Event* evt) {
-	if (widget->on_hover != NULL)
-		widget->on_hover(widget, evt);
-}
-
-void widget_on_click(Widget* widget, Event* evt) {
-	if (widget->on_click != NULL)
-		widget->on_click(widget, evt);
-}
-
 void widget_on_click_up(Widget* widget, Event* evt) {
 	if (widget->on_click_up != NULL)
 		widget->on_click_up(widget, evt);
 }
 
-void widget_set_on_hover(Widget* widget, EventCallback on_hover) {
-	widget->on_hover = on_hover;
-}
-
-void widget_set_on_click(Widget* widget, EventCallback on_click) {
-	widget->on_click = on_click;
+BOOL widget_state(Widget* widget, uint state) {
+	return widget->state & state;
 }
 
 void widget_set_on_click_up(Widget* widget, EventCallback on_click_up) {
@@ -860,7 +863,8 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 	button->header.type = WIDGET_TYPE_BUTTON;	// Setting button type, padding and hover function
 
 	button->padding = padding + border_size * 2;
-	button->text = text_create(&scene->text_batch, text, text_size, text_position, button_text_color);	// Initializing the button's text
+	// Initializing the button's text
+	button->text = text_create(&scene->text_batch, text, text_size, text_position, button_text_color);
 
 	float text_width = text_get_width(button->text),
 		text_height = text_get_height(button->text);
@@ -868,8 +872,8 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 	button->header.height = text_height;	// Setting widget height
 
 	button->button_background = drawable_allocate(1);	// Background of the button
-
-	Material* button_material = material_create(ui_button_shader, ui_button_uniforms, ARRAY_SIZE(ui_button_uniforms));	// Background's material
+	// Background's material
+	Material* button_material = material_create(ui_button_shader, ui_button_uniforms, ARRAY_SIZE(ui_button_uniforms));
 
 	drawable_rectangle_init(button->button_background,	// Initializing the background drawable
 		text_width + button->padding * 2.f,
@@ -959,6 +963,14 @@ void widget_button_destroy(void* widget) {
 	free(button);
 }
 
+void widget_label_set_depth(void* widget, float depth) {
+	text_set_depth(((Label*)widget)->text, depth);
+}
+
+void widget_button_set_depth(void* widget, float depth) {
+	text_set_depth(((Button*)widget)->text, depth);
+}
+
 static void (*widget_draw_vtable[])(Window*, void*, Vector2, Mat4) = {
 	[WIDGET_TYPE_LABEL] = &widget_label_draw,
 	[WIDGET_TYPE_BUTTON] = &widget_button_draw,
@@ -974,6 +986,11 @@ static void (*widget_destroy_vtable[])(void*) = {
 	[WIDGET_TYPE_BUTTON] = &widget_button_destroy
 };
 
+static void (*widget_set_depth_vtable[])(void*, float) = {
+	[WIDGET_TYPE_LABEL] = &widget_label_set_depth,
+	[WIDGET_TYPE_BUTTON] = &widget_button_set_depth
+};
+
 void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix) {
 	Vector2 real_position = widget_get_real_position(widget, window);
 
@@ -986,6 +1003,10 @@ void widget_set_transparency(Widget* widget, float transparency) {
 
 void widget_destroy(Widget* widget) {
 	widget_destroy_vtable[widget->type](widget);
+}
+
+void widget_set_depth(Widget* widget, float depth) {
+	widget_set_depth_vtable[widget->type](widget, depth);
 }
 
 void render_initialize(void) {
@@ -1013,6 +1034,7 @@ void render_initialize(void) {
 	ui_text_shader = shader_create("./shaders/vertex_ui_text.glsl", "./shaders/fragment_ui_text.glsl");
 	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_button.glsl");
 	color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl");
+	text_bar_shader = shader_create("./shaders/vertex_text_bar.glsl", "./shaders/fragment_text_bar.glsl");
 
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
 	material_set_uniform_vec3(axis_material, 0, blue);

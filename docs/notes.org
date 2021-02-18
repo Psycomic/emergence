@@ -1,9 +1,11 @@
 * DONE Batch renderer
+  Render several objects in one call by batching them together in a
+  single vertex buffer.
 ** TODO Batch drawable deletion
 *** Naive solution
 	Displace entire vertex buffer to overwrite where the drawable part
 	of the buffer was. This is very inefficient, because we have to
-	redisplace and entire array in GPU memory
+	re-displace and entire array in GPU memory
 
 #+BEGIN_SRC
 									Initial configuration
@@ -35,7 +37,7 @@
 
 ** TODO Per-batch drawable uniforms
    *The problem*
-   With batch draw, I have to pass paramters in the
+   With batch draw, I have to pass parameters in the
    vertex attributes, but sometimes, like for a widget or for a text
    object, I need different attributes not for the vertices, but for
    the entire text.
@@ -66,3 +68,24 @@ void main() {
 	BatchDrawableUniforms my_uniforms = parameters[i];
 }
 #+END_SRC
+
+* TODO Possible bug with text rendering in windows
+  When I render text, I do this
+
+#+BEGIN_SRC c
+text_set_depth(window->title, window->depth + 0.1f);
+
+for (uint j = 0; j < window->widgets_count; j++)
+	widget_set_depth(window->widgets[j], window->depth + 0.1f);
+#+END_SRC
+
+  It kinds of works for now, but when I'll have more windows, it might
+  overflow on the others
+* TODO Stencil buffer to hide text
+  Now, text inside the window overflows on the edges if I try to
+  minimize it.
+* TODO Render buttons with batch rendering
+  Buttons should be rendered in one draw call like the other user
+  interface components.
+* DONE Window bar depth problems
+  The window bar is not at the right depth

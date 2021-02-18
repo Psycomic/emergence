@@ -11,6 +11,8 @@ void text_set_color(Text* text, Vector3 color);
 void text_set_angle(Text* text, float angle);
 void text_set_position(Text* text, Vector2 position);
 void text_set_transparency(Text* text, float transparency);
+void text_set_depth(Text* text, float depth);
+
 void text_destroy(Text* text);
 void text_update(Text* text);
 

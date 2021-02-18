@@ -3,7 +3,7 @@
 
 #include "batch_renderer.h"
 
-#define TEXT_VERTEX_SIZE 8
+#define TEXT_VERTEX_SIZE 9		// 3 + 2 + 1 + 3
 
 // Abstraction over text. Basically a collection of drawables, each with a
 // glyph texture, to end up with text
@@ -22,8 +22,8 @@ void text_update(Text* text);
 
 void text_set_color(Text* text, Vector3 color) {
 	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		Vector3* vertex_transparency = (Vector3*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 5);
-		*vertex_transparency = color;
+		Vector3* vertex_color = (Vector3*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 6);
+		*vertex_color = color;
 	}
 
 	text->color = color;
@@ -33,7 +33,7 @@ void text_set_color(Text* text, Vector3 color) {
 
 void text_set_transparency(Text* text, float transparency) {
 	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		float* vertex_transparency = (float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 4;
+		float* vertex_transparency = (float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 5;
 		*vertex_transparency = transparency;
 	}
 
@@ -55,6 +55,15 @@ void text_set_position(Text* text, Vector2 position) {
 	}
 
 	text->position = position;
+	text_update(text);
+}
+
+void text_set_depth(Text* text, float depth) {
+	for (uint i = 0; i < text->drawable.vertices_count; i++) {
+		float* vertex_depth = (float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 2;
+		*vertex_depth = depth;
+	}
+
 	text_update(text);
 }
 
@@ -115,6 +124,8 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 	float* drawable_vertices = malloc(sizeof(float) * vertices_number);
 	uint* drawable_elements = malloc(sizeof(uint) * 6 * text_length);
 
+	bzero(drawable_vertices, sizeof(float) * vertices_number);
+
 	const float height = 512,
 		half_height = height / 32,
 		width = 64,
@@ -149,16 +160,16 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 			// Initializing vertices: two triangles
 			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0]; GET_INDEX(drawable_vertices, 1) = vertex_up_left[1]; // Set position
-			GET_INDEX(drawable_vertices, 2) = uv_up_left[0]; GET_INDEX(drawable_vertices, 3) = uv_up_left[1];
+			GET_INDEX(drawable_vertices, 3) = uv_up_left[0]; GET_INDEX(drawable_vertices, 4) = uv_up_left[1];
 
-			GET_INDEX(drawable_vertices, 8) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 9) = vertex_down_left[1];
-			GET_INDEX(drawable_vertices, 10) = uv_down_left[0]; GET_INDEX(drawable_vertices, 11) = uv_down_left[1];
+			GET_INDEX(drawable_vertices, 9) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 10) = vertex_down_left[1];
+			GET_INDEX(drawable_vertices, 12) = uv_down_left[0]; GET_INDEX(drawable_vertices, 13) = uv_down_left[1];
 
-			GET_INDEX(drawable_vertices, 16) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 17) = vertex_down_right[1];
-			GET_INDEX(drawable_vertices, 18) = uv_down_right[0]; GET_INDEX(drawable_vertices, 19) = uv_down_right[1];
+			GET_INDEX(drawable_vertices, 18) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 19) = vertex_down_right[1];
+			GET_INDEX(drawable_vertices, 21) = uv_down_right[0]; GET_INDEX(drawable_vertices, 22) = uv_down_right[1];
 
-			GET_INDEX(drawable_vertices, 24) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 25) = vertex_up_right[1];
-			GET_INDEX(drawable_vertices, 26) = uv_up_right[0]; GET_INDEX(drawable_vertices, 27) = uv_up_right[1];
+			GET_INDEX(drawable_vertices, 27) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 28) = vertex_up_right[1];
+			GET_INDEX(drawable_vertices, 30) = uv_up_right[0]; GET_INDEX(drawable_vertices, 31) = uv_up_right[1];
 
 			// Initializing elements
 			drawable_elements[j * 6 + 0] = j * 4 + 0; drawable_elements[j * 6 + 1] = j * 4 + 3;

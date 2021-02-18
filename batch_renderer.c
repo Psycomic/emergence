@@ -3,13 +3,14 @@
 #include <stdio.h>
 #include <assert.h>
 
-void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity, size_t index_buffer_capacity,
-				uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count)
+void batch_init(Batch* batch, GLuint draw_type, Material* material, size_t vertex_buffer_capacity,
+				size_t index_buffer_capacity, uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count)
 {
 	batch->material = material;
 
 	batch->vertex_buffer_capacity = vertex_buffer_capacity;
 	batch->index_buffer_capacity = index_buffer_capacity;
+	batch->draw_type = draw_type;
 
 	batch->vertex_attributes_sizes = vertex_attributes_sizes;
 	batch->vertex_attributes_count = vertex_attributes_count;
@@ -103,6 +104,6 @@ void batch_draw(Batch* batch, float* view_matrix) {
 	material_use(batch->material, NULL, view_matrix);
 
 	glBindVertexArray(batch->vao);
-	glDrawElements(GL_TRIANGLES, elements_size, GL_UNSIGNED_INT, NULL);
+	glDrawElements(batch->draw_type, elements_size, GL_UNSIGNED_INT, NULL);
 	glBindVertexArray(0);
 }

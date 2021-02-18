@@ -252,6 +252,9 @@ int main(void) {
 		scene_draw(scene, background_color);
 		scene_handle_events(scene, window);
 
+		if (widget_state(terrain_presentation_label, WIDGET_STATE_HOVERED))
+			printf("Clicked!!\n");
+
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 

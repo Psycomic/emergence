@@ -21,6 +21,8 @@ typedef struct {
 	GLuint vertex_buffer;
 	GLuint index_buffer;
 
+	GLuint draw_type;
+
 	size_t vertex_buffer_capacity;
 	size_t index_buffer_capacity;
 
@@ -44,8 +46,8 @@ typedef struct {
 	uint64_t vertex_buffer_offset;
 } BatchDrawable;
 
-void batch_init(Batch* batch, Material* material, size_t vertex_buffer_capacity, size_t index_buffer_capacity,
-				uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count);
+void batch_init(Batch* batch, GLuint draw_type, Material* material, size_t vertex_buffer_capacity,
+				size_t index_buffer_capacity, uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count);
 void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vertices,
 						 uint64_t vertices_count, uint32_t* elements, uint64_t elements_count);
 void batch_draw(Batch* batch, float* view_matrix);
