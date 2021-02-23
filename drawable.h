@@ -14,17 +14,82 @@ typedef struct {
 	GLuint update_rate;
 } ArrayBufferDeclaration;
 
-#ifndef DRAWABLE_INTERAL
 
-typedef void Material;
-typedef void Uniform;
-typedef void Drawable;
+// Shader's uniform abstraction.
+typedef struct {
+	enum {
+		UNIFORM_VEC3, UNIFORM_VEC2,
+		UNIFORM_FLOAT, UNIFORM_BOOL
+	} type;
 
-#endif // !DRAWABLE_INTERAL
+	union {
+		Vector3 vec3;
+		Vector2 vec2;
+		float f;
+		uint b;
+	} data;
+
+	GLint location;
+	GLboolean is_set;
+} Uniform;
+
+// Basically a collection of uniforms for a particular shader.
+typedef struct {
+	GLuint program_id;
+	GLint view_position_matrix_location;
+	GLint model_matrix_location;
+
+	uint uniforms_count;
+	Uniform uniforms[];
+} Material;
+
+// Array Buffer abstraction
+typedef struct {
+	void* data;
+	uint size;
+	GLuint buffer;
+} Buffer;
+
+// OpenGL context information
+#define STATE_GL_DEPTH_TEST (1 << 0)
+#define STATE_GL_BLEND (1 << 1)
+#define STATE_GL_CULL_FACE (1 << 2)
+
+typedef struct {
+	uint64_t state;
+
+	GLuint bound_texture;
+	GLuint active_texture;
+	GLuint bound_program;
+	GLuint bound_vertex_array;
+} StateContext;
+
+typedef struct {
+	Buffer elements_buffer;
+
+	Material* material;
+	Vector3* position;
+	GLuint* textures;
+
+	GLuint vertex_array;
+	GLenum draw_mode;
+
+	uint textures_count;
+	uint elements_count;
+	uint buffer_count;
+	uint flags;
+
+	Buffer buffers[];
+} Drawable;
 
 #define DRAWABLE_USES_ELEMENTS (1 << 0)
 #define DRAWABLE_SHOW_AXIS (1 << 1)
 #define DRAWABLE_NO_DEPTH_TEST (1 << 2)
+
+void StateGlEnable(StateContext* gl, GLuint thing);
+void StateGlDisable(StateContext* gl, GLuint thing);
+void StateGlActiveTexure(StateContext* gl, GLuint texture_id);
+void StateGlBindTexture(StateContext* gl, GLuint type, GLuint texture);
 
 GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader_path);
 
@@ -34,31 +99,24 @@ void material_set_uniform_vec2(Material* material, uint program_id, Vector2 vec)
 void material_set_uniform_float(Material* material, uint program_id, float f);
 void material_uniform_vec2(Material* material, uint uniform_id, Vector2 vec);
 void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec);
-void material_use(Material* material, float* model_matrix, float* position_view_matrix);
+void material_use(Material* material, StateContext* gl, float* model_matrix, float* position_view_matrix);
 
-GLuint texture_create(Image* image, BOOL generate_mipmap);
+GLuint texture_create(Image* image);
 
 void drawable_update(Drawable* drawable);
 void drawable_update_buffer(Drawable* drawable, uint buffer_id);
 
-Material* drawable_material(Drawable* drawable);
-uint drawable_flags(Drawable* drawable);
-Vector3 drawable_position(Drawable* drawable);
-void* drawable_buffer_data(Drawable* drawable, uint buffer_id);
-
-void drawable_draw(Drawable* drawable);
-
-Drawable* drawable_allocate(uint buffer_count);
+void drawable_draw(Drawable* drawable, StateContext* gl);
 void drawable_destroy(Drawable* drawable);
 
 void drawable_init(Drawable* drawable, unsigned short* elements,
-	uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
-	Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
+				   uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
+				   Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
 void drawable_rectangle_texture_init(Drawable* drawable, float width, float height,
-	Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count,
-	float* texture_uv, uint flags);
+									 Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count,
+									 float* texture_uv, uint flags);
 void drawable_rectangle_init(Drawable* drawable, float width, float height,
-	Material* material, GLenum mode, Vector3* position, uint flags);
+							 Material* material, GLenum mode, Vector3* position, uint flags);
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height);
 void rectangle_vertices_set(float* rectangle_vertices, float width, float height,

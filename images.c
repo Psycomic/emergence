@@ -27,6 +27,8 @@ int image_load_bmp(Image* image, const char* path) {
 
 	image_size = width * height * 3;
 
+	printf("dataPos = %d\n", dataPos);
+
 	if (dataPos == 0)
 		dataPos = 54;
 

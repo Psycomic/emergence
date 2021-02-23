@@ -2,23 +2,9 @@
 #include <assert.h>
 
 #include "batch_renderer.h"
+#include "text.h"
 
 #define TEXT_VERTEX_SIZE 9		// 3 + 2 + 1 + 3
-
-// Abstraction over text. Basically a collection of drawables, each with a
-// glyph texture, to end up with text
-typedef struct {
-	Vector2 position;
-	Vector3 color;
-
-	BatchDrawable drawable;
-	char* string;
-
-	float size;
-	float angle;
-} Text;
-
-void text_update(Text* text);
 
 void text_set_color(Text* text, Vector3 color) {
 	for (uint i = 0; i < text->drawable.vertices_count; i++) {
@@ -41,7 +27,19 @@ void text_set_transparency(Text* text, float transparency) {
 }
 
 void text_set_angle(Text* text, float angle) {
-	/* TODO */
+	for (uint i = 0; i < text->drawable.vertices_count; i++) {
+		Vector2* vertex_position = (Vector2*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE);
+
+		Vector2 origin_position;
+		vector2_sub(&origin_position, *vertex_position, text->position);
+
+		float rotation = angle - text->angle;
+		vector2_rotate(&origin_position, origin_position, rotation);
+		vector2_add(vertex_position, origin_position, text->position);
+	}
+
+	text->angle = angle;
+	batch_drawable_update(&text->drawable);
 }
 
 void text_set_position(Text* text, Vector2 position) {

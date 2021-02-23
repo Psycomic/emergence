@@ -13,39 +13,30 @@
  | First batch drawable                       |  Second batch drawable        |  third batch drawable  	  |
  +--------------------------------------------+-------------------------------+---------------------------+
 																										  |
-																										  |
 																									 Size of buffer
-																		     / 						   \
 													 		           		X---------------------------X
-																	         \      				   /
 																	Size of buffer
 									Deleting 2 drawables				  |
  +--------------------------------------------+---------------------------+-------------------------------+
  | First batch drawable                       |  third batch drawable  	  |         Junk                  |
  +--------------------------------------------+--------------\------------+-------------------------------+
 															  ---\    		   ---/
-															      ------------/
                                                                   Copy content
-
 #+END_SRC
-
 *** Advanced solution
 	I could try something using the index buffer: the drawable
 	vertices stay were they were, and only the element buffer
 	changes. A big hole in the buffer will be left, where new data
 	could be allocated.
-
 ** TODO Per-batch drawable uniforms
    *The problem*
    With batch draw, I have to pass parameters in the
    vertex attributes, but sometimes, like for a widget or for a text
    object, I need different attributes not for the vertices, but for
    the entire text.
-
    *How to solve it*
    I think the best solution would be to add an index to every vertex
    attribute, like this:
-
 #+BEGIN_SRC glsl
 #version 330 core
 
@@ -68,7 +59,7 @@ void main() {
 	BatchDrawableUniforms my_uniforms = parameters[i];
 }
 #+END_SRC
-
+* TODO Rotate text bar
 * TODO Possible bug with text rendering in windows
   When I render text, I do this
 
@@ -84,8 +75,7 @@ for (uint j = 0; j < window->widgets_count; j++)
 * TODO Stencil buffer to hide text
   Now, text inside the window overflows on the edges if I try to
   minimize it.
-* TODO Render buttons with batch rendering
-  Buttons should be rendered in one draw call like the other user
-  interface components.
+* TODO Theme system
+  To have an uniform way of creating widget and changing window's colors.
 * DONE Window bar depth problems
   The window bar is not at the right depth

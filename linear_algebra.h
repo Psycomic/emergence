@@ -41,6 +41,7 @@ typedef struct {
 void vector2_add(Vector2* dest, Vector2 a, Vector2 b);
 void vector2_sub(Vector2* dest, Vector2 a, Vector2 b);
 void vector2_neg(Vector2* dest, Vector2 a);
+void vector2_rotate(Vector2* dest, Vector2 a, float angle);
 
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b);
 void vector3_sub(Vector3* dest, Vector3 a, Vector3 b);

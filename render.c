@@ -1,5 +1,3 @@
-#define RENDER_INTERNAL
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,9 +12,7 @@
 #include "stack_allocator.h"
 #include "render.h"
 #include "drawable.h"
-#include "text.h"
 #include "batch_renderer.h"
-#include "camera.h"
 
 #define SCENE_DEFAULT_CAPACITY 10
 #define CAMERA_SPEED 0.1f
@@ -28,100 +24,12 @@ const Vector3 blue = { { 0, 0, 1 } };
 const Vector3 black = { { 0, 0, 0 } };
 const Vector3 green = { { 0, 1, 0 } };
 
-typedef void (*EventCallback)(void*, void*);
-
-// Parent "class" of every UI widget
-typedef struct Widget {
-	Vector2 position;
-
-	struct Widget* parent; 		// NULL if directly on a window
-
-	float height;				// Used to align the widgets correcly
-	float margin;				// Distance between the widget and the previous
-								// widget
-	enum {
-		WIDGET_TYPE_LABEL = 0,
-		WIDGET_TYPE_BUTTON
-	} type;
-
-	EventCallback on_click_up; // Callbacks for different events
-							   // ingored if NULL
-	Layout layout;
-
-	uint32_t state;
-	uint index;
-} Widget;
-
-typedef struct {
-	Widget header; // Support for "object-oriented" inheritance
-
-	Vector3 color;
-	Text* text;
-} Label;
-
-// Simple clickable button
-typedef struct {
-	Widget header;
-
-	Text* text;
-	Drawable* button_background;
-
-	float padding;  // Distance between the text and
-					// the button's edges
-} Button;
-
-// Window UI : a width, height, mininum width and transparency.
-// every drawable has its own container, differing from the original scene.
-typedef struct {
-	Vector2 position;   // Position used to calculate vertex translation
-						// for every change of position
-
-	void (*on_close)();	// Called when the window is closed
-
-	float width, height; // Window dimensions
-	float min_width, min_height; // How much you can resize the window
-
-	float depth;
-	float transparency;
-
-	float pack_last_size;		// Position of last widget added to
-								// the window
-	uint widgets_count;
-	Layout layout;
-	Text* title;
-
-	BatchDrawable background_drawable; // Drawable element for the window's
-									   // frame
-	BatchDrawable text_bar_drawable;
-	Widget* widgets[64];
-} Window;
-
 #define SCENE_MAX_WINDOWS 4
 
 #define SCENE_GUI_MODE			(1 << 0)
 #define SCENE_EVENT_MOUSE_RIGHT	(1 << 1)
 #define SCENE_EVENT_MOUSE_LEFT	(1 << 2)
 #define SCENE_EVENT_QUIT		(1 << 3)
-
-// What you see on the screen. It is basically the container of every
-// graphical aspect of the game : the 3D view and the 2D UI.
-typedef struct {
-	DynamicArray windows;	// Window array
-	DynamicArray drawables;	// Drawables array
-
-	Camera camera;
-
-	Batch windows_batch;		// Respectively the batch to draw
-								// window backgrounds, the batch to
-	Batch text_batch;			// draw text and the batch to draw the
-	Batch window_text_bar_batch; // title bar of the windows
-
-	GLFWwindow* context;
-
-	uint glfw_last_character;
-	uint flags;
-	uint selected_window;
-} Scene;
 
 static GLuint ui_background_shader;
 static GLuint ui_text_shader;
@@ -133,12 +41,6 @@ static GLuint text_bar_shader;
 static GLuint monospaced_font_texture;
 
 static Material* axis_material = NULL;
-
-static char* color_uniforms[] = {
-	"color",
-	"model_position",
-	"transparency",
-};
 
 static char* ui_button_uniforms[] = {
 	"model_position",			// 0
@@ -170,30 +72,7 @@ void render_initialize(void);
 float random_float(void);
 
 void window_draw(Window* window, Mat4 view_position_matrix);
-
-void window_set_position(Window* window, float x, float y);
-void window_set_size(Window* window, float width, float height);
-void window_set_transparency(Window* window, float transparency);
-void window_destroy(Scene* scene, WindowID id);
-
-void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix);
-Vector2 widget_get_real_position(Widget* widget, Window* window);
-void widget_set_transparency(Widget* widget, float transparency);
-float widget_get_margin_height(Widget* widget);
-void widget_set_depth(Widget* widget, float depth);
-
-GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y);
-
-void widget_on_click_up(Widget* widget, Event* evt);
-
-void widget_destroy(Widget* widget);
-
-Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
-							float text_size, float margin, Vector3 color, Layout layout);
-Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
-							 float text_size, float margin, float padding, Layout layout);
-
-void scene_set_size(Scene* scene, float width, float height);
+void window_update(Window* window);
 
 int initialize_everything() {
 	glewExperimental = 1;
@@ -242,6 +121,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	// Creating window and OpenGL context
 	scene->context = glfwCreateWindow(width, height, title, NULL, NULL);
+	bzero(&scene->gl, sizeof(StateContext));
 
 	if (scene->context == NULL) {
 		fprintf(stderr, "Failed to open a window\n");
@@ -264,16 +144,14 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	glfwSwapInterval(1);			// Disable double buffering
 
 	// OpenGL settings
-	glEnable(GL_BLEND);			// Enable blend
+	StateGlEnable(&scene->gl, GL_BLEND);			// Enable blend
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Texture parameters
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	StateGlEnable(&scene->gl, GL_CULL_FACE);
 
 	glViewport(0, 0, width, height); // Viewport size
 
 	render_initialize();		// Initialize scene
-
 	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height); // Initalize player camera
 
 	scene->flags = 0x0;
@@ -296,8 +174,8 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 		3, 2, 1, 3 // Position, texture postion, transparency, color
 	};
 
-	batch_init(&scene->text_batch, GL_TRIANGLES, text_batch_material, sizeof(float) * 8192,
-			   sizeof(uint32_t) * 8192, text_attributes_sizes, ARRAY_SIZE(text_attributes_sizes));
+	batch_init(&scene->text_batch, GL_TRIANGLES, text_batch_material, sizeof(float) * 262144,
+			   sizeof(uint32_t) * 262144, text_attributes_sizes, ARRAY_SIZE(text_attributes_sizes));
 
 	Material* text_bar_material = material_create(text_bar_shader, NULL, 0);
 	uint64_t text_bar_attributes_sizes[] = {
@@ -335,40 +213,40 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 
 	for (uint i = 0; i < scene->drawables.size; i++) {
 		Drawable* drawable = *(Drawable**)dynamic_array_at(&scene->drawables, i);
-		uint flags = drawable_flags(drawable);
+		uint flags = drawable->flags;
 
 		Mat4 position_matrix;
-		mat4_create_translation(position_matrix, drawable_position(drawable));
+		mat4_create_translation(position_matrix, *drawable->position);
 
 		// Drawing the elements added to the scene
 		if (flags & DRAWABLE_NO_DEPTH_TEST)
-			glDisable(GL_DEPTH_TEST);
+			StateGlDisable(&scene->gl, GL_DEPTH_TEST);
 		else
-			glEnable(GL_DEPTH_TEST);
+			StateGlEnable(&scene->gl, GL_DEPTH_TEST);
 
-		material_use(drawable_material(drawable), position_matrix, camera_final_matrix);
-		drawable_draw(drawable);
+		material_use(drawable->material, &scene->gl, position_matrix, camera_final_matrix);
+		drawable_draw(drawable, &scene->gl);
 
 		if (flags & DRAWABLE_SHOW_AXIS) {
-			material_use(drawable_material(axis_drawable), position_matrix, camera_final_matrix);
-			drawable_draw(axis_drawable);
+			material_use(axis_drawable->material, &scene->gl, position_matrix, camera_final_matrix);
+			drawable_draw(axis_drawable, &scene->gl);
 		}
 	}
 
 	if (scene->flags & SCENE_GUI_MODE) {
-		glEnable(GL_DEPTH_TEST);
+		StateGlEnable(&scene->gl, GL_DEPTH_TEST);
 
-		batch_draw(&scene->windows_batch, scene->camera.ortho_matrix);
-		batch_draw(&scene->window_text_bar_batch, scene->camera.ortho_matrix);
+		batch_draw(&scene->windows_batch, &scene->gl, scene->camera.ortho_matrix);
+		batch_draw(&scene->window_text_bar_batch, &scene->gl, scene->camera.ortho_matrix);
 
 		for (uint i = 0; i < scene->windows.size; i++) {
 			Window* win = dynamic_array_at(&scene->windows, i);
 			window_draw(win, scene->camera.ortho_matrix);
 		}
 
-		glActiveTexture(GL_TEXTURE0);
+		StateGlActiveTexure(&scene->gl, GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, monospaced_font_texture);
-		batch_draw(&scene->text_batch, scene->camera.ortho_matrix);
+		batch_draw(&scene->text_batch, &scene->gl, scene->camera.ortho_matrix);
 	}
 }
 
@@ -392,10 +270,11 @@ void scene_update_window_depths(Scene* scene) {
 		}
 
 		text_set_depth(window->title, window->depth + 0.1f);
-		batch_drawable_update(&window->text_bar_drawable);
 
 		for (uint j = 0; j < window->widgets_count; j++)
 			widget_set_depth(window->widgets[j], window->depth + 0.1f);
+
+		window_update(window);
 	}
 }
 
@@ -407,7 +286,7 @@ Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint ele
 {
 	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
 
-	*drawable_pos = drawable_allocate(declarations_count);
+	*drawable_pos = malloc(sizeof(Drawable) + sizeof(Buffer) * declarations_count);
 
 	drawable_init(*drawable_pos, elements, elements_number, declarations, declarations_count, material, mode,
 				  position, textures, textures_count, flags);
@@ -520,6 +399,7 @@ void window_update(Window* window) {
 	text_position.x += 6.f;
 
 	text_set_position(window->title, text_position);
+	text_set_angle(window->title, M_PI / 2.f);
 
 	batch_drawable_update(&window->background_drawable);
 
@@ -565,6 +445,9 @@ void window_set_position(Window* window, float x, float y) {
 	window->position.x = x;
 	window->position.y = y;
 
+	for (uint i = 0; i < window->widgets_count; i++)
+		widget_set_position(window->widgets[i], window);
+
 	window_update(window);
 }
 
@@ -579,6 +462,9 @@ void window_set_size(Window* window, float width, float height) {
 	rectangle_vertices_set((float*)window->background_drawable.vertices,
 						   window->width, window->height, 4,
 						   window->position.x, window->position.y);
+
+	for (uint i = 0; i < window->widgets_count; i++)
+		widget_set_position(window->widgets[i], window);
 
 	window_update(window);
 }
@@ -604,6 +490,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 
 	bzero(window, sizeof(Window));
 
+	window->parent = scene;
 	window->min_width = 200.f;
 	window->min_height = 100.f;
 	window->depth = -1.f;
@@ -621,7 +508,7 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 
 	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
-	float* background_drawable_vertices = malloc(sizeof(float) * 4 * 5);
+	float* background_drawable_vertices = malloc(sizeof(float) * 4 * 4);
 	batch_drawable_init(&scene->windows_batch, &window->background_drawable, background_drawable_vertices, 4,
 						rectangle_elements, ARRAY_SIZE(rectangle_elements));
 
@@ -631,8 +518,8 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	batch_drawable_init(&scene->window_text_bar_batch, &window->text_bar_drawable,
 						text_bar_vertices, 2, text_bar_elements, 2);
 
-	window_set_position(window, window->position.x, window->position.y);
 	window_set_size(window, width, height);
+	window_set_position(window, window->position.x, window->position.y);
 	window_set_transparency(window, 0.9f);
 
 	scene->selected_window = scene->windows.size - 1;
@@ -800,6 +687,7 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 		}
 	}
 
+	widget_set_position(widget, window);
 	window->widgets[window->widgets_count++] = widget;
 }
 
@@ -871,7 +759,7 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 
 	button->header.height = text_height;	// Setting widget height
 
-	button->button_background = drawable_allocate(1);	// Background of the button
+	button->button_background = malloc(sizeof(Drawable) + sizeof(Buffer) * 1);	// Background of the button
 	// Background's material
 	Material* button_material = material_create(ui_button_shader, ui_button_uniforms, ARRAY_SIZE(ui_button_uniforms));
 
@@ -889,19 +777,20 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 }
 
 void widget_label_draw(Window* window, void* widget, Vector2 position, Mat4 view_position_matrix) {
-	Label* label_widget = widget;
-	text_set_position(label_widget->text, position);	// Setting the text's position
+	/* pass */
 }
 
 void widget_button_draw(Window* window, void* widget, Vector2 position, Mat4 view_position_matrix) {
 	Button* button = widget;
 
-	Vector2 background_position = position;		// Calculating the button's background position
-	background_position.y -= button->header.height + button->padding * 2;
+	Vector3 background_position;		// Calculating the button's background position
+	background_position.x = position.x;
+	background_position.y = position.y - (button->header.height + button->padding * 2);
+	background_position.z = button->depth;
 
-	Material* button_material = drawable_material(button->button_background);
+	Material* button_material = button->button_background->material;
 
-	material_set_uniform_vec2(button_material, 0, background_position);			// Position
+	material_set_uniform_vec3(button_material, 0, background_position);			// Position
 
 	material_set_uniform_float(button_material, 3, widget_get_width(SUPER(button)));	// Width
 	material_set_uniform_float(button_material, 4, widget_get_height(SUPER(button)));	// Height
@@ -919,13 +808,8 @@ void widget_button_draw(Window* window, void* widget, Vector2 position, Mat4 vie
 		material_set_uniform_vec3(button_material, 5, button_background_color);
 	}
 
-	material_use(button_material, NULL, view_position_matrix);	// Drawing the background using the material
-	drawable_draw(button->button_background);
-
-	position.x += button->padding;	// Drawing the text a little bit below
-	position.y -= button->padding;
-
-	text_set_position(button->text, position);
+	material_use(button_material, &window->parent->gl, NULL, view_position_matrix);	// Drawing the background using the material
+	drawable_draw(button->button_background, &window->parent->gl);
 }
 
 void widget_label_set_transparency(void* widget, float transparency) {
@@ -936,7 +820,7 @@ void widget_button_set_transparency(void* widget, float transparency) {
 	Button* button = (Button*)widget;
 
 	text_set_transparency(button->text, transparency);
-	material_set_uniform_float(drawable_material(button->button_background), 1, transparency);
+	material_set_uniform_float(button->button_background->material, 1, transparency);
 }
 
 void widget_label_set_text(void* widget, const char* text) { // TODO: Add support for dynamic text changing
@@ -957,7 +841,7 @@ void widget_button_destroy(void* widget) {
 
 	text_destroy(button->text);
 
-	free(drawable_buffer_data(button->button_background, 0));
+	free(button->button_background->buffers[0].data);
 
 	drawable_destroy(button->button_background);
 	free(button);
@@ -968,27 +852,51 @@ void widget_label_set_depth(void* widget, float depth) {
 }
 
 void widget_button_set_depth(void* widget, float depth) {
-	text_set_depth(((Button*)widget)->text, depth);
+	Button* button = widget;
+
+	button->depth = depth;
+	text_set_depth(button->text, depth + 0.1f);
+}
+
+void widget_label_set_position(void* widget, Window* window) {
+	Label* label = widget;
+	text_set_position(label->text, widget_get_real_position(widget, window));
+}
+
+void widget_button_set_position(void* widget, Window* window) {
+	Button* button = widget;
+
+	Vector2 position = widget_get_real_position(widget, window);
+
+	position.x += button->padding;	// Drawing the text a little bit below
+	position.y -= button->padding;
+
+	text_set_position(button->text, position);
 }
 
 static void (*widget_draw_vtable[])(Window*, void*, Vector2, Mat4) = {
-	[WIDGET_TYPE_LABEL] = &widget_label_draw,
-	[WIDGET_TYPE_BUTTON] = &widget_button_draw,
+	[WIDGET_TYPE_LABEL] = widget_label_draw,
+	[WIDGET_TYPE_BUTTON] = widget_button_draw,
 };
 
 static void (*widget_set_transparency_vtable[])(void*, float) = {
-	[WIDGET_TYPE_LABEL] = &widget_label_set_transparency,
-	[WIDGET_TYPE_BUTTON] = &widget_button_set_transparency,
+	[WIDGET_TYPE_LABEL] = widget_label_set_transparency,
+	[WIDGET_TYPE_BUTTON] = widget_button_set_transparency,
 };
 
 static void (*widget_destroy_vtable[])(void*) = {
-	[WIDGET_TYPE_LABEL] = &widget_label_destroy,
-	[WIDGET_TYPE_BUTTON] = &widget_button_destroy
+	[WIDGET_TYPE_LABEL] = widget_label_destroy,
+	[WIDGET_TYPE_BUTTON] = widget_button_destroy
 };
 
 static void (*widget_set_depth_vtable[])(void*, float) = {
-	[WIDGET_TYPE_LABEL] = &widget_label_set_depth,
-	[WIDGET_TYPE_BUTTON] = &widget_button_set_depth
+	[WIDGET_TYPE_LABEL] = widget_label_set_depth,
+	[WIDGET_TYPE_BUTTON] = widget_button_set_depth
+};
+
+static void (*widget_set_position_vtable[])(void*, Window* window) = {
+	[WIDGET_TYPE_LABEL] = widget_label_set_position,
+	[WIDGET_TYPE_BUTTON] = widget_button_set_position
 };
 
 void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix) {
@@ -1007,6 +915,10 @@ void widget_destroy(Widget* widget) {
 
 void widget_set_depth(Widget* widget, float depth) {
 	widget_set_depth_vtable[widget->type](widget, depth);
+}
+
+void widget_set_position(Widget* widget, Window* window) {
+	widget_set_position_vtable[widget->type](widget, window);
 }
 
 void render_initialize(void) {
@@ -1039,18 +951,17 @@ void render_initialize(void) {
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
 	material_set_uniform_vec3(axis_material, 0, blue);
 
-	axis_drawable = drawable_allocate(1);
+	axis_drawable = malloc(sizeof(Drawable) + sizeof(Buffer));
 	drawable_init(axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
 
 	Image font_image;
 	if (image_load_bmp(&font_image, "./fonts/monospace.bmp") >= 0)
-		printf("Success loading lain !\n");
+		printf("Success loading font !\n");
 	else
-		printf("Error when loading image !\n");
+		printf("Error when loading font !\n");
 
-	monospaced_font_texture = texture_create(&font_image, 1);
+	monospaced_font_texture = texture_create(&font_image);
 	image_destroy(&font_image);
 }
-
 
 #undef RENDER_INTERNAL

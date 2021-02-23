@@ -7,7 +7,7 @@ uniform vec3 color;
 
 uniform float transparency = 1;
 
-uniform vec2 model_position;
+uniform vec3 model_position;
 uniform mat4 view_position;
 
 uniform float border_size;

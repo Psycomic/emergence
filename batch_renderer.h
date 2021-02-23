@@ -50,7 +50,7 @@ void batch_init(Batch* batch, GLuint draw_type, Material* material, size_t verte
 				size_t index_buffer_capacity, uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count);
 void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vertices,
 						 uint64_t vertices_count, uint32_t* elements, uint64_t elements_count);
-void batch_draw(Batch* batch, float* view_matrix);
+void batch_draw(Batch* batch, StateContext* gl, float* view_matrix);
 void batch_drawable_update(BatchDrawable* batch_drawable);
 
 #endif // __BATCH_RENDERER_H_

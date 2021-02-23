@@ -1,5 +1,3 @@
-#define DRAWABLE_INTERAL
-
 #include "linear_algebra.h"
 #include "images.h"
 #include "misc.h"
@@ -7,66 +5,12 @@
 #include <stddef.h>
 #include <assert.h>
 #include <stdio.h>
-
-// Shader's uniform abstraction.
-typedef struct {
-	enum {
-		UNIFORM_VEC3, UNIFORM_VEC2,
-		UNIFORM_FLOAT, UNIFORM_BOOL
-	} type;
-
-	union {
-		Vector3 vec3;
-		Vector2 vec2;
-		float f;
-		uint b;
-	} data;
-
-	GLint location;
-	GLboolean is_set;
-} Uniform;
-
-// Basically a collection of uniforms for a particular shader.
-typedef struct {
-	GLuint program_id;
-	GLint view_position_matrix_location;
-	GLint model_matrix_location;
-
-	uint uniforms_count;
-	Uniform uniforms[];
-} Material;
-
-// Array Buffer abstraction
-typedef struct {
-	void* data;
-	uint size;
-	GLuint buffer;
-} Buffer;
-
 // Biggest abstraction yet. A Drawable is a collection of array
 // buffers, some flags, a material, a pointer to a position, and some flags.
 
-#define DRAWBLE_MAX_BUFFER_COUNT 256
-
-typedef struct {
-	Buffer elements_buffer;
-
-	Material* material;
-	Vector3* position;
-	GLuint* textures;
-
-	GLuint vertex_array;
-	GLenum draw_mode;
-
-	uint textures_count;
-	uint elements_count;
-	uint buffer_count;
-	uint flags;
-
-	Buffer buffers[];
-} Drawable;
-
 #include "drawable.h"
+
+#define DRAWBLE_MAX_BUFFER_COUNT 256
 
 static unsigned short rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 
@@ -93,18 +37,18 @@ void array_buffer_destroy(Buffer* buffer) {
 	glDeleteBuffers(1, &buffer->buffer);
 }
 
-GLuint texture_create(Image* image, GLboolean generate_mipmap) {
+GLuint texture_create(Image* image) {
 	GLuint texture;
 	glGenTextures(1, &texture);
 
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image->width, image->height, 0, image->color_encoding, GL_UNSIGNED_BYTE, image->data);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, image->width, image->height, 0,
+				 image->color_encoding, GL_UNSIGNED_BYTE, image->data);
 
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);	// Texture parameters
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-	if (generate_mipmap)
-		glGenerateMipmap(GL_TEXTURE_2D);
 
 	return texture;
 }
@@ -177,10 +121,10 @@ void drawable_destroy(Drawable* drawable) {
 	free(drawable);
 }
 
-void drawable_draw(Drawable* drawable) {
+void drawable_draw(Drawable* drawable, StateContext* gl) {
 	for (uint i = 0; i < drawable->textures_count; i++) {
-		glActiveTexture(GL_TEXTURE0 + i);
-		glBindTexture(GL_TEXTURE_2D, drawable->textures[i]);
+		StateGlActiveTexure(gl, GL_TEXTURE0 + i);
+		StateGlBindTexture(gl, GL_TEXTURE_2D, drawable->textures[i]);
 	}
 
 	glBindVertexArray(drawable->vertex_array);
@@ -200,7 +144,9 @@ void drawable_update(Drawable* drawable) {
 		array_buffer_update(&drawable->buffers[i]);
 }
 
-void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, uint flags) {
+void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode,
+							 Vector3* position, uint flags)
+{
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
 	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
@@ -208,10 +154,13 @@ void drawable_rectangle_init(Drawable* drawable, float width, float height, Mate
 		{rectangle_vertices, sizeof(float) * 8, 2, 0, GL_DYNAMIC_DRAW},
 	};
 
-	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 1, material, mode, position, NULL, 0, flags);
+	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 1, material, mode,
+				  position, NULL, 0, flags);
 }
 
-void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags) {
+void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode,
+									 Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags)
+{
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
 	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
@@ -220,7 +169,8 @@ void drawable_rectangle_texture_init(Drawable* drawable, float width, float heig
 		{texture_uv, sizeof(float) * 8, 2, 1, GL_STATIC_DRAW}
 	};
 
-	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 2, material, mode, position, textures, textures_count, flags);
+	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 2, material, mode,
+				  position, textures, textures_count, flags);
 }
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height) {
@@ -246,6 +196,74 @@ void* drawable_buffer_data(Drawable* drawable, uint buffer_id) {
 	return drawable->buffers[buffer_id].data;
 }
 
+
+void StateGlEnable(StateContext* gl, GLuint thing) {
+	uint64_t state = 0;
+
+	switch (thing) {
+	case GL_BLEND:
+		state = STATE_GL_BLEND;
+		break;
+	case GL_DEPTH_TEST:
+		state = STATE_GL_DEPTH_TEST;
+		break;
+	case GL_CULL_FACE:
+		state = STATE_GL_CULL_FACE;
+		break;
+	default:
+		assert(1);
+	}
+
+	if (!(gl->state & state))
+		glEnable(thing);
+
+	gl->state |= state;
+}
+
+void StateGlDisable(StateContext* gl, GLuint thing) {
+	uint64_t state = 0;
+
+	switch (thing) {
+	case GL_BLEND:
+		state = STATE_GL_BLEND;
+		break;
+	case GL_DEPTH_TEST:
+		state = STATE_GL_DEPTH_TEST;
+		break;
+	case GL_CULL_FACE:
+		state = STATE_GL_CULL_FACE;
+		break;
+	default:
+		assert(1);
+	}
+
+	if (gl->state & state)
+		glDisable(thing);
+
+	gl->state &= ~state;
+}
+
+void StateGlActiveTexure(StateContext* gl, GLuint texture_id) {
+	if (gl->active_texture != texture_id)
+		glActiveTexture(texture_id);
+
+	gl->active_texture = texture_id;
+}
+
+void StateGlBindTexture(StateContext* gl, GLuint type, GLuint texture) {
+	if (gl->bound_texture != texture)
+		glBindTexture(type, texture);
+
+	gl->bound_texture = texture;
+}
+
+void StateGlUseProgram(StateContext* gl, GLuint program_id) {
+	if (gl->bound_program != program_id)
+		glUseProgram(program_id);
+
+	gl->bound_program = program_id;
+}
+
 GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader_path) {
 	GLboolean errors_occurred = GL_FALSE;
 
@@ -255,11 +273,11 @@ GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader
 
 	// Read the Vertex Shader code from the file
 	char VertexShaderCode[2048];
-	read_file(VertexShaderCode, vertex_shader_path);
+	assert(read_file(VertexShaderCode, vertex_shader_path) >= 0);
 
 	// Read the Fragment Shader code from the file
 	char FragmentShaderCode[2048];
-	read_file(FragmentShaderCode, fragment_shader_path);
+	assert(read_file(FragmentShaderCode, fragment_shader_path) >= 0);
 
 	GLint Result = GL_FALSE;
 	int InfoLogLength;
@@ -402,11 +420,12 @@ void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec) {
 	glUniform3f(material->uniforms[uniform_id].location, vec.x, vec.y, vec.z);
 }
 
-void material_use(Material* material, float* model_matrix, float* view_position_matrix) {
-	glUseProgram(material->program_id);
+void material_use(Material* material, StateContext* gl, float* model_matrix, float* view_position_matrix) {
+	StateGlUseProgram(gl, material->program_id);
 
 	if (view_position_matrix)
 		glUniformMatrix4fv(material->view_position_matrix_location, 1, GL_FALSE, view_position_matrix);
+
 	if (model_matrix)
 		glUniformMatrix4fv(material->model_matrix_location, 1, GL_FALSE, model_matrix);
 

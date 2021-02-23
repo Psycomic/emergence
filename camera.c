@@ -35,7 +35,7 @@ void camera_init(Camera* camera, Vector3 position, float far, float near, float 
 	float half_width = (float)width / 2,
 		half_height = (float)height / 2;
 
-	mat4_create_orthogonal(camera->ortho_matrix, -half_width, half_width, -half_height, half_height, -2.f, 2.f);
+	mat4_create_orthogonal(camera->ortho_matrix, -half_width, half_width, -half_height, half_height, -20.f, 20.f);
 }
 
 void camera_get_final_matrix(Camera* camera, Mat4 final_matrix) {

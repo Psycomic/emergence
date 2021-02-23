@@ -3,7 +3,18 @@
 
 #include "batch_renderer.h"
 
-typedef void Text;
+// Abstraction over text. Basically a collection of drawables, each with a
+// glyph texture, to end up with text
+typedef struct {
+	Vector2 position;
+	Vector3 color;
+
+	BatchDrawable drawable;
+	char* string;
+
+	float size;
+	float angle;
+} Text;
 
 Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vector3 color);
 

@@ -9,7 +9,7 @@ int read_file(char* buffer, const char* filename) {
 	FILE* file = fopen(filename, "r");
 
 	if (file == NULL) {
-		fprintf(stderr, "Could not open file !\n");
+		fprintf(stderr, "Could not open file %s!\n", filename);
 		return -1;
 	}
 	else {

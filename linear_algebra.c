@@ -29,6 +29,14 @@ void vector2_neg(Vector2* dest, Vector2 a) {
 	dest->y = -a.y;
 }
 
+void vector2_rotate(Vector2* dest, Vector2 a, float angle) {
+	float angle_cos = cosf(angle),
+		angle_sin = sinf(angle);
+
+	dest->x = a.x * angle_cos - a.y * angle_sin;
+	dest->y = a.x * angle_sin + a.y * angle_cos;
+}
+
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b) {
 	dest->x = a.x + b.x;
 	dest->y = a.y + b.y;
