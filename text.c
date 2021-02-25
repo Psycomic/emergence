@@ -115,6 +115,12 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 	text->size = size;
 
 	uint text_length = strlen(string);
+	uint line_return_count;
+
+	const char *s = string;
+	for (line_return_count = 0; s[line_return_count]; s[line_return_count] == '\n' ? line_return_count++ : *s++);
+
+	text_length -= line_return_count;
 
 	const uint vertex_size = TEXT_VERTEX_SIZE,
 		vertices_number = vertex_size * 4 * text_length;
@@ -122,16 +128,15 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 	float* drawable_vertices = malloc(sizeof(float) * vertices_number);
 	uint* drawable_elements = malloc(sizeof(uint) * 6 * text_length);
 
-	bzero(drawable_vertices, sizeof(float) * vertices_number);
-
 	const float height = 512,
 		half_height = height / 32,
 		width = 64,
 		half_width = width / 32;
 
 	int y_stride = 0;
+	uint element_index = 0;
 
-	for (uint i = 0, j = 0; j < text_length; j++) {
+	for (uint i = 0, j = 0; string[j] != '\0'; j++) {
 		if (string[j] == '\n') {
 			y_stride--;
 			i = 0;
@@ -154,7 +159,7 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 			float vertex_down_left[2] = { i * size, y_stride * size };
 			float vertex_down_right[2] = { i * size + size, y_stride * size };
 
-#define GET_INDEX(arr, index) arr[j * vertex_size * 4 + index]
+#define GET_INDEX(arr, index) arr[element_index * vertex_size * 4 + index]
 
 			// Initializing vertices: two triangles
 			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0]; GET_INDEX(drawable_vertices, 1) = vertex_up_left[1]; // Set position
@@ -170,13 +175,17 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 			GET_INDEX(drawable_vertices, 30) = uv_up_right[0]; GET_INDEX(drawable_vertices, 31) = uv_up_right[1];
 
 			// Initializing elements
-			drawable_elements[j * 6 + 0] = j * 4 + 0; drawable_elements[j * 6 + 1] = j * 4 + 3;
-			drawable_elements[j * 6 + 2] = j * 4 + 1; drawable_elements[j * 6 + 3] = j * 4 + 3;
-			drawable_elements[j * 6 + 4] = j * 4 + 2; drawable_elements[j * 6 + 5] = j * 4 + 1;
+			drawable_elements[element_index * 6 + 0] = element_index * 4 + 0;
+			drawable_elements[element_index * 6 + 1] = element_index * 4 + 3;
+			drawable_elements[element_index * 6 + 2] = element_index * 4 + 1;
+			drawable_elements[element_index * 6 + 3] = element_index * 4 + 3;
+			drawable_elements[element_index * 6 + 4] = element_index * 4 + 2;
+			drawable_elements[element_index * 6 + 5] = element_index * 4 + 1;
 
 #undef GET_INDEX
 
 			i++;
+			element_index++;
 		}
 	}
 

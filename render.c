@@ -509,11 +509,16 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
 	float* background_drawable_vertices = malloc(sizeof(float) * 4 * 4);
+	uint32_t* background_drawable_elements = malloc(sizeof(uint32_t) * 6);
+
+	memcpy(background_drawable_elements, rectangle_elements, sizeof(uint) * 6);
+
 	batch_drawable_init(&scene->windows_batch, &window->background_drawable, background_drawable_vertices, 4,
-						rectangle_elements, ARRAY_SIZE(rectangle_elements));
+						background_drawable_elements, 6);
 
 	float* text_bar_vertices = malloc(sizeof(float) * 6 * 2);
-	static uint32_t text_bar_elements[] = { 0, 1 };
+	uint32_t* text_bar_elements = malloc(sizeof(uint32_t) * 2);
+	text_bar_elements[0] = 0; text_bar_elements[1] = 1;
 
 	batch_drawable_init(&scene->window_text_bar_batch, &window->text_bar_drawable,
 						text_bar_vertices, 2, text_bar_elements, 2);
