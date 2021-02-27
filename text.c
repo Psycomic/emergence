@@ -46,7 +46,6 @@ void text_set_position(Text* text, Vector2 position) {
 	Vector2 translation;
 	vector2_sub(&translation, position, text->position);
 
-	/* vertices_count = 4 * text_length */
 	for (uint i = 0; i < text->drawable.vertices_count; i++) {
 		Vector2* vertex_position = (Vector2*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE);
 		vector2_add(vertex_position, *vertex_position, translation);
@@ -127,6 +126,8 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 	float* drawable_vertices = malloc(sizeof(float) * vertices_number);
 	uint* drawable_elements = malloc(sizeof(uint) * 6 * text_length);
+
+	bzero(drawable_vertices, sizeof(float) * vertices_number);
 
 	const float height = 512,
 		half_height = height / 32,

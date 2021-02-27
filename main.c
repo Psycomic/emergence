@@ -255,7 +255,7 @@ int main(void) {
 
 	// Window 1's widgets
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
-		"EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, white, LAYOUT_PACK);
+													   "EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, white, LAYOUT_PACK);
 
 	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
 		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, white, LAYOUT_PACK);
@@ -288,9 +288,6 @@ int main(void) {
 	while (!scene_should_close(scene)) {
 		scene_draw(scene, background_color);
 		scene_handle_events(scene, window);
-
-		if (widget_state(terrain_presentation_label, WIDGET_STATE_HOVERED))
-			printf("Clicked!!\n");
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();

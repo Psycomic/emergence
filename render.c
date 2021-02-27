@@ -305,13 +305,6 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 	glfwGetWindowSize(window, &width, &height);
 
 	if ((scene->flags & SCENE_GUI_MODE) && scene->windows.size > 0) {
-		for (uint i = 0; i < scene->windows.size; i++) {
-			if (i == scene->selected_window)
-				window_set_transparency(dynamic_array_at(&scene->windows, i), 1.f);
-			else
-				window_set_transparency(dynamic_array_at(&scene->windows, i), 0.3f);
-		}
-
 		float screen_x = (float)xpos - (width / 2.f),
 			screen_y = -(float)ypos + (height / 2.f);
 
@@ -342,7 +335,9 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 
 		switch (scene->glfw_last_character) {
 		case ' ':
+			window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 0.3f);
 			scene->selected_window = ((size_t)scene->selected_window + 1) % scene->windows.size;
+			window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 1.f);
 			scene_update_window_depths(scene);
 			break;
 		case 'c':
@@ -352,7 +347,6 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 
 		if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL)) {
 			Window* selected_window = dynamic_array_at(&scene->windows, scene->selected_window);
-
 			window_set_position(selected_window, screen_x - selected_window->width / 2, screen_y - selected_window->height / 2);
 		}
 		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)) {
@@ -525,8 +519,9 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 
 	window_set_size(window, width, height);
 	window_set_position(window, window->position.x, window->position.y);
-	window_set_transparency(window, 0.9f);
+	window_set_transparency(window, 1.f);
 
+	window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 0.3f);
 	scene->selected_window = scene->windows.size - 1;
 	scene_update_window_depths(scene);
 
