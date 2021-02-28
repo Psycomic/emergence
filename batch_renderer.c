@@ -68,27 +68,27 @@ void batch_drawable_init(Batch* batch, BatchDrawable* batch_drawable, void* vert
 	batch_drawable->index_buffer_offset = batch->index_buffer_size;
 	batch_drawable->vertex_buffer_offset = batch->vertex_buffer_size;
 
-	/* if (batch->vertex_buffer_size + vertices_count * batch->vertex_size * sizeof(float) > */
-	/* 	batch->vertex_buffer_capacity) */
-	/* { */
-	/* 	GLuint new_vertex_buffer; */
-	/* 	glGenBuffers(1, &new_vertex_buffer); */
+/*	if (batch->vertex_buffer_size + vertices_count * batch->vertex_size * sizeof(float) >
+		batch->vertex_buffer_capacity)
+	{
+		GLuint new_vertex_buffer;
+		glGenBuffers(1, &new_vertex_buffer);
 
-	/* 	uint64_t new_capacity = batch->vertex_buffer_capacity * 2; */
+		uint64_t new_capacity = batch->vertex_buffer_capacity * 2;
 
-	/* 	glBindBuffer(GL_ARRAY_BUFFER, new_vertex_buffer); */
-	/* 	glBufferData(GL_ARRAY_BUFFER, new_capacity, NULL, GL_STREAM_DRAW); */
+		glBindBuffer(GL_ARRAY_BUFFER, new_vertex_buffer);
+		glBufferData(GL_ARRAY_BUFFER, new_capacity, NULL, GL_STREAM_DRAW);
 
-	/* 	glBindBuffer(GL_COPY_READ_BUFFER, batch->vertex_buffer); */
-	/* 	glBindBuffer(GL_COPY_WRITE_BUFFER, new_vertex_buffer); */
+		glBindBuffer(GL_COPY_READ_BUFFER, batch->vertex_buffer);
+		glBindBuffer(GL_COPY_WRITE_BUFFER, new_vertex_buffer);
 
-	/* 	glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, */
-	/* 						0, 0, batch->vertex_buffer_size); */
+		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
+							0, 0, batch->vertex_buffer_size);
 
-	/* 	glDeleteBuffers(1, &batch->vertex_buffer); */
-	/* 	batch->vertex_buffer = new_vertex_buffer; */
-	/* 	batch->vertex_buffer_capacity = new_capacity; */
-	/* } */
+		glDeleteBuffers(1, &batch->vertex_buffer);
+		batch->vertex_buffer = new_vertex_buffer;
+		batch->vertex_buffer_capacity = new_capacity;
+	} */
 
 	uint64_t elements_offset = batch_drawable->vertex_buffer_offset / (sizeof(float) * batch->vertex_size);
 

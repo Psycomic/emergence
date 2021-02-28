@@ -33,6 +33,8 @@ const Vector3 green = { { 0, 1, 0 } };
 
 #define WINDOW_ELEMENT_DEPTH_OFFSET 0.001f
 
+#define WINDOW_BACKGROUND_VERTEX_SIZE 7
+
 static GLuint ui_background_shader;
 static GLuint ui_text_shader;
 static GLuint ui_button_shader;
@@ -165,7 +167,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
 	uint64_t windows_attributes_sizes[] = {
-		3, 1 // Position, transparency
+		3, 1, 2, 1 // Position, transparency, texture coords, aspect ratio
 	};
 
 	batch_init(&scene->windows_batch, GL_TRIANGLES, window_batch_material, sizeof(float) * 2048,
@@ -262,7 +264,7 @@ void scene_update_window_depths(Scene* scene) {
 		printf("Window %lu has depth %.2f\n", index, window->depth);
 
 		for (uint j = 0; j < window->background_drawable.vertices_count; j++) {
-			float* vertex = (float*)window->background_drawable.vertices + scene->windows_batch.vertex_size * j;
+			float* vertex = (float*)window->background_drawable.vertices + WINDOW_BACKGROUND_VERTEX_SIZE * j;
 			vertex[2] = window->depth;
 		}
 
@@ -456,8 +458,21 @@ void window_set_size(Window* window, float width, float height) {
 #endif
 
 	rectangle_vertices_set((float*)window->background_drawable.vertices,
-						   window->width, window->height, 4,
+						   window->width, window->height, WINDOW_BACKGROUND_VERTEX_SIZE,
 						   window->position.x, window->position.y);
+
+	float aspect_ratio = window->width / window->height;
+
+	for (uint i = 0; i < window->background_drawable.vertices_count; i++) {
+		float* vertex = ((float*)window->background_drawable.vertices) + i * WINDOW_BACKGROUND_VERTEX_SIZE;
+		vertex[6] = aspect_ratio;
+	}
+
+	float* vertices = window->background_drawable.vertices;
+	vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE] = 1.f;
+	vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 2] = 1.f;
+	vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
+	vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
 
 	for (uint i = 0; i < window->widgets_count; i++)
 		widget_set_position(window->widgets[i], window);
@@ -469,7 +484,7 @@ void window_set_transparency(Window* window, float transparency) {
 	window->transparency = transparency;
 
 	for (uint i = 0; i < window->background_drawable.vertices_count; i++) {
-		float* vertex = (float*)window->background_drawable.vertices + window->background_drawable.batch->vertex_size * i;
+		float* vertex = (float*)window->background_drawable.vertices + WINDOW_BACKGROUND_VERTEX_SIZE * i;
 		vertex[3] = transparency;
 	}
 
@@ -504,8 +519,13 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 
 	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
-	float* background_drawable_vertices = malloc(sizeof(float) * 4 * 4);
+	float* background_drawable_vertices = malloc(sizeof(float) * 4 * WINDOW_BACKGROUND_VERTEX_SIZE);
 	uint32_t* background_drawable_elements = malloc(sizeof(uint32_t) * 6);
+
+	background_drawable_vertices[4] = 0.f;
+	background_drawable_vertices[5] = 0.f;
+	background_drawable_vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE] = 0.f;
+	background_drawable_vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE * 2] = 0.f;
 
 	memcpy(background_drawable_elements, rectangle_elements, sizeof(uint) * 6);
 
