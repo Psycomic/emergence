@@ -59,7 +59,7 @@ void main() {
 	BatchDrawableUniforms my_uniforms = parameters[i];
 }
 #+END_SRC
-* TODO Rotate text bar
+* DONE Rotate text bar
 * TODO Possible bug with text rendering in windows
   When I render text, I do this
 

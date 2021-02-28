@@ -31,6 +31,8 @@ const Vector3 green = { { 0, 1, 0 } };
 #define SCENE_EVENT_MOUSE_LEFT	(1 << 2)
 #define SCENE_EVENT_QUIT		(1 << 3)
 
+#define WINDOW_ELEMENT_DEPTH_OFFSET 0.001f
+
 static GLuint ui_background_shader;
 static GLuint ui_text_shader;
 static GLuint ui_button_shader;
@@ -236,8 +238,8 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	if (scene->flags & SCENE_GUI_MODE) {
 		StateGlEnable(&scene->gl, GL_DEPTH_TEST);
 
-		batch_draw(&scene->windows_batch, &scene->gl, scene->camera.ortho_matrix);
 		batch_draw(&scene->window_text_bar_batch, &scene->gl, scene->camera.ortho_matrix);
+		batch_draw(&scene->windows_batch, &scene->gl, scene->camera.ortho_matrix);
 
 		for (uint i = 0; i < scene->windows.size; i++) {
 			Window* win = dynamic_array_at(&scene->windows, i);
@@ -266,13 +268,13 @@ void scene_update_window_depths(Scene* scene) {
 
 		for (uint j = 0; j < window->text_bar_drawable.vertices_count; j++) {
 			float* vertex = (float*)window->text_bar_drawable.vertices + scene->window_text_bar_batch.vertex_size * j;
-			vertex[2] = window->depth + 0.1f;
+			vertex[2] = window->depth + WINDOW_ELEMENT_DEPTH_OFFSET;
 		}
 
-		text_set_depth(window->title, window->depth + 0.1f);
+		text_set_depth(window->title, window->depth + WINDOW_ELEMENT_DEPTH_OFFSET);
 
 		for (uint j = 0; j < window->widgets_count; j++)
-			widget_set_depth(window->widgets[j], window->depth + 0.1f);
+			widget_set_depth(window->widgets[j], window->depth + WINDOW_ELEMENT_DEPTH_OFFSET);
 
 		window_update(window);
 	}
@@ -405,7 +407,7 @@ void window_update(Window* window) {
 
 	text_bar_vertices[0] = text_get_size(window->title) + 6.f + window->position.x;
 	text_bar_vertices[1] = window->height + window->position.y;
-	text_bar_vertices[2] = window->depth + 0.1f;
+	text_bar_vertices[2] = window->depth + WINDOW_ELEMENT_DEPTH_OFFSET;
 
 	text_bar_vertices[3] = text_bar_color.x;
 	text_bar_vertices[4] = text_bar_color.y;
@@ -413,7 +415,7 @@ void window_update(Window* window) {
 
 	text_bar_vertices[6] = text_get_size(window->title) + 6.f + window->position.x;
 	text_bar_vertices[7] = window->position.y;
-	text_bar_vertices[8] = window->depth + 0.1f;
+	text_bar_vertices[8] = window->depth + WINDOW_ELEMENT_DEPTH_OFFSET;
 
 	text_bar_vertices[9] = text_bar_color.x;
 	text_bar_vertices[10] = text_bar_color.y;
@@ -855,7 +857,7 @@ void widget_button_set_depth(void* widget, float depth) {
 	Button* button = widget;
 
 	button->depth = depth;
-	text_set_depth(button->text, depth + 0.1f);
+	text_set_depth(button->text, depth + WINDOW_ELEMENT_DEPTH_OFFSET);
 }
 
 void widget_label_set_position(void* widget, Window* window) {
