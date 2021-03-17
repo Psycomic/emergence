@@ -34,7 +34,7 @@ typedef union {
 	} keyboard_info;
 } Event;
 
-typedef int WindowID;
+typedef uint WindowID;
 
 struct Widget;
 typedef void (*EventCallback)(struct Widget*, Event*);
@@ -103,9 +103,9 @@ typedef struct {
 	uint widgets_count;
 	Layout layout;
 
-	BatchDrawable background_drawable; // Drawable element for the window's
+	BatchDrawable* background_drawable; // Drawable element for the window's
 									   // frame
-	BatchDrawable text_bar_drawable;
+	BatchDrawable* text_bar_drawable;
 	Widget* widgets[64];
 
 	Text* title;

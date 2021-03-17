@@ -33,7 +33,7 @@ const Vector3 green = { { 0, 1, 0 } };
 
 #define WINDOW_ELEMENT_DEPTH_OFFSET 0.001f
 
-#define WINDOW_BACKGROUND_VERTEX_SIZE 7
+#define WINDOW_BACKGROUND_VERTEX_SIZE 8
 
 static GLuint ui_background_shader;
 static GLuint ui_text_shader;
@@ -49,7 +49,6 @@ static Material* axis_material = NULL;
 static char* ui_button_uniforms[] = {
 	"model_position",			// 0
 	"transparency",				// 1
-	"border_size",				// 2
 	"width",					// 3
 	"height",					// 4
 	"color"						// 5
@@ -167,7 +166,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
 	uint64_t windows_attributes_sizes[] = {
-		3, 1, 2, 1 // Position, transparency, texture coords, aspect ratio
+		3, 1, 2, 2 // Position, transparency, texture coords, quad size
 	};
 
 	batch_init(&scene->windows_batch, GL_TRIANGLES, window_batch_material, sizeof(float) * 2048,
@@ -263,13 +262,13 @@ void scene_update_window_depths(Scene* scene) {
 
 		printf("Window %lu has depth %.2f\n", index, window->depth);
 
-		for (uint j = 0; j < window->background_drawable.vertices_count; j++) {
-			float* vertex = (float*)window->background_drawable.vertices + WINDOW_BACKGROUND_VERTEX_SIZE * j;
+		for (uint j = 0; j < window->background_drawable->vertices_count; j++) {
+			float* vertex = (float*)window->background_drawable->vertices + WINDOW_BACKGROUND_VERTEX_SIZE * j;
 			vertex[2] = window->depth;
 		}
 
-		for (uint j = 0; j < window->text_bar_drawable.vertices_count; j++) {
-			float* vertex = (float*)window->text_bar_drawable.vertices + scene->window_text_bar_batch.vertex_size * j;
+		for (uint j = 0; j < window->text_bar_drawable->vertices_count; j++) {
+			float* vertex = (float*)window->text_bar_drawable->vertices + scene->window_text_bar_batch.vertex_size * j;
 			vertex[2] = window->depth + WINDOW_ELEMENT_DEPTH_OFFSET;
 		}
 
@@ -280,6 +279,15 @@ void scene_update_window_depths(Scene* scene) {
 
 		window_update(window);
 	}
+}
+
+void scene_set_selected_window(Scene* scene, WindowID id) {
+	if (scene->selected_window < scene->windows.size)
+		window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 0.3f);
+
+	scene->selected_window = id;
+	window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 1.f);
+	scene_update_window_depths(scene);
 }
 
 // Add drawable to scene
@@ -339,10 +347,7 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 
 		switch (scene->glfw_last_character) {
 		case ' ':
-			window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 0.3f);
-			scene->selected_window = ((size_t)scene->selected_window + 1) % scene->windows.size;
-			window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 1.f);
-			scene_update_window_depths(scene);
+			scene_set_selected_window(scene, (scene->selected_window + 1) % scene->windows.size);
 			break;
 		case 'c':
 			window_destroy(scene, scene->selected_window);
@@ -399,13 +404,13 @@ void window_update(Window* window) {
 	text_set_position(window->title, text_position);
 	text_set_angle(window->title, M_PI / 2.f);
 
-	batch_drawable_update(&window->background_drawable);
+	batch_drawable_update(window->background_drawable);
 
 	static Vector3 text_bar_color = {
 		{ 0.7f, 0.7f, 0.7f }
 	};
 
-	float* text_bar_vertices = window->text_bar_drawable.vertices;
+	float* text_bar_vertices = window->text_bar_drawable->vertices;
 
 	text_bar_vertices[0] = text_get_size(window->title) + 6.f + window->position.x;
 	text_bar_vertices[1] = window->height + window->position.y;
@@ -423,7 +428,7 @@ void window_update(Window* window) {
 	text_bar_vertices[10] = text_bar_color.y;
 	text_bar_vertices[11] = text_bar_color.z;
 
-	batch_drawable_update(&window->text_bar_drawable);
+	batch_drawable_update(window->text_bar_drawable);
 }
 
 void window_set_position(Window* window, float x, float y) {
@@ -433,8 +438,8 @@ void window_set_position(Window* window, float x, float y) {
 	vector2_sub(&translation, new_position, window->position);
 
 	// Set position of the window background
-	for (uint i = 0; i < window->background_drawable.vertices_count; i++) {
-		BatchDrawable* drawable = &window->background_drawable;
+	for (uint i = 0; i < window->background_drawable->vertices_count; i++) {
+		BatchDrawable* drawable = window->background_drawable;
 
 		Vector2* vertex = (Vector2*)((float*)drawable->vertices + drawable->batch->vertex_size * i);
 		vector2_add(vertex, *((Vector2*)vertex), translation);
@@ -457,22 +462,15 @@ void window_set_size(Window* window, float width, float height) {
 	printf("Set window size to %.2f %.2f\n", window->width, window->height);
 #endif
 
-	rectangle_vertices_set((float*)window->background_drawable.vertices,
+	rectangle_vertices_set((float*)window->background_drawable->vertices,
 						   window->width, window->height, WINDOW_BACKGROUND_VERTEX_SIZE,
 						   window->position.x, window->position.y);
 
-	float aspect_ratio = window->width / window->height;
-
-	for (uint i = 0; i < window->background_drawable.vertices_count; i++) {
-		float* vertex = ((float*)window->background_drawable.vertices) + i * WINDOW_BACKGROUND_VERTEX_SIZE;
-		vertex[6] = aspect_ratio;
+	for (uint i = 0; i < window->background_drawable->vertices_count; i++) {
+		float* vertex = ((float*)window->background_drawable->vertices) + i * WINDOW_BACKGROUND_VERTEX_SIZE;
+		vertex[6] = window->width;
+		vertex[7] = window->height;
 	}
-
-	float* vertices = window->background_drawable.vertices;
-	vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE] = 1.f;
-	vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 2] = 1.f;
-	vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
-	vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
 
 	for (uint i = 0; i < window->widgets_count; i++)
 		widget_set_position(window->widgets[i], window);
@@ -483,12 +481,12 @@ void window_set_size(Window* window, float width, float height) {
 void window_set_transparency(Window* window, float transparency) {
 	window->transparency = transparency;
 
-	for (uint i = 0; i < window->background_drawable.vertices_count; i++) {
-		float* vertex = (float*)window->background_drawable.vertices + WINDOW_BACKGROUND_VERTEX_SIZE * i;
+	for (uint i = 0; i < window->background_drawable->vertices_count; i++) {
+		float* vertex = (float*)window->background_drawable->vertices + WINDOW_BACKGROUND_VERTEX_SIZE * i;
 		vertex[3] = transparency;
 	}
 
-	batch_drawable_update(&window->background_drawable);
+	batch_drawable_update(window->background_drawable);
 
 	for (uint i = 0; i < window->widgets_count; i++)
 		widget_set_transparency(window->widgets[i], transparency);
@@ -520,31 +518,30 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
 
 	float* background_drawable_vertices = malloc(sizeof(float) * 4 * WINDOW_BACKGROUND_VERTEX_SIZE);
-	uint32_t* background_drawable_elements = malloc(sizeof(uint32_t) * 6);
 
 	background_drawable_vertices[4] = 0.f;
 	background_drawable_vertices[5] = 0.f;
+	background_drawable_vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE] = 1.f;
 	background_drawable_vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE] = 0.f;
 	background_drawable_vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE * 2] = 0.f;
+	background_drawable_vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 2] = 1.f;
+	background_drawable_vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
+	background_drawable_vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
 
-	memcpy(background_drawable_elements, rectangle_elements, sizeof(uint) * 6);
-
-	batch_drawable_init(&scene->windows_batch, &window->background_drawable, background_drawable_vertices, 4,
-						background_drawable_elements, 6);
+	window->background_drawable = batch_drawable_create(&scene->windows_batch, background_drawable_vertices, 4,
+														rectangle_elements, 6);
 
 	float* text_bar_vertices = malloc(sizeof(float) * 6 * 2);
-	uint32_t* text_bar_elements = malloc(sizeof(uint32_t) * 2);
-	text_bar_elements[0] = 0; text_bar_elements[1] = 1;
+	static uint32_t text_bar_elements[] = { 0, 1 };
 
-	batch_drawable_init(&scene->window_text_bar_batch, &window->text_bar_drawable,
-						text_bar_vertices, 2, text_bar_elements, 2);
+	window->text_bar_drawable = batch_drawable_create(&scene->window_text_bar_batch, text_bar_vertices, 2,
+													  text_bar_elements, 2);
 
 	window_set_size(window, width, height);
 	window_set_position(window, window->position.x, window->position.y);
 	window_set_transparency(window, 1.f);
 
-	window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 0.3f);
-	scene->selected_window = scene->windows.size - 1;
+	scene_set_selected_window(scene, scene->windows.size - 1);
 	scene_update_window_depths(scene);
 
 	return scene->windows.size - 1;
@@ -599,21 +596,20 @@ void window_destroy(Scene* scene, WindowID id) {
 		if (window->on_close != NULL)
 			window->on_close();
 
-		free(window->text_bar_drawable.vertices);
+		batch_drawable_destroy(window->text_bar_drawable);
+		free(window->text_bar_drawable->vertices);
 
 		for (uint i = 0; i < window->widgets_count; i++)
 			widget_destroy(window->widgets[i]);
 
 		text_destroy(window->title);
+		batch_drawable_destroy(window->background_drawable);
+
 		// Reajusting the windows array
 		dynamic_array_remove(&scene->windows, id);
 
-		scene->selected_window = scene->selected_window % scene->windows.size;
+		scene_set_selected_window(scene, scene->selected_window % scene->windows.size);
 	}
-}
-
-void window_switch_to(Scene* scene, WindowID id) {
-	scene->selected_window = id;
 }
 
 Vector2 widget_get_real_position(Widget* widget, Window* window) {
@@ -682,7 +678,7 @@ void widget_get_hitbox(Widget* widget, Vector3 real_position, float* min_x, floa
 	*max_y = real_position.y;
 }
 
-void widget_init(Widget* widget, Window* window, Widget* parent, float margin, Layout layout) {
+void widget_init(Widget* widget, Window* window, WindowID window_id, Widget* parent, float margin, Layout layout) {
 	widget->parent = parent;
 	widget->layout = layout;
 	widget->margin = margin;
@@ -711,6 +707,13 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 
 	widget_set_position(widget, window);
 	window->widgets[window->widgets_count++] = widget;
+
+	if (window_id == window->parent->selected_window)
+		widget_set_transparency(widget, 1.f);
+	else
+		widget_set_transparency(widget, 0.3f);
+
+	widget_set_depth(widget, window->depth + WINDOW_ELEMENT_DEPTH_OFFSET);
 }
 
 GLboolean widget_is_colliding(Widget* widget, Window* window, float x, float y) {
@@ -756,7 +759,7 @@ Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, ch
 
 	label->header.height = text_get_height(label->text);	// Setting widget height
 
-	widget_init(SUPER(label), window, parent, margin, layout);		// Intializing the widget
+	widget_init(SUPER(label), window, window_id, parent, margin, layout);		// Intializing the widget
 
 	return SUPER(label);
 }
@@ -790,10 +793,9 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 		text_height + button->padding * 2.f,
 		button_material, GL_TRIANGLES, NULL, 0x0);
 
-	material_set_uniform_float(button_material, 3, border_size);			// Border size
-	material_set_uniform_vec3(button_material, 5, button_background_color);	// Color
+	material_set_uniform_vec3(button_material, 4, button_background_color);	// Color
 
-	widget_init(SUPER(button), window, parent, margin, layout);	// Intializing the widget
+	widget_init(SUPER(button), window, window_id, parent, margin, layout);	// Intializing the widget
 
 	return SUPER(button);
 }
@@ -814,20 +816,20 @@ void widget_button_draw(Window* window, void* widget, Vector2 position, Mat4 vie
 
 	material_set_uniform_vec3(button_material, 0, background_position);			// Position
 
-	material_set_uniform_float(button_material, 3, widget_get_width(SUPER(button)));	// Width
-	material_set_uniform_float(button_material, 4, widget_get_height(SUPER(button)));	// Height
+	material_set_uniform_float(button_material, 2, widget_get_width(SUPER(button)));	// Width
+	material_set_uniform_float(button_material, 3, widget_get_height(SUPER(button)));	// Height
 
 	if (button->header.state & WIDGET_STATE_CLICKED) {
 		text_set_color(button->text, button_text_click_color);
-		material_set_uniform_vec3(button_material, 5, button_background_click_color);
+		material_set_uniform_vec3(button_material, 4, button_background_click_color);
 	}
 	else if (button->header.state & WIDGET_STATE_HOVERED) {		// Setting the background color
 		text_set_color(button->text, button_text_hover_color);
-		material_set_uniform_vec3(button_material, 5, button_background_hover_color);
+		material_set_uniform_vec3(button_material, 4, button_background_hover_color);
 	}
 	else {
 		text_set_color(button->text, button_text_color);
-		material_set_uniform_vec3(button_material, 5, button_background_color);
+		material_set_uniform_vec3(button_material, 4, button_background_color);
 	}
 
 	material_use(button_material, &window->parent->gl, NULL, view_position_matrix);	// Drawing the background using the material

@@ -47,6 +47,7 @@ typedef struct {
 typedef struct {
 	void* data;
 	uint size;
+	GLenum type;
 	GLuint buffer;
 } Buffer;
 
@@ -102,6 +103,14 @@ void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec);
 void material_use(Material* material, StateContext* gl, float* model_matrix, float* position_view_matrix);
 
 GLuint texture_create(Image* image);
+
+void get_opengl_errors_f();
+
+#ifdef _DEBUG
+#define get_opengl_errors() get_opengl_errors_f(__FILE__, __LINE__)
+#else
+#define get_opengl_errors() (void)0
+#endif
 
 void drawable_update(Drawable* drawable);
 void drawable_update_buffer(Drawable* drawable, uint buffer_id);

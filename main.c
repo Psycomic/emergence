@@ -255,7 +255,7 @@ int main(void) {
 
 	// Window 1's widgets
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
-													   "EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, white, LAYOUT_PACK);
+													   "EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, red, LAYOUT_PACK);
 
 	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
 		"THIS IS A COMPUTER GENERATED FRACTAL\nUSING THE HOPALONG FORMULA\n", 10.f, 0.f, white, LAYOUT_PACK);
@@ -271,7 +271,15 @@ int main(void) {
 	widget_set_on_click_up(quit_button, quit_callback);
 	widget_set_on_click_up(new_window_button, new_window_callback);
 
-	window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
+	WindowID test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
+	Widget* test_title = widget_label_create(test_window, scene, NULL, "THIS IS A BIG TITLE", 25.f, 0.f, green, LAYOUT_PACK);
+	Widget* test_text = widget_label_create(test_window, scene, NULL,
+											"THIS IS SOME RANDOM\n"
+											"TEXT TO MAKE THIS WINDOW\n"
+											"STAND OUT",
+											15.f, 5.f, black, LAYOUT_PACK);
+
+	Widget* test_button = widget_button_create(test_window, scene, test_text, "TEST BUTTON", 12.f, 5.f, 5.f, LAYOUT_PACK);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 

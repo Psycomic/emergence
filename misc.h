@@ -41,11 +41,6 @@ typedef struct {
 	uint element_size;
 } DynamicArray;
 
-typedef struct List {
-	struct List* next;
-	char data[];
-} List;
-
 typedef struct HashTableEntry {
 	char* key;
 
@@ -78,15 +73,6 @@ void dynamic_array_swap(DynamicArray* arr, uint src, uint dst);
 void dynamic_array_remove(DynamicArray* arr, uint id);
 void dynamic_array_clear(DynamicArray* arr);
 void dynamic_array_destroy(DynamicArray* arr);
-
-List* cons(void* data, size_t data_size, List* next);
-
-void* list_first(List* list);
-void* list_rest(List* list);
-void* list_nth(List* list, uint index);
-void list_destroy(List* list);
-
-void list_map(List* list, void (*function)(void*));
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);

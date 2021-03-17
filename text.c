@@ -7,8 +7,8 @@
 #define TEXT_VERTEX_SIZE 9		// 3 + 2 + 1 + 3
 
 void text_set_color(Text* text, Vector3 color) {
-	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		Vector3* vertex_color = (Vector3*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 6);
+	for (uint i = 0; i < text->drawable->vertices_count; i++) {
+		Vector3* vertex_color = (Vector3*)((float*)text->drawable->vertices + i * TEXT_VERTEX_SIZE + 6);
 		*vertex_color = color;
 	}
 
@@ -18,8 +18,8 @@ void text_set_color(Text* text, Vector3 color) {
 }
 
 void text_set_transparency(Text* text, float transparency) {
-	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		float* vertex_transparency = (float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 5;
+	for (uint i = 0; i < text->drawable->vertices_count; i++) {
+		float* vertex_transparency = (float*)text->drawable->vertices + i * TEXT_VERTEX_SIZE + 5;
 		*vertex_transparency = transparency;
 	}
 
@@ -27,8 +27,8 @@ void text_set_transparency(Text* text, float transparency) {
 }
 
 void text_set_angle(Text* text, float angle) {
-	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		Vector2* vertex_position = (Vector2*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE);
+	for (uint i = 0; i < text->drawable->vertices_count; i++) {
+		Vector2* vertex_position = (Vector2*)((float*)text->drawable->vertices + i * TEXT_VERTEX_SIZE);
 
 		Vector2 origin_position;
 		vector2_sub(&origin_position, *vertex_position, text->position);
@@ -39,15 +39,15 @@ void text_set_angle(Text* text, float angle) {
 	}
 
 	text->angle = angle;
-	batch_drawable_update(&text->drawable);
+	batch_drawable_update(text->drawable);
 }
 
 void text_set_position(Text* text, Vector2 position) {
 	Vector2 translation;
 	vector2_sub(&translation, position, text->position);
 
-	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		Vector2* vertex_position = (Vector2*)((float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE);
+	for (uint i = 0; i < text->drawable->vertices_count; i++) {
+		Vector2* vertex_position = (Vector2*)((float*)text->drawable->vertices + i * TEXT_VERTEX_SIZE);
 		vector2_add(vertex_position, *vertex_position, translation);
 	}
 
@@ -56,8 +56,8 @@ void text_set_position(Text* text, Vector2 position) {
 }
 
 void text_set_depth(Text* text, float depth) {
-	for (uint i = 0; i < text->drawable.vertices_count; i++) {
-		float* vertex_depth = (float*)text->drawable.vertices + i * TEXT_VERTEX_SIZE + 2;
+	for (uint i = 0; i < text->drawable->vertices_count; i++) {
+		float* vertex_depth = (float*)text->drawable->vertices + i * TEXT_VERTEX_SIZE + 2;
 		*vertex_depth = depth;
 	}
 
@@ -96,7 +96,7 @@ float text_get_height(Text* text) {
 }
 
 void text_update(Text* text) {
-	batch_drawable_update(&text->drawable);
+	batch_drawable_update(text->drawable);
 }
 
 float text_get_size(Text* text) {
@@ -190,8 +190,10 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 		}
 	}
 
-	batch_drawable_init(batch, &text->drawable, drawable_vertices, 4 * text_length,
-						drawable_elements, 6 * text_length);
+	text->drawable = batch_drawable_create(batch, drawable_vertices, 4 * text_length,
+										   drawable_elements, 6 * text_length);
+
+	free(drawable_elements);
 
 	text_set_position(text, position);
 	text_set_transparency(text, 1.f);
@@ -202,5 +204,6 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 /* Free resources associated with a text object */
 void text_destroy(Text* text) {
+	batch_drawable_destroy(text->drawable);
 	free(text);
 }

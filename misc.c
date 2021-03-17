@@ -96,9 +96,11 @@ int dynamic_array_pop(DynamicArray* arr, uint count) {
 }
 
 void dynamic_array_swap(DynamicArray* arr, uint src, uint dst) {
-	assert(src < arr->size&& dst < arr->size);
+	assert(src < arr->size && dst < arr->size);
 
-	memcpy((uchar*)arr->data + (size_t)dst * arr->element_size, (uchar*)arr->data + (size_t)src * arr->element_size, arr->element_size);
+	memcpy((uchar*)arr->data + (size_t)dst * arr->element_size,
+		   (uchar*)arr->data + (size_t)src * arr->element_size,
+		   arr->element_size);
 }
 
 void dynamic_array_remove(DynamicArray* arr, uint id) {
@@ -119,55 +121,6 @@ void dynamic_array_destroy(DynamicArray* arr) {
 	arr->size = 0;
 	arr->capacity = 0;
 	arr->data = NULL;
-}
-
-List* cons(void* data, size_t data_size, List* next) {
-	List* list = malloc(sizeof(List) + data_size);
-	assert(list != NULL);
-
-	memcpy(list->data, data, data_size);
-
-	list->next = next;
-
-	return list;
-}
-
-void* list_first(List* list) {
-	return list->data;
-}
-
-void* list_rest(List* list) {
-	return list->next;
-}
-
-void* list_nth(List* list, uint index) {
-	uint i = 0;
-
-	while (i++ != index) {
-		list = list->next;
-
-		if (list == NULL) {
-			return NULL;
-		}
-	}
-
-	return list->data;
-}
-
-void list_destroy(List* list) {
-	while (list != NULL) {
-		List* next = list->next;
-
-		free(list);
-
-		list = next;
-	}
-}
-
-void list_map(List* list, void (*function)(void*)) {
-	for (; list != NULL; list = list->next) {
-		function(list->data);
-	}
 }
 
 uint str_hash(char* str, uint maxval) {

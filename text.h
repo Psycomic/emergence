@@ -9,7 +9,7 @@ typedef struct {
 	Vector2 position;
 	Vector3 color;
 
-	BatchDrawable drawable;
+	BatchDrawable* drawable;
 	char* string;
 
 	float size;

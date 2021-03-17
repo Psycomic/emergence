@@ -26,6 +26,8 @@ GTAGS
 analysis.txt
 gmon.out
 
+*.xcf
+
 # User files
 *.user
 .ccls-cache/

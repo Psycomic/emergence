@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <stdio.h>
+
 // Biggest abstraction yet. A Drawable is a collection of array
 // buffers, some flags, a material, a pointer to a position, and some flags.
 
@@ -20,10 +21,12 @@ Buffer array_buffer_create(uint size, int type, void* data, GLuint update_rate) 
 	glBindBuffer(type, array_buffer);
 	glBufferData(type, size, data, update_rate);
 
-	Buffer buffer;
-	buffer.buffer = array_buffer;
-	buffer.data = data;
-	buffer.size = size;
+	Buffer buffer = {
+		.size = size,
+		.data = data,
+		.buffer = array_buffer,
+		.type = type
+	};
 
 	return buffer;
 }
@@ -65,7 +68,8 @@ Drawable* drawable_allocate(uint buffer_count) {
 }
 
 /* Create an abstraction over basic openGL calls */
-void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
+				   Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
 	drawable->buffer_count = declarations_count;
 	drawable->material = material;
 	drawable->position = position;
@@ -196,7 +200,6 @@ void* drawable_buffer_data(Drawable* drawable, uint buffer_id) {
 	return drawable->buffers[buffer_id].data;
 }
 
-
 void StateGlEnable(StateContext* gl, GLuint thing) {
 	uint64_t state = 0;
 
@@ -262,6 +265,39 @@ void StateGlUseProgram(StateContext* gl, GLuint program_id) {
 		glUseProgram(program_id);
 
 	gl->bound_program = program_id;
+}
+
+void get_opengl_errors_f(const char* file, int line) {
+	GLenum err;
+	while((err = glGetError()) != GL_NO_ERROR) {
+		printf("====OPENGL ERROR DETECTED====\n%s:%d, ", file, line);
+
+		switch (err) {
+		case GL_INVALID_ENUM:
+			printf("INVALID ENUM!\n");
+			break;
+		case GL_INVALID_OPERATION:
+			printf("INVALID OPERATION!\n");
+			break;
+		case GL_INVALID_VALUE:
+			printf("INVALID VALUE!\n");
+			break;
+		case GL_STACK_OVERFLOW:
+			printf("STACK OVERFLOW!\n");
+			break;
+		case GL_STACK_UNDERFLOW:
+			printf("STACK UNDERFLOW!\n");
+			break;
+		case GL_OUT_OF_MEMORY:
+			printf("OUT OF MEMORY!\n");
+			break;
+		case GL_INVALID_FRAMEBUFFER_OPERATION:
+			printf("INVALID FRAMEBUFFER OPERATION!\n");
+			break;
+		}
+
+		exit(-1);
+	}
 }
 
 GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader_path) {
@@ -352,6 +388,8 @@ GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader
 
 	assert(!errors_occurred);
 
+	get_opengl_errors();
+
 	return ProgramID;
 }
 
@@ -376,6 +414,8 @@ Material* material_create(GLuint shader, char** uniforms_position, uint uniforms
 
 		assert(new_material->uniforms[i].location >= 0);
 	}
+
+	get_opengl_errors();
 
 	return new_material;
 }
@@ -451,6 +491,8 @@ void material_use(Material* material, StateContext* gl, float* model_matrix, flo
 			}
 		}
 	}
+
+	get_opengl_errors();
 }
 
 
