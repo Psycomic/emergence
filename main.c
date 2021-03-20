@@ -124,17 +124,13 @@ int main(void) {
 	execute_tests();			// Unit tests
  #endif
 
-	Image copland_os_image;
-	if (image_load_bmp(&copland_os_image, "./images/copland_os_enterprise.bmp") >= 0)
-		printf("Success loading copland !\n");
-	else
-		printf("Error when loading image !\n");
-
 	Image lain_image;
-	if (image_load_bmp(&lain_image, "./images/copland_os_enterprise.bmp") >= 0)
-		printf("Success loading lain !\n");
-	else
-		printf("Error when loading image !\n");
+	Image copland_os_image;
+
+	if (image_load_bmp(&copland_os_image, "./images/copland_os_enterprise.bmp") < 0)
+		goto error;
+	if (image_load_bmp(&lain_image, "./images/copland_os_enterprise.bmp") < 0)
+		goto error;
 
 	Vector3 camera_position = { { 0.f, 0.f, 0.f } };
 
@@ -160,9 +156,9 @@ int main(void) {
 	World* physic_world = world_create(gravity, 10);
 
 	Shape triangle1_shape = { { { 0.f, 0.f, 0.f } }, triangle1_vertices, NULL, 3, 3, };
-	world_body_add(physic_world, &triangle1_shape, 0.f);
-
 	Shape triangle2_shape = { { { 0.f, 1.f, 0.5f } }, triangle2_vertices, NULL, 3, 3 };
+
+	world_body_add(physic_world, &triangle1_shape, 0.f);
 	world_body_add(physic_world, &triangle2_shape, 1.f);
 
 	Vector3* terrain_vertices = malloc(sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE);
@@ -193,34 +189,38 @@ int main(void) {
 	if ((scene = scene_create(camera_position, 800, 600, "Emergence")) == NULL)
 		return -1;
 
-	Vector3 background_color = { { 0, 0, 0.2f } };
-
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
 
-	GLuint lain_texture = texture_create(&lain_image);
+	GLuint lain_texture, copland_os_texture;
+
+	Material *texture_material1 = material_create(texture_shader, NULL, 0),
+		*texture_material2 = material_create(texture_shader, NULL, 0);
+
+	lain_texture = texture_create(&lain_image);
+	copland_os_texture = texture_create(&copland_os_image);
+
 	image_destroy(&lain_image);
-
-	Material* texture_material1 = material_create(texture_shader, NULL, 0);
-
-	ArrayBufferDeclaration triangle1_buffers[] = {
-		{triangle1_vertices, sizeof(triangle1_vertices), 3, 0, GL_STATIC_DRAW},
-		{texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW}
-	};
-
-	Drawable* triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
-
-	GLuint copland_os_texture = texture_create(&copland_os_image);
 	image_destroy(&copland_os_image);
 
-	Material* texture_material2 = material_create(texture_shader, NULL, 0);
+	Vector3 background_color = { { 0, 0, 0.2f } };
 
-	ArrayBufferDeclaration triangle2_buffers[] = {
-		{triangle2_vertices, sizeof(triangle2_vertices), 3, 0, GL_STATIC_DRAW},
-		{texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW}
+	ArrayBufferDeclaration triangle1_buffers[] = {
+		{ triangle1_vertices, sizeof(triangle1_vertices), 3, 0, GL_STATIC_DRAW },
+		{ texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW }
 	};
 
-	Drawable* triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
+	ArrayBufferDeclaration triangle2_buffers[] = {
+		{ triangle2_vertices, sizeof(triangle2_vertices), 3, 0, GL_STATIC_DRAW },
+		{ texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW }
+	};
+
+	Drawable *triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1,
+														 GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1,
+														 DRAWABLE_SHOW_AXIS),
+		*triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2,
+													texture_material2, GL_TRIANGLES, &triangle2_shape.position,
+													&copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	Material* terrain_material = material_create(color_shader, NULL, 0);
 
@@ -231,7 +231,10 @@ int main(void) {
 
 	Vector3 terrain_position = { { 0.f, -5.f, 0.f } };
 
-	scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
+	scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6,
+						  terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES,
+						  &terrain_position, NULL, 0, 0x0);
+
 	Material* hopalong_material = material_create(color_shader, NULL, 0);
 
 	ArrayBufferDeclaration hopalong_buffers[] = {
@@ -240,20 +243,15 @@ int main(void) {
 	};
 
 	Vector3	hopalong_position = { { 10.f, 0.f, 5.f } };
+	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers,
+											  ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS,
+											  &hopalong_position, NULL, 0, 0x0);
 
-	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
-
-	float window1_position[] = {
-		0.5f, 0.2f
-	};
-
-	float window2_position[] = {
-		0.1f, 0.2f
-	};
+	float window1_position[] = { 0.5f, 0.2f };
+	float window2_position[] = { 0.1f, 0.2f };
 
 	Window* terrain_window = window_create(scene, 478.f, 237.f, window1_position, "EDIT FRACTAL");
 
-	// Window 1's widgets
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
 													   "EDIT THE HOPALONG\nFRACTAL\n", 20.f, 0.f, red, LAYOUT_PACK);
 
@@ -333,4 +331,8 @@ int main(void) {
 	glfwTerminate();
 
 	return 0;
+
+error:
+	printf("Something failed...\n");
+	return -1;
 }
