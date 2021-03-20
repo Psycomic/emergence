@@ -161,8 +161,11 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	scene->selected_window = 0;
 	scene->glfw_last_character = 0;
 
+	scene->windows_count = 0;
+
 	DYNAMIC_ARRAY_CREATE(&scene->drawables, Drawable*);
-	DYNAMIC_ARRAY_CREATE(&scene->windows, Window);
+
+	scene->last_window = NULL;
 
 	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
 	uint64_t windows_attributes_sizes[] = {
@@ -207,6 +210,18 @@ void scene_set_size(Scene* scene, float width, float height) {
 	glViewport(0, 0, scene->camera.width, scene->camera.height);
 }
 
+void scene_next_window(Scene* scene) {
+	window_set_transparency(scene->selected_window, 0.3f);
+
+	if (scene->selected_window->previous == NULL)
+		for (; scene->selected_window->next != NULL; scene->selected_window = scene->selected_window->next);
+	else
+		scene->selected_window = scene->selected_window->previous;
+
+	window_set_transparency(scene->selected_window, 1.f);
+	scene_update_window_depths(scene);
+}
+
 void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -242,10 +257,8 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		batch_draw(&scene->window_text_bar_batch, &scene->gl, scene->camera.ortho_matrix);
 		batch_draw(&scene->windows_batch, &scene->gl, scene->camera.ortho_matrix);
 
-		for (uint i = 0; i < scene->windows.size; i++) {
-			Window* win = dynamic_array_at(&scene->windows, i);
+		for (Window* win = scene->last_window; win != NULL; win = win->previous)
 			window_draw(win, scene->camera.ortho_matrix);
-		}
 
 		StateGlActiveTexure(&scene->gl, GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, monospaced_font_texture);
@@ -255,12 +268,16 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 
 // Set windows' depth correspondingly to their priority rank
 void scene_update_window_depths(Scene* scene) {
-	for (uint i = 0; i < scene->windows.size; i++) {
-		size_t index = ((size_t)scene->selected_window + i) % scene->windows.size;
-		Window* window = dynamic_array_at(&scene->windows, index);
-		window->depth = -((float)i / scene->windows.size + 1.f);
+	uint i = 0;
+	Window* window = scene->selected_window;
 
-		printf("Window %lu has depth %.2f\n", index, window->depth);
+	do {
+		window = window->previous;
+
+		if (window == NULL)
+			window = scene->last_window;
+
+		window->depth = -((float)(scene->windows_count - 1 - i++) / scene->windows_count + 1.f);
 
 		for (uint j = 0; j < window->background_drawable->vertices_count; j++) {
 			float* vertex = (float*)window->background_drawable->vertices + WINDOW_BACKGROUND_VERTEX_SIZE * j;
@@ -278,16 +295,7 @@ void scene_update_window_depths(Scene* scene) {
 			widget_set_depth(window->widgets[j], window->depth + WINDOW_ELEMENT_DEPTH_OFFSET);
 
 		window_update(window);
-	}
-}
-
-void scene_set_selected_window(Scene* scene, WindowID id) {
-	if (scene->selected_window < scene->windows.size)
-		window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 0.3f);
-
-	scene->selected_window = id;
-	window_set_transparency(dynamic_array_at(&scene->windows, scene->selected_window), 1.f);
-	scene_update_window_depths(scene);
+	} while (window != scene->selected_window);
 }
 
 // Add drawable to scene
@@ -316,14 +324,14 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 	int width, height;
 	glfwGetWindowSize(window, &width, &height);
 
-	if ((scene->flags & SCENE_GUI_MODE) && scene->windows.size > 0) {
+	if ((scene->flags & SCENE_GUI_MODE) && scene->last_window != NULL) {
 		float screen_x = (float)xpos - (width / 2.f),
 			screen_y = -(float)ypos + (height / 2.f);
 
-		for (uint i = 0; i < DYNAMIC_ARRAY_AT(&scene->windows, scene->selected_window, Window)->widgets_count; i++) {
-			Widget* widget = DYNAMIC_ARRAY_AT(&scene->windows, scene->selected_window, Window)->widgets[i];
+		for (uint i = 0; i < scene->selected_window->widgets_count; i++) {
+			Widget* widget = scene->selected_window->widgets[i];
 
-			if (widget_is_colliding(widget, dynamic_array_at(&scene->windows, scene->selected_window), screen_x, screen_y)) {
+			if (widget_is_colliding(widget, scene->selected_window, screen_x, screen_y)) {
 				Event evt;
 				evt.mouse_info.screen_x = screen_x;
 				evt.mouse_info.screen_y = screen_y;
@@ -347,24 +355,23 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 
 		switch (scene->glfw_last_character) {
 		case ' ':
-			scene_set_selected_window(scene, (scene->selected_window + 1) % scene->windows.size);
+			scene_next_window(scene);
 			break;
 		case 'c':
 			window_destroy(scene, scene->selected_window);
 			break;
 		}
 
-		if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL)) {
-			Window* selected_window = dynamic_array_at(&scene->windows, scene->selected_window);
-			window_set_position(selected_window, screen_x - selected_window->width / 2, screen_y - selected_window->height / 2);
-		}
+		if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL))
+			window_set_position(scene->selected_window,
+								screen_x - scene->selected_window->width / 2,
+								screen_y - scene->selected_window->height / 2);
+
 		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)) {
-			Window* selected_window = dynamic_array_at(&scene->windows, scene->selected_window);
+			float new_width = screen_x - scene->selected_window->position.x;
+			float new_height = screen_y - scene->selected_window->position.y;
 
-			float new_width = screen_x - selected_window->position.x;
-			float new_height = screen_y - selected_window->position.y;
-
-			window_set_size(selected_window, new_width, new_height);
+			window_set_size(scene->selected_window, new_width, new_height);
 		}
 	}
 	else {
@@ -494,10 +501,18 @@ void window_set_transparency(Window* window, float transparency) {
 
 static uint32_t rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 
-WindowID window_create(Scene* scene, float width, float height, float* position, char* title) {
-	Window* window = dynamic_array_push_back(&scene->windows);
-
+Window* window_create(Scene* scene, float width, float height, float* position, char* title) {
+	Window* window = malloc(sizeof(Window));
 	bzero(window, sizeof(Window));
+
+	window->next = NULL;
+	window->previous = scene->last_window;
+
+	if (scene->last_window != NULL)
+		scene->last_window->next = window;
+
+	scene->last_window = window;
+	scene->windows_count++;
 
 	window->parent = scene;
 	window->min_width = 200.f;
@@ -541,14 +556,16 @@ WindowID window_create(Scene* scene, float width, float height, float* position,
 	window_set_position(window, window->position.x, window->position.y);
 	window_set_transparency(window, 1.f);
 
-	scene_set_selected_window(scene, scene->windows.size - 1);
-	scene_update_window_depths(scene);
+	if (scene->selected_window == NULL)
+		scene->selected_window = window;
+	else
+		scene_next_window(scene);
 
-	return scene->windows.size - 1;
+	return window;
 }
 
-void window_set_on_close(Scene* scene, WindowID id, void (*on_close)()) {
-	((Window*)dynamic_array_at(&scene->windows, id))->on_close = on_close;
+void window_set_on_close(Window* window, void (*on_close)()) {
+	window->on_close = on_close;
 }
 
 Vector2 window_get_anchor(Window* window) {
@@ -581,23 +598,23 @@ Vector2 window_get_max_position(Window* window) {
 	return max_positon;
 }
 
-void window_destroy(Scene* scene, WindowID id) {
-	if (scene->windows.size <= 1) {
+void window_destroy(Scene* scene, Window* window) {
+	if (window->previous == NULL && window->next == NULL) {
 		float position[] = {
 			0.f, 0.f
 		};
 
-		WindowID error_window = window_create(scene, 400.f, 100.f, position, "ERROR");
+		Window* error_window = window_create(scene, 400.f, 100.f, position, "ERROR");
 		widget_label_create(error_window, scene, NULL, "ATTEMPTED TO DELETE\nSOLE WINDOW", 14.f, 5.f, red, LAYOUT_PACK);
 	}
 	else {
-		Window* window = dynamic_array_at(&scene->windows, id);
-
 		if (window->on_close != NULL)
 			window->on_close();
 
-		batch_drawable_destroy(window->text_bar_drawable);
+		scene_next_window(scene);
+
 		free(window->text_bar_drawable->vertices);
+		batch_drawable_destroy(window->text_bar_drawable);
 
 		for (uint i = 0; i < window->widgets_count; i++)
 			widget_destroy(window->widgets[i]);
@@ -606,9 +623,16 @@ void window_destroy(Scene* scene, WindowID id) {
 		batch_drawable_destroy(window->background_drawable);
 
 		// Reajusting the windows array
-		dynamic_array_remove(&scene->windows, id);
 
-		scene_set_selected_window(scene, scene->selected_window % scene->windows.size);
+		if (window->previous != NULL)
+			window->previous->next = window->next;
+
+		if (window->next != NULL)
+			window->next->previous = window->previous;
+		else
+			scene->last_window = window->previous;
+
+		scene->windows_count--;
 	}
 }
 
@@ -678,7 +702,7 @@ void widget_get_hitbox(Widget* widget, Vector3 real_position, float* min_x, floa
 	*max_y = real_position.y;
 }
 
-void widget_init(Widget* widget, Window* window, WindowID window_id, Widget* parent, float margin, Layout layout) {
+void widget_init(Widget* widget, Window* window, Widget* parent, float margin, Layout layout) {
 	widget->parent = parent;
 	widget->layout = layout;
 	widget->margin = margin;
@@ -708,7 +732,7 @@ void widget_init(Widget* widget, Window* window, WindowID window_id, Widget* par
 	widget_set_position(widget, window);
 	window->widgets[window->widgets_count++] = widget;
 
-	if (window_id == window->parent->selected_window)
+	if (window == window->parent->selected_window)
 		widget_set_transparency(widget, 1.f);
 	else
 		widget_set_transparency(widget, 0.3f);
@@ -745,9 +769,8 @@ void widget_set_on_click_up(Widget* widget, EventCallback on_click_up) {
 	widget->on_click_up = on_click_up;
 }
 
-Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
+Widget* widget_label_create(Window* window, Scene* scene, Widget* parent, char* text,
 							float text_size, float margin, Vector3 color, Layout layout) {
-	Window* window = dynamic_array_at(&scene->windows, window_id);
 	Vector2 text_position = { { 0.f, 0.f } };
 	Label* label = malloc(sizeof(Label));
 
@@ -759,15 +782,13 @@ Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, ch
 
 	label->header.height = text_get_height(label->text);	// Setting widget height
 
-	widget_init(SUPER(label), window, window_id, parent, margin, layout);		// Intializing the widget
+	widget_init(SUPER(label), window, parent, margin, layout);		// Intializing the widget
 
 	return SUPER(label);
 }
 
-Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
+Widget* widget_button_create(Window* window, Scene* scene, Widget* parent, char* text,
 							 float text_size, float margin, float padding, Layout layout) {
-	Window* window = dynamic_array_at(&scene->windows, window_id);
-
 	static const float border_size = 1.f;
 
 	Vector2 text_position = { { 0.f, 0.f } };
@@ -795,7 +816,7 @@ Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, c
 
 	material_set_uniform_vec3(button_material, 4, button_background_color);	// Color
 
-	widget_init(SUPER(button), window, window_id, parent, margin, layout);	// Intializing the widget
+	widget_init(SUPER(button), window, parent, margin, layout);	// Intializing the widget
 
 	return SUPER(button);
 }

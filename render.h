@@ -34,8 +34,6 @@ typedef union {
 	} keyboard_info;
 } Event;
 
-typedef uint WindowID;
-
 struct Widget;
 typedef void (*EventCallback)(struct Widget*, Event*);
 
@@ -84,12 +82,14 @@ struct Scene;
 
 // Window UI : a width, height, mininum width and transparency.
 // every drawable has its own container, differing from the original scene.
-typedef struct {
+typedef struct _Window {
 	struct Scene* parent;
+
+	struct _Window* next;
+	struct _Window* previous;
 
 	Vector2 position;   // Position used to calculate vertex translation
 						// for every change of position
-
 	void (*on_close)();	// Called when the window is closed
 
 	float width, height; // Window dimensions
@@ -98,13 +98,11 @@ typedef struct {
 	float depth;
 	float transparency;
 
-	float pack_last_size;		// Position of last widget added to
-								// the window
+	float pack_last_size;		// Position of last widget added to the window
 	uint widgets_count;
 	Layout layout;
 
-	BatchDrawable* background_drawable; // Drawable element for the window's
-									   // frame
+	BatchDrawable* background_drawable; // Drawable element for the window's frame
 	BatchDrawable* text_bar_drawable;
 	Widget* widgets[64];
 
@@ -116,8 +114,9 @@ typedef struct {
 typedef struct Scene {
 	StateContext gl;
 
-	DynamicArray windows;	// Window array
 	DynamicArray drawables;	// Drawables array
+	Window* last_window;
+	uint64_t windows_count;
 
 	Camera camera;
 
@@ -130,7 +129,7 @@ typedef struct Scene {
 
 	uint glfw_last_character;
 	uint flags;
-	uint selected_window;
+	Window* selected_window;
 } Scene;
 
 extern const Vector3 white;
@@ -155,14 +154,14 @@ Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint ele
 void scene_draw(Scene* scene, Vector3 clear_color);
 void scene_handle_events(Scene* scene, GLFWwindow* window);
 void scene_set_size(Scene* scene, float width, float height);
+void scene_update_window_depths(Scene* scene);
 
-WindowID window_create(Scene* scene, float width, float height, float* position, char* title);
-void window_switch_to(Scene* scene, WindowID id);
-void window_set_on_close(Scene* scene, WindowID id, void (*on_close)());
+Window* window_create(Scene* scene, float width, float height, float* position, char* title);
+void window_set_on_close(Window* window, void (*on_close)());
 void window_set_position(Window* window, float x, float y);
 void window_set_size(Window* window, float width, float height);
 void window_set_transparency(Window* window, float transparency);
-void window_destroy(Scene* scene, WindowID id);
+void window_destroy(Scene* scene, Window* window);
 
 void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix);
 
@@ -182,10 +181,10 @@ void widget_set_position(Widget* widget, Window* window);
 
 void widget_destroy(Widget* widget);
 
-Widget* widget_label_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
+Widget* widget_label_create(Window* window_id, Scene* scene, Widget* parent, char* text,
 							float text_size, float margin, Vector3 color, Layout layout);
 
-Widget* widget_button_create(WindowID window_id, Scene* scene, Widget* parent, char* text,
+Widget* widget_button_create(Window* window_id, Scene* scene, Widget* parent, char* text,
 							 float text_size, float margin, float padding, Layout layout);
 
 #endif // RENDER_HEADER

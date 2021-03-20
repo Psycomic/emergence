@@ -66,6 +66,7 @@ BatchDrawable* batch_drawable_create(Batch* batch, void* vertices, uint64_t vert
 	BatchDrawable* batch_drawable = malloc(sizeof(BatchDrawable));
 
 	batch_drawable->next = NULL;
+	batch_drawable->previous = batch->last_added_drawable;
 
 	if (batch->last_added_drawable != NULL)
 		batch->last_added_drawable->next = batch_drawable;
@@ -142,6 +143,15 @@ void batch_drawable_destroy(BatchDrawable* batch_drawable) {
 	for (BatchDrawable* drawable = batch_drawable->next; drawable != NULL; drawable = drawable->next)
 		drawable->index_buffer_offset -= elements_size;
 
+	if (batch_drawable->previous != NULL)
+		batch_drawable->previous->next = batch_drawable->next;
+
+	if (batch_drawable->next != NULL)
+		batch_drawable->next->previous = batch_drawable->previous;
+	else
+		batch->last_added_drawable = batch_drawable->previous;
+
+	free(batch_drawable);
 }
 
 void batch_drawable_update(BatchDrawable* batch_drawable) {

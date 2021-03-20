@@ -90,7 +90,7 @@ void new_window_callback(Widget* widget, Event* evt) {
 		random_float() * 800 - 400.f,
 		random_float() * 600 - 300.f
 	};
-	WindowID new_window = window_create(scene, 500.f, 400.f, new_window_position, "NEW WINDOW");
+	Window* new_window = window_create(scene, 500.f, 400.f, new_window_position, "NEW WINDOW");
 	widget_label_create(new_window, scene, NULL,
 						"LOREM IPSUM DOLOR SIT\n"
 						"AMET CONSECTETUR ADIPISCING\n"
@@ -251,7 +251,7 @@ int main(void) {
 		0.1f, 0.2f
 	};
 
-	WindowID terrain_window = window_create(scene, 478.f, 237.f, window1_position, "EDIT FRACTAL");
+	Window* terrain_window = window_create(scene, 478.f, 237.f, window1_position, "EDIT FRACTAL");
 
 	// Window 1's widgets
 	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
@@ -271,7 +271,7 @@ int main(void) {
 	widget_set_on_click_up(quit_button, quit_callback);
 	widget_set_on_click_up(new_window_button, new_window_callback);
 
-	WindowID test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
+	Window* test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
 	Widget* test_title = widget_label_create(test_window, scene, NULL, "THIS IS A BIG TITLE", 25.f, 0.f, green, LAYOUT_PACK);
 	Widget* test_text = widget_label_create(test_window, scene, NULL,
 											"THIS IS SOME RANDOM\n"

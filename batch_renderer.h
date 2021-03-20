@@ -37,6 +37,7 @@ typedef struct _BatchDrawable {
 	Batch* batch;
 
 	struct _BatchDrawable* next;
+	struct _BatchDrawable* previous;
 
 	uint64_t vertex_size;
 
