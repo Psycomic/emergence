@@ -13,7 +13,7 @@ uniform mat4 view_position;
 
 void main() {
 	transparency = VertexTransparency;
-	gl_Position = view_position * vec4(VertexPos, 1);
+	gl_Position = view_position * vec4(VertexPos.xyz, 1);
 
 	texture_coords = TexCoords;
 	size = QuadSize;

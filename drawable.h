@@ -52,9 +52,10 @@ typedef struct {
 } Buffer;
 
 // OpenGL context information
-#define STATE_GL_DEPTH_TEST (1 << 0)
-#define STATE_GL_BLEND (1 << 1)
-#define STATE_GL_CULL_FACE (1 << 2)
+#define STATE_GL_DEPTH_TEST		(1 << 0)
+#define STATE_GL_BLEND			(1 << 1)
+#define STATE_GL_CULL_FACE		(1 << 2)
+#define STATE_GL_STENCIL_TEST	(1 << 3)
 
 typedef struct {
 	uint64_t state;

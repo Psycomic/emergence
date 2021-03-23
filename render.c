@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <math.h>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -41,6 +42,7 @@ static GLuint ui_button_shader;
 static GLuint color_shader;
 static GLuint axis_shader;
 static GLuint text_bar_shader;
+static GLuint single_color_shader;
 
 static GLuint monospaced_font_texture;
 
@@ -69,6 +71,8 @@ static Vector3 button_text_click_color = { { 0.8f, 0.8f, 0.9f } };
 static Drawable* axis_drawable;
 
 double last_xpos = -1.0, last_ypos = -1.0;
+
+extern float global_time;
 
 void render_initialize(void);
 
@@ -168,6 +172,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	scene->last_window = NULL;
 
 	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
+
 	uint64_t windows_attributes_sizes[] = {
 		3, 1, 2, 2 // Position, transparency, texture coords, quad size
 	};
@@ -223,8 +228,13 @@ void scene_next_window(Scene* scene) {
 }
 
 void scene_draw(Scene* scene, Vector3 clear_color) {
+	StateGlEnable(&scene->gl, GL_STENCIL_TEST);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	glStencilMask(0x00);
 
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
@@ -252,10 +262,15 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	}
 
 	if (scene->flags & SCENE_GUI_MODE) {
-		StateGlEnable(&scene->gl, GL_DEPTH_TEST);
-
+		glClear(GL_DEPTH_BUFFER_BIT);
 		batch_draw(&scene->window_text_bar_batch, &scene->gl, scene->camera.ortho_matrix);
+
+		glStencilFunc(GL_ALWAYS, 1, 0xFF); // all fragments should pass the stencil test
+		glStencilMask(0xFF); // enable writing to the stencil buffer
 		batch_draw(&scene->windows_batch, &scene->gl, scene->camera.ortho_matrix);
+
+		glStencilFunc(GL_EQUAL, 1, 0xFF);
+		glStencilMask(0x00);
 
 		for (Window* win = scene->last_window; win != NULL; win = win->previous)
 			window_draw(win, scene->camera.ortho_matrix);
@@ -263,6 +278,9 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		StateGlActiveTexure(&scene->gl, GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, monospaced_font_texture);
 		batch_draw(&scene->text_batch, &scene->gl, scene->camera.ortho_matrix);
+
+		glStencilMask(0xFF);
+		glStencilFunc(GL_ALWAYS, 1, 0xFF);
 	}
 }
 
@@ -992,6 +1010,7 @@ void render_initialize(void) {
 	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_button.glsl");
 	color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl");
 	text_bar_shader = shader_create("./shaders/vertex_text_bar.glsl", "./shaders/fragment_text_bar.glsl");
+	single_color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_single_color.glsl");
 
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
 	material_set_uniform_vec3(axis_material, 0, blue);

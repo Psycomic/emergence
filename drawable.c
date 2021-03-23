@@ -213,6 +213,9 @@ void StateGlEnable(StateContext* gl, GLuint thing) {
 	case GL_CULL_FACE:
 		state = STATE_GL_CULL_FACE;
 		break;
+	case GL_STENCIL_TEST:
+		state = STATE_GL_STENCIL_TEST;
+		break;
 	default:
 		assert(1);
 	}
@@ -235,6 +238,9 @@ void StateGlDisable(StateContext* gl, GLuint thing) {
 		break;
 	case GL_CULL_FACE:
 		state = STATE_GL_CULL_FACE;
+		break;
+	case GL_STENCIL_TEST:
+		state = STATE_GL_STENCIL_TEST;
 		break;
 	default:
 		assert(1);

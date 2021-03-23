@@ -39,6 +39,7 @@ void usleep(clock_t time) {
 
 float points[POINTS_COUNT * 2];
 float* octaves[7];
+float global_time = 0.f;
 
 void execute_tests(void);
 
@@ -308,6 +309,8 @@ int main(void) {
 		clock_t end = clock();
 		clock_t* delta = dynamic_array_push_back(&frames);
 		*delta = end - start;
+
+		global_time += ((float)*delta) / CLOCKS_PER_SEC;
 
 		if (count++ % 10 == 0)
 			printf("%ld FPS\n", CLOCKS_PER_SEC / *delta);
