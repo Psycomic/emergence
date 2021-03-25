@@ -8,6 +8,9 @@
 int image_load_bmp(Image* image, const char* path) {
 	uchar* file_contents = (uchar*)read_file(path);
 
+	if (file_contents == NULL)
+		return -1;
+
 	if (file_contents[0] != 'B' || file_contents[1] != 'M') {
 		free(file_contents);
 		return -1;
@@ -18,8 +21,10 @@ int image_load_bmp(Image* image, const char* path) {
 	uint width = *(uint*)&(file_contents[0x12]);
 	uint height = *(uint*)&(file_contents[0x16]);
 
-	if (image_size != width * height * 3)
+	if (image_size != width * height * 3) {
+		fprintf(stderr, "Image size not corresponding!\n");
 		return -1;
+	}
 
 	image->height = height;
 	image->width = width;

@@ -99,7 +99,10 @@ typedef struct Window {
 	float transparency;
 
 	float pack_last_size;		// Position of last widget added to the window
+	float scroll_offset;		// Offset of the scroll
+
 	uint widgets_count;
+
 	Layout layout;
 
 	BatchDrawable* background_drawable; // Drawable element for the window's frame
@@ -115,8 +118,11 @@ typedef struct Scene {
 	StateContext gl;
 
 	DynamicArray drawables;	// Drawables array
-	Window* last_window;
+
 	uint64_t windows_count;
+
+	Window* last_window;
+	Window* selected_window;
 
 	Camera camera;
 
@@ -129,7 +135,6 @@ typedef struct Scene {
 
 	uint glfw_last_character;
 	uint flags;
-	Window* selected_window;
 } Scene;
 
 extern const Vector3 white;

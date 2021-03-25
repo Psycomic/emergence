@@ -92,6 +92,7 @@ float random_float(void);
 
 void window_draw(Window* window, Mat4 view_position_matrix);
 void window_update(Window* window);
+void window_scroll(Window* window, float amount);
 
 int initialize_everything() {
 	glewExperimental = 1;
@@ -119,6 +120,11 @@ void resize_callback(GLFWwindow* window, int width, int height) {
 	Scene* scene = glfwGetWindowUserPointer(window);
 
 	scene_set_size(scene, width, height);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+	Scene* scene = glfwGetWindowUserPointer(window);
+	window_scroll(scene->selected_window, -yoffset * 20.f);
 }
 
 GLFWwindow* scene_context(Scene* scene) {
@@ -149,6 +155,8 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	glfwSetCharCallback(scene->context, character_callback);
 	glfwSetWindowSizeCallback(scene->context, resize_callback);
+
+	glfwSetScrollCallback(scene->context, scroll_callback);
 
 	glfwSetWindowUserPointer(scene->context, scene);
 	glfwGetWindowSize(scene->context, &width, &height);
@@ -184,6 +192,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	scene->last_window = NULL;
 
 	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
+
 
 	uint64_t windows_attributes_sizes[] = {
 		3, 1, 2, 2 // Position, transparency, texture coords, quad size
@@ -541,6 +550,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	window->widgets_count = 0;
 	window->layout = LAYOUT_PACK;
 	window->on_close = NULL;
+	window->scroll_offset = 0.f;
 
 	window->position.x = position[0];
 	window->position.y = position[1];
@@ -591,7 +601,7 @@ Vector2 window_get_anchor(Window* window) {
 	Vector2 window_anchor = {
 		{
 			window->position.x + 30.f,
-			window->position.y + window->height - 30.f
+			window->position.y + window->height - 30.f + window->scroll_offset
 		}
 	};
 
@@ -615,6 +625,13 @@ Vector2 window_get_max_position(Window* window) {
 	max_positon.y = window_anchor.y - window->position.y;
 
 	return max_positon;
+}
+
+void window_scroll(Window* window, float amount) {
+	window->scroll_offset = clampf(window->scroll_offset + amount, 0.f, window->pack_last_size);
+
+	for (uint i = 0; i < window->widgets_count; i++)
+		widget_update_position(window->widgets[i], window);
 }
 
 void window_destroy(Scene* scene, Window* window) {
@@ -1020,12 +1037,15 @@ void render_initialize(void) {
 	drawable_init(axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
 
 	Image font_image;
-	if (image_load_bmp(&font_image, "./fonts/default.bmp") >= 0)
+	if (image_load_bmp(&font_image, "./fonts/Monospace.bmp") >= 0) {
 		printf("Success loading font !\n");
-	else
+	}
+	else {
 		printf("Error when loading font !\n");
+		exit(0);
+	}
 
-	font_init(&monospaced_font, &font_image, 32, 32, 512, 512);
+	font_init(&monospaced_font, &font_image, 19, 32, 304, 512);
 	image_destroy(&font_image);
 }
 

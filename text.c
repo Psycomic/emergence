@@ -75,7 +75,7 @@ float text_get_width(Text* text) {
 			width = 0.f;
 		}
 		else {
-			width += text->size;
+			width += text->width;
 		}
 	} while (*(c++) != '\0');
 
@@ -91,7 +91,7 @@ float text_get_height(Text* text) {
 			count++;
 	} while (*(++c) != '\0');
 
-	return text->size * (count + 1);
+	return text->height * (count + 1);
 }
 
 void text_update(Text* text) {
@@ -99,7 +99,7 @@ void text_update(Text* text) {
 }
 
 float text_get_size(Text* text) {
-	return text->size;
+	return text->height;
 }
 
 // Every glyph will be a 32 x 32 texture. This means the image is 64 x 416
@@ -110,7 +110,8 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 	bzero(text, sizeof(Text));
 
 	text->string = string;
-	text->size = size;
+
+	text->height = size;
 
 	uint text_length = strlen(string);
 	uint line_return_count;
@@ -135,10 +136,15 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 		half_width = width / glyph_width,
 		half_height = height / glyph_height;
 
+	text->width = size * (glyph_width / glyph_height);
+
 	const int divisor = width / glyph_width;
 
 	int y_stride = 0;
 	uint element_index = 0;
+
+	float size_height = size,
+		size_width = text->width;
 
 	for (uint i = 0, j = 0; string[j] != '\0'; j++) {
 		if (string[j] == '\n') {
@@ -146,9 +152,6 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 			i = 0;
 		}
 		else {
-			/* assert((string[j] >= 'A' && string[j] <= 'Z') || string[j] == ' ' || string[j] == '\n'); */
-
-			/* uint index = string[j] == ' ' ? 31 : string[j] - 'A'; */
 			uint index = string[j];
 
 			float x_pos = ((index % divisor) * glyph_width) / width,
@@ -159,10 +162,10 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 			float uv_up_left[] = { x_pos, y_pos };
 			float uv_up_right[] = { x_pos + 1.f / half_width, y_pos };
 
-			float vertex_up_left[] = { i * size, -size + y_stride * size };
-			float vertex_up_right[] = { i * size + size, -size + y_stride * size };
-			float vertex_down_left[] = { i * size, y_stride * size };
-			float vertex_down_right[] = { i * size + size, y_stride * size };
+			float vertex_up_left[] = { i * size_width, -size_height + y_stride * size_height };
+			float vertex_up_right[] = { i * size_width + size_width, -size_height + y_stride * size_height };
+			float vertex_down_left[] = { i * size_width, y_stride * size_height };
+			float vertex_down_right[] = { i * size_width + size_width, y_stride * size_height };
 
 #define GET_INDEX(arr, index) arr[element_index * vertex_size * 4 + index]
 

@@ -38,6 +38,15 @@ float gaussian_random() {
 	return sum - 6.f;
 }
 
+float clampf(float x, float min, float max) {
+	if (x < min)
+		return min;
+	else if (x > max)
+		return max;
+	else
+		return x;
+}
+
 void random_arrayf(float* destination, uint size) {
 	for (uint i = 0; i < size; ++i) {
 		destination[i] = random_float();

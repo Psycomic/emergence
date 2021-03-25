@@ -12,7 +12,7 @@ typedef struct {
 	BatchDrawable* drawable;
 	char* string;
 
-	float size;
+	float width, height;
 	float angle;
 } Text;
 

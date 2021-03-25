@@ -59,6 +59,7 @@ char* read_file(const char* filename);
 float random_float(void);
 void random_arrayf(float* destination, uint size);
 float gaussian_random(void);
+float clampf(float x, float min, float max);
 
 Vector3 rgb_to_vec(uchar r, uchar g, uchar b);
 
