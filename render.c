@@ -44,7 +44,7 @@ static GLuint axis_shader;
 static GLuint text_bar_shader;
 static GLuint single_color_shader;
 
-static GLuint monospaced_font_texture;
+static Font monospaced_font;
 
 static Material* axis_material = NULL;
 
@@ -290,7 +290,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 			window_draw(win, scene->camera.ortho_matrix);
 
 		StateGlActiveTexure(&scene->gl, GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, monospaced_font_texture);
+		glBindTexture(GL_TEXTURE_2D, monospaced_font.texture);
 		batch_draw(&scene->text_batch, &scene->gl, scene->camera.ortho_matrix);
 
 		glStencilMask(0xFF);
@@ -549,7 +549,7 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 		{ 0.6f, 0.6f, 0.6f }
 	};
 
-	window->title = text_create(&scene->text_batch, title, 15.f, window->position, title_color);
+	window->title = text_create(&scene->text_batch, &monospaced_font, title, 15.f, window->position, title_color);
 
 	float* background_drawable_vertices = malloc(sizeof(float) * 4 * WINDOW_BACKGROUND_VERTEX_SIZE);
 
@@ -797,7 +797,7 @@ Widget* widget_label_create(Window* window, Scene* scene, Widget* parent, char* 
 
 	label->header.type = WIDGET_TYPE_LABEL;
 	label->color = color;
-	label->text = text_create(&scene->text_batch, text, text_size, text_position, color);
+	label->text = text_create(&scene->text_batch, &monospaced_font, text, text_size, text_position, color);
 
 	label->header.height = text_get_height(label->text);	// Setting widget height
 
@@ -817,7 +817,7 @@ Widget* widget_button_create(Window* window, Scene* scene, Widget* parent, char*
 
 	button->padding = padding + border_size * 2;
 	// Initializing the button's text
-	button->text = text_create(&scene->text_batch, text, text_size, text_position, button_text_color);
+	button->text = text_create(&scene->text_batch, &monospaced_font, text, text_size, text_position, button_text_color);
 
 	float text_width = text_get_width(button->text),
 		text_height = text_get_height(button->text);
@@ -1020,12 +1020,12 @@ void render_initialize(void) {
 	drawable_init(axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);
 
 	Image font_image;
-	if (image_load_bmp(&font_image, "./fonts/monospace.bmp") >= 0)
+	if (image_load_bmp(&font_image, "./fonts/default.bmp") >= 0)
 		printf("Success loading font !\n");
 	else
 		printf("Error when loading font !\n");
 
-	monospaced_font_texture = texture_create(&font_image);
+	font_init(&monospaced_font, &font_image, 32, 32, 512, 512);
 	image_destroy(&font_image);
 }
 

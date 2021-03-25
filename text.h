@@ -16,7 +16,19 @@ typedef struct {
 	float angle;
 } Text;
 
-Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vector3 color);
+typedef struct {
+	uint glyph_width;
+	uint glyph_height;
+
+	GLuint texture;
+
+	uint texture_height;
+	uint texture_width;
+} Font;
+
+void font_init(Font* font, Image* font_image, uint glyph_width, uint glyph_height, uint image_width, uint image_height);
+
+Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 position, Vector3 color);
 
 void text_set_color(Text* text, Vector3 color);
 void text_set_angle(Text* text, float angle);

@@ -13,7 +13,6 @@ void text_set_color(Text* text, Vector3 color) {
 	}
 
 	text->color = color;
-
 	text_update(text);
 }
 
@@ -104,7 +103,7 @@ float text_get_size(Text* text) {
 }
 
 // Every glyph will be a 32 x 32 texture. This means the image is 64 x 416
-Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vector3 color) {
+Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 position, Vector3 color) {
 	Text* text = malloc(sizeof(Text));
 	if (text == NULL) return text;
 
@@ -129,13 +128,14 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 	bzero(drawable_vertices, sizeof(float) * vertices_number);
 
-	const float height = 512,
-		glyph_size = 32.f,
-		half_height = height / glyph_size,
-		width = 64,
-		half_width = width / glyph_size;
+	const float	glyph_width = font->glyph_width,
+		glyph_height = font->glyph_height,
+		height = font->texture_height,
+		width = font->texture_width,
+		half_width = width / glyph_width,
+		half_height = height / glyph_height;
 
-	const int divisor = width / glyph_size;
+	const int divisor = width / glyph_width;
 
 	int y_stride = 0;
 	uint element_index = 0;
@@ -146,12 +146,13 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 			i = 0;
 		}
 		else {
-			assert((string[j] >= 'A' && string[j] <= 'Z') || string[j] == ' ' || string[j] == '\n');
+			/* assert((string[j] >= 'A' && string[j] <= 'Z') || string[j] == ' ' || string[j] == '\n'); */
 
-			uint index = string[j] == ' ' ? 31 : string[j] - 'A';
+			/* uint index = string[j] == ' ' ? 31 : string[j] - 'A'; */
+			uint index = string[j];
 
-			float x_pos = ((index % divisor) * glyph_size) / width,
-				y_pos = (1.f - 1 / half_height) - ((index / divisor) * glyph_size) / height;
+			float x_pos = ((index % divisor) * glyph_width) / width,
+				y_pos = (1.f - 1 / half_height) - ((index / divisor) * glyph_height) / height;
 
 			float uv_down_left[] = { x_pos, (y_pos + (1.f / half_height)) };
 			float uv_down_right[] = { x_pos + 1.f / half_width, (y_pos + (1.f / half_height)) };
@@ -209,4 +210,12 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 void text_destroy(Text* text) {
 	batch_drawable_destroy(text->drawable);
 	free(text);
+}
+
+void font_init(Font* font, Image* font_image, uint glyph_width, uint glyph_height, uint image_width, uint image_height) {
+	font->texture = texture_create(font_image);
+	font->glyph_width = glyph_width;
+	font->glyph_height = glyph_height;
+	font->texture_width = image_width;
+	font->texture_height = image_height;
 }

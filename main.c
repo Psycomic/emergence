@@ -86,37 +86,25 @@ void quit_callback(Widget* widget, Event* evt) {
 	scene_quit(scene);
 }
 
+static char* main_file_contents = NULL;
+
 void new_window_callback(Widget* widget, Event* evt) {
 	float new_window_position[] = {
 		random_float() * 800 - 400.f,
 		random_float() * 600 - 300.f
 	};
+
 	Window* new_window = window_create(scene, 500.f, 400.f, new_window_position, "NEW WINDOW");
 	widget_label_create(new_window, scene, NULL,
-						"LOREM IPSUM DOLOR SIT\n"
-						"AMET CONSECTETUR ADIPISCING\n"
-						"ELIT PROIN TEMPUS PRETIUM\n"
-						"SAGITTIS MORBI AT NUNC EU\n"
-						"EST LAOREET SCELERISQUE PELLENTESQUE\n"
-						"SED FACILISIS SAPIEN\n"
-						"DUIS VEL DOLOR IN\n"
-						"ODIO CONVALLIS SODALES CRAS SEMPER\n"
-						"DUI PURUS NAM AUCTOR\n"
-						"CONSEQUAT LIGULA EGET\n"
-						"LAOREET ERAT MAXIMUS IN\n"
-						"UT SED EX LOREM ETIAM\n"
-						"TINCIDUNT MATTIS TURPIS QUIS\n"
-						"ORNARE NISL TINCIDUNT\n"
-						"AC PROIN AT ELIT\n"
-						"ELEIFEND INTERDUM METUS A RHONCUS\n"
-						"SAPIEN VIVAMUS AT ELEIFEND\n"
-						"NISI NULLAM A\n"
-						"SCELERISQUE JUSTO",
+						main_file_contents,
 						15.f, 1.f, white, LAYOUT_PACK);
 }
 
 int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
+
+	main_file_contents = read_file("main.c");
+	main_file_contents[2000] = '\0';
 
 	if (initialize_everything() != 0)
 		return -1;
@@ -270,8 +258,8 @@ int main(void) {
 	widget_set_on_click_up(quit_button, quit_callback);
 	widget_set_on_click_up(new_window_button, new_window_callback);
 
-	Window* test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD");
-	Widget* test_title = widget_label_create(test_window, scene, NULL, "THIS IS A BIG TITLE", 25.f, 0.f, green, LAYOUT_PACK);
+	Window* test_window = window_create(scene, 400.f, 200.f, window2_position, "HELLO WORLD!");
+	Widget* test_title = widget_label_create(test_window, scene, NULL, "THIS IS A BIG TITLE!", 25.f, 0.f, green, LAYOUT_PACK);
 	Widget* test_text = widget_label_create(test_window, scene, NULL,
 											"THIS IS SOME RANDOM\n"
 											"TEXT TO MAKE THIS WINDOW\n"
