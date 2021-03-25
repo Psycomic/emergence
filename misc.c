@@ -5,25 +5,28 @@
 
 #include "misc.h"
 
-int read_file(char* buffer, const char* filename) {
+char* read_file(const char* filename) {
 	FILE* file = fopen(filename, "r");
+
+	fseek(file, 0L, SEEK_END);
+	size_t sz = ftell(file);
+	fseek(file, 0L, SEEK_SET);
+
+	char* buffer = malloc(sz + 1);
 
 	if (file == NULL) {
 		fprintf(stderr, "Could not open file %s!\n", filename);
-		return -1;
+		return NULL;
 	}
-	else {
+	else
 		printf("Successfully opened file %s!\n", filename);
-	}
 
-	while ((*buffer = fgetc(file)) != EOF) {
-		buffer++;
-	}
-
-	*buffer = '\0';
+	fread(buffer, 1, sz, file);
+	buffer[sz] = '\0';
 
 	fclose(file);
-	return 0;
+
+	return buffer;
 }
 
 float gaussian_random() {

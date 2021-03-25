@@ -6,42 +6,29 @@
 #include "misc.h"
 
 int image_load_bmp(Image* image, const char* path) {
-	FILE* bmp_file;
+	uchar* file_contents = (uchar*)read_file(path);
 
-	if ((bmp_file = fopen(path, "rb")) < 0)
-		return -1;
-
-	uchar header[0x7a];
-
-	fread(header, 1, 0x7a, bmp_file);
-
-	if (header[0] != 'B' || header[1] != 'M') {
-		fclose(bmp_file);
+	if (file_contents[0] != 'B' || file_contents[1] != 'M') {
+		free(file_contents);
 		return -1;
 	}
 
-	uint dataPos = *(uint*)&(header[0xa]);
-	uint image_size = *(uint*)&(header[0x22]);
-	uint width = *(uint*)&(header[0x12]);
-	uint height = *(uint*)&(header[0x16]);
+	uint dataPos = *(uint*)&(file_contents[0xa]);
+	uint image_size = *(uint*)&(file_contents[0x22]);
+	uint width = *(uint*)&(file_contents[0x12]);
+	uint height = *(uint*)&(file_contents[0x16]);
 
-	image_size = width * height * 3;
-
-	printf("dataPos = %d\n", dataPos);
-
-	if (dataPos == 0)
-		dataPos = 54;
+	if (image_size != width * height * 3)
+		return -1;
 
 	image->height = height;
 	image->width = width;
 	image->data = malloc(sizeof(uchar) * image_size);
-
-	fread(image->data, 1, image_size, bmp_file);
-
 	image->color_encoding = GL_BGR;
 
-	fclose(bmp_file);
+	memcpy(image->data, file_contents + dataPos, image_size);
 
+	free(file_contents);
 	return 0;
 }
 

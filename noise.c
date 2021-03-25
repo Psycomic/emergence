@@ -7,6 +7,7 @@
 
 #include <assert.h>
 
+#include "misc.h"
 #include "linear_algebra.h"
 
 #define index(x, y, z, size) x + y * size + z * size * size

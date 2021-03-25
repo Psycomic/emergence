@@ -130,9 +130,12 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 	bzero(drawable_vertices, sizeof(float) * vertices_number);
 
 	const float height = 512,
-		half_height = height / 32,
+		glyph_size = 32.f,
+		half_height = height / glyph_size,
 		width = 64,
-		half_width = width / 32;
+		half_width = width / glyph_size;
+
+	const int divisor = width / glyph_size;
 
 	int y_stride = 0;
 	uint element_index = 0;
@@ -147,18 +150,18 @@ Text* text_create(Batch* batch, char* string, float size, Vector2 position, Vect
 
 			uint index = string[j] == ' ' ? 31 : string[j] - 'A';
 
-			float x_pos = ((index % 2) * 32) / 64.f,
-				y_pos = (1.f - 1 / half_height) - ((index / 2) * 32) / height;
+			float x_pos = ((index % divisor) * glyph_size) / width,
+				y_pos = (1.f - 1 / half_height) - ((index / divisor) * glyph_size) / height;
 
 			float uv_down_left[] = { x_pos, (y_pos + (1.f / half_height)) };
 			float uv_down_right[] = { x_pos + 1.f / half_width, (y_pos + (1.f / half_height)) };
 			float uv_up_left[] = { x_pos, y_pos };
 			float uv_up_right[] = { x_pos + 1.f / half_width, y_pos };
 
-			float vertex_up_left[2] = { i * size, -size + y_stride * size };
-			float vertex_up_right[2] = { i * size + size, -size + y_stride * size };
-			float vertex_down_left[2] = { i * size, y_stride * size };
-			float vertex_down_right[2] = { i * size + size, y_stride * size };
+			float vertex_up_left[] = { i * size, -size + y_stride * size };
+			float vertex_up_right[] = { i * size + size, -size + y_stride * size };
+			float vertex_down_left[] = { i * size, y_stride * size };
+			float vertex_down_right[] = { i * size + size, y_stride * size };
 
 #define GET_INDEX(arr, index) arr[element_index * vertex_size * 4 + index]
 

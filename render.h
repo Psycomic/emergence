@@ -82,11 +82,11 @@ struct Scene;
 
 // Window UI : a width, height, mininum width and transparency.
 // every drawable has its own container, differing from the original scene.
-typedef struct _Window {
+typedef struct Window {
 	struct Scene* parent;
 
-	struct _Window* next;
-	struct _Window* previous;
+	struct Window* next;
+	struct Window* previous;
 
 	Vector2 position;   // Position used to calculate vertex translation
 						// for every change of position
@@ -177,7 +177,7 @@ BOOL widget_state(Widget* widget, uint state);
 
 void widget_on_click_up(Widget* widget, Event* evt);
 void widget_set_on_click_up(Widget* widget, EventCallback on_click_up);
-void widget_set_position(Widget* widget, Window* window);
+void widget_update_position(Widget* widget, Window* window);
 
 void widget_destroy(Widget* widget);
 

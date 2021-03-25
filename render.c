@@ -56,8 +56,21 @@ static char* ui_button_uniforms[] = {
 	"color"						// 5
 };
 
+enum {
+	UI_BUTTON_MODEL_POSITION_UNIFORM = 0,
+	UI_BUTTON_TRANSPARENCY_UNIFORM,
+	UI_BUTTON_WIDTH_UNIFORM,
+	UI_BUTTON_HEIGHT_UNIFORM,
+	UI_BUTTON_COLOR_UNIFORM,
+};
+
 static char* axis_uniforms[] = {
 	"color", "transparency"
+};
+
+enum {
+	AXIS_MODEL_COLOR_UNIFORM = 0,
+	AXIS_MODEL_TRANSPARENCY_UNIFORM,
 };
 
 static Vector3 button_background_color = { { 0.5f, 0.5f, 0.5f } };
@@ -75,7 +88,6 @@ double last_xpos = -1.0, last_ypos = -1.0;
 extern float global_time;
 
 void render_initialize(void);
-
 float random_float(void);
 
 void window_draw(Window* window, Mat4 view_position_matrix);
@@ -239,6 +251,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
 
+	StateGlEnable(&scene->gl, GL_CULL_FACE);
 	for (uint i = 0; i < scene->drawables.size; i++) {
 		Drawable* drawable = *(Drawable**)dynamic_array_at(&scene->drawables, i);
 		uint flags = drawable->flags;
@@ -261,6 +274,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		}
 	}
 
+	StateGlDisable(&scene->gl, GL_CULL_FACE);
 	if (scene->flags & SCENE_GUI_MODE) {
 		glClear(GL_DEPTH_BUFFER_BIT);
 		batch_draw(&scene->window_text_bar_batch, &scene->gl, scene->camera.ortho_matrix);
@@ -457,24 +471,15 @@ void window_update(Window* window) {
 }
 
 void window_set_position(Window* window, float x, float y) {
-	Vector2 translation;
-	Vector2 new_position = { { x, y } };
-
-	vector2_sub(&translation, new_position, window->position);
-
-	// Set position of the window background
-	for (uint i = 0; i < window->background_drawable->vertices_count; i++) {
-		BatchDrawable* drawable = window->background_drawable;
-
-		Vector2* vertex = (Vector2*)((float*)drawable->vertices + drawable->batch->vertex_size * i);
-		vector2_add(vertex, *((Vector2*)vertex), translation);
-	}
-
 	window->position.x = x;
 	window->position.y = y;
 
+	rectangle_vertices_set((float*)window->background_drawable->vertices,
+						   window->width, window->height, WINDOW_BACKGROUND_VERTEX_SIZE,
+						   window->position.x, window->position.y);
+
 	for (uint i = 0; i < window->widgets_count; i++)
-		widget_set_position(window->widgets[i], window);
+		widget_update_position(window->widgets[i], window);
 
 	window_update(window);
 }
@@ -482,10 +487,6 @@ void window_set_position(Window* window, float x, float y) {
 void window_set_size(Window* window, float width, float height) {
 	window->width = max(width, window->min_width);
 	window->height = max(height, window->min_height);
-
-#ifdef _DEBUG
-	printf("Set window size to %.2f %.2f\n", window->width, window->height);
-#endif
 
 	rectangle_vertices_set((float*)window->background_drawable->vertices,
 						   window->width, window->height, WINDOW_BACKGROUND_VERTEX_SIZE,
@@ -498,7 +499,7 @@ void window_set_size(Window* window, float width, float height) {
 	}
 
 	for (uint i = 0; i < window->widgets_count; i++)
-		widget_set_position(window->widgets[i], window);
+		widget_update_position(window->widgets[i], window);
 
 	window_update(window);
 }
@@ -747,7 +748,7 @@ void widget_init(Widget* widget, Window* window, Widget* parent, float margin, L
 		}
 	}
 
-	widget_set_position(widget, window);
+	widget_update_position(widget, window);
 	window->widgets[window->widgets_count++] = widget;
 
 	if (window == window->parent->selected_window)
@@ -832,7 +833,7 @@ Widget* widget_button_create(Window* window, Scene* scene, Widget* parent, char*
 		text_height + button->padding * 2.f,
 		button_material, GL_TRIANGLES, NULL, 0x0);
 
-	material_set_uniform_vec3(button_material, 4, button_background_color);	// Color
+	material_set_uniform_vec3(button_material, UI_BUTTON_COLOR_UNIFORM, button_background_color);	// Color
 
 	widget_init(SUPER(button), window, parent, margin, layout);	// Intializing the widget
 
@@ -853,22 +854,22 @@ void widget_button_draw(Window* window, void* widget, Vector2 position, Mat4 vie
 
 	Material* button_material = button->button_background->material;
 
-	material_set_uniform_vec3(button_material, 0, background_position);			// Position
+	material_set_uniform_vec3(button_material, UI_BUTTON_MODEL_POSITION_UNIFORM, background_position);
 
-	material_set_uniform_float(button_material, 2, widget_get_width(SUPER(button)));	// Width
-	material_set_uniform_float(button_material, 3, widget_get_height(SUPER(button)));	// Height
+	material_set_uniform_float(button_material, UI_BUTTON_WIDTH_UNIFORM, widget_get_width(SUPER(button)));
+	material_set_uniform_float(button_material, UI_BUTTON_HEIGHT_UNIFORM, widget_get_height(SUPER(button)));
 
 	if (button->header.state & WIDGET_STATE_CLICKED) {
 		text_set_color(button->text, button_text_click_color);
-		material_set_uniform_vec3(button_material, 4, button_background_click_color);
+		material_set_uniform_vec3(button_material, UI_BUTTON_COLOR_UNIFORM, button_background_click_color);
 	}
 	else if (button->header.state & WIDGET_STATE_HOVERED) {		// Setting the background color
 		text_set_color(button->text, button_text_hover_color);
-		material_set_uniform_vec3(button_material, 4, button_background_hover_color);
+		material_set_uniform_vec3(button_material, UI_BUTTON_COLOR_UNIFORM, button_background_hover_color);
 	}
 	else {
 		text_set_color(button->text, button_text_color);
-		material_set_uniform_vec3(button_material, 4, button_background_color);
+		material_set_uniform_vec3(button_material, UI_BUTTON_COLOR_UNIFORM, button_background_color);
 	}
 
 	material_use(button_material, &window->parent->gl, NULL, view_position_matrix);	// Drawing the background using the material
@@ -883,7 +884,7 @@ void widget_button_set_transparency(void* widget, float transparency) {
 	Button* button = (Button*)widget;
 
 	text_set_transparency(button->text, transparency);
-	material_set_uniform_float(button->button_background->material, 1, transparency);
+	material_set_uniform_float(button->button_background->material, UI_BUTTON_TRANSPARENCY_UNIFORM, transparency);
 }
 
 void widget_label_set_text(void* widget, const char* text) { // TODO: Add support for dynamic text changing
@@ -921,12 +922,12 @@ void widget_button_set_depth(void* widget, float depth) {
 	text_set_depth(button->text, depth + WINDOW_ELEMENT_DEPTH_OFFSET);
 }
 
-void widget_label_set_position(void* widget, Window* window) {
+void widget_label_update_position(void* widget, Window* window) {
 	Label* label = widget;
 	text_set_position(label->text, widget_get_real_position(widget, window));
 }
 
-void widget_button_set_position(void* widget, Window* window) {
+void widget_button_update_position(void* widget, Window* window) {
 	Button* button = widget;
 
 	Vector2 position = widget_get_real_position(widget, window);
@@ -957,9 +958,9 @@ static void (*widget_set_depth_vtable[])(void*, float) = {
 	[WIDGET_TYPE_BUTTON] = widget_button_set_depth
 };
 
-static void (*widget_set_position_vtable[])(void*, Window* window) = {
-	[WIDGET_TYPE_LABEL] = widget_label_set_position,
-	[WIDGET_TYPE_BUTTON] = widget_button_set_position
+static void (*widget_update_position_vtable[])(void*, Window* window) = {
+	[WIDGET_TYPE_LABEL] = widget_label_update_position,
+	[WIDGET_TYPE_BUTTON] = widget_button_update_position
 };
 
 void widget_draw(Window* window, Widget* widget, Mat4 view_position_matrix) {
@@ -980,8 +981,8 @@ void widget_set_depth(Widget* widget, float depth) {
 	widget_set_depth_vtable[widget->type](widget, depth);
 }
 
-void widget_set_position(Widget* widget, Window* window) {
-	widget_set_position_vtable[widget->type](widget, window);
+void widget_update_position(Widget* widget, Window* window) {
+	widget_update_position_vtable[widget->type](widget, window);
 }
 
 void render_initialize(void) {
@@ -1013,7 +1014,7 @@ void render_initialize(void) {
 	single_color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_single_color.glsl");
 
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
-	material_set_uniform_vec3(axis_material, 0, blue);
+	material_set_uniform_vec3(axis_material, AXIS_MODEL_COLOR_UNIFORM, blue);
 
 	axis_drawable = malloc(sizeof(Drawable) + sizeof(Buffer));
 	drawable_init(axis_drawable, axis_elements, 6, axis_buffers, 1, axis_material, GL_LINES, &axis_position, NULL, 0, 0x0);

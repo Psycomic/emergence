@@ -314,12 +314,14 @@ GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader
 	GLuint FragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 
 	// Read the Vertex Shader code from the file
-	char VertexShaderCode[2048];
-	assert(read_file(VertexShaderCode, vertex_shader_path) >= 0);
+	char* VertexShaderCode = read_file(vertex_shader_path);
+	if (VertexShaderCode == NULL)
+		goto error;
 
 	// Read the Fragment Shader code from the file
-	char FragmentShaderCode[2048];
-	assert(read_file(FragmentShaderCode, fragment_shader_path) >= 0);
+	char* FragmentShaderCode = read_file(fragment_shader_path);
+	if (FragmentShaderCode == NULL)
+		goto error;
 
 	GLint Result = GL_FALSE;
 	int InfoLogLength;
@@ -331,11 +333,13 @@ GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader
 	glShaderSource(VertexShaderID, 1, &VertexSourcePointer, NULL);
 	glCompileShader(VertexShaderID);
 
+	free(VertexShaderCode);
+
 	// Check Vertex Shader
 	glGetShaderiv(VertexShaderID, GL_COMPILE_STATUS, &Result);
 	glGetShaderiv(VertexShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
 
-	if (InfoLogLength > 0) {
+	if (Result != GL_TRUE) {
 		char* VertexShaderErrorMessage = malloc(sizeof(char) * ((size_t)InfoLogLength + 1));
 		glGetShaderInfoLog(VertexShaderID, InfoLogLength, NULL, VertexShaderErrorMessage);
 		printf("%s\n", VertexShaderErrorMessage);
@@ -351,11 +355,13 @@ GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader
 	glShaderSource(FragmentShaderID, 1, &FragmentSourcePointer, NULL);
 	glCompileShader(FragmentShaderID);
 
+	free(FragmentShaderCode);
+
 	// Check Fragment Shader
 	glGetShaderiv(FragmentShaderID, GL_COMPILE_STATUS, &Result);
 	glGetShaderiv(FragmentShaderID, GL_INFO_LOG_LENGTH, &InfoLogLength);
 
-	if (InfoLogLength > 0) {
+	if (Result != GL_TRUE) {
 		char* FragmentShaderErrorMessage = malloc(sizeof(char) * ((size_t)InfoLogLength + 1));
 		glGetShaderInfoLog(FragmentShaderID, InfoLogLength, NULL, FragmentShaderErrorMessage);
 		printf("%s\n", FragmentShaderErrorMessage);
@@ -397,6 +403,10 @@ GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader
 	get_opengl_errors();
 
 	return ProgramID;
+
+error:
+	fprintf(stderr, "Could not read shaders %s and %s", vertex_shader_path, fragment_shader_path);
+	return 0;
 }
 
 Material* material_create(GLuint shader, char** uniforms_position, uint uniforms_count) {

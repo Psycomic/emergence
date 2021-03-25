@@ -54,7 +54,7 @@ typedef struct {
 	uint size;
 } HashTable;
 
-int read_file(char* buffer, const char* filename);
+char* read_file(const char* filename);
 
 float random_float(void);
 void random_arrayf(float* destination, uint size);

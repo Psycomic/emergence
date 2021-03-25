@@ -14,7 +14,7 @@ typedef struct {
 	Material* material;
 	uint32_t* elements;
 	uint64_t* vertex_attributes_sizes;
-	struct _BatchDrawable* last_added_drawable;
+	struct BatchDrawable* last_added_drawable;
 
 	uint64_t vertex_attributes_count;
 	uint64_t vertex_size;
@@ -32,12 +32,12 @@ typedef struct {
 
 // Element of a Batch, has vertices, elements
 // and information needed to modify its state
-typedef struct _BatchDrawable {
+typedef struct BatchDrawable {
 	void* vertices;
 	Batch* batch;
 
-	struct _BatchDrawable* next;
-	struct _BatchDrawable* previous;
+	struct BatchDrawable* next;
+	struct BatchDrawable* previous;
 
 	uint64_t vertex_size;
 
