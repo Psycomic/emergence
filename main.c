@@ -11,13 +11,22 @@
 #ifdef _WIN32
 #include <windows.h>
 
-void usleep(clock_t time) {
+void m_usleep(clock_t time) {
 	Sleep(time);
 }
+
 #endif // _WIN32
 #ifdef __linux__
 
 #include <unistd.h>
+
+void m_usleep(clock_t time) {
+	struct timespec req, rem;
+	req.tv_sec = 0;
+	req.tv_nsec = time;
+
+	nanosleep(&req, &rem);
+}
 
 #endif // __linux__
 
@@ -104,7 +113,7 @@ int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
 
 	main_file_contents = read_file("main.c");
-	main_file_contents[2000] = '\0';
+	main_file_contents[3000] = '\0';
 
 	if (initialize_everything() != 0)
 		return -1;
@@ -247,7 +256,7 @@ int main(void) {
 	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
 													 "This is a computer-generated fractal\n"
 													 "called the hopalong fractal",
-													 20.f, 0.f, white, LAYOUT_PACK);
+													 20.f, 5.f, white, LAYOUT_PACK);
 
 	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "Randomize",
 													20.f, 5.f, 5.f, LAYOUT_PACK);
@@ -306,7 +315,7 @@ int main(void) {
 			printf("%ld FPS\n", CLOCKS_PER_SEC / *delta);
 
 		clock_t wait_time = max(spf - *delta, 0);
-		usleep(wait_time);
+		m_usleep(wait_time);
 
 		start = clock();
 	}

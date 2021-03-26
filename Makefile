@@ -1,7 +1,7 @@
 TARGET_DEBUG = Emergence_Debug
 TARGET_RELEASE = Emergence_Release
 
-LFLAGS = -lglfw -lGL -lGLEW -ldl -lpthread -lX11 -lXrandr -lXinerama -lXi -lm -Wall -std=c11
+LFLAGS = -lglfw -lGL -lGLEW -ldl -lpthread -lX11 -lXrandr -lXinerama -lXi -lm -Wall -std=c99 -D_POSIX_C_SOURCE=199309L
 CC = gcc
 
 debug:

@@ -107,7 +107,7 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 	Text* text = malloc(sizeof(Text));
 	if (text == NULL) return text;
 
-	bzero(text, sizeof(Text));
+	m_bzero(text, sizeof(Text));
 
 	text->string = string;
 
@@ -127,7 +127,7 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 	float* drawable_vertices = malloc(sizeof(float) * vertices_number);
 	uint* drawable_elements = malloc(sizeof(uint) * 6 * text_length);
 
-	bzero(drawable_vertices, sizeof(float) * vertices_number);
+	m_bzero(drawable_vertices, sizeof(float) * vertices_number);
 
 	const float	glyph_width = font->glyph_width,
 		glyph_height = font->glyph_height,

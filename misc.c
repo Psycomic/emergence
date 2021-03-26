@@ -230,6 +230,32 @@ void* hash_table_get(HashTable* table, char* key) {
 	return entry->data;
 }
 
+void m_bzero(void* dst, size_t size) {
+	char* dest = dst;
+
+	for (size_t i = 0; i < size; i++)
+		dest[i] = 0;
+}
+
+char* m_strdup(const char* str) {
+	char *n = malloc(strlen(str) + 1);
+	strcpy(n, str);
+
+	return n;
+}
+
+char* m_strndup(const char* str, size_t count) {
+	char *n = malloc(count + 1);
+
+	size_t i;
+	for (i = 0; i < count; i++)
+		n[i] = str[i];
+
+	n[i] = '\0';
+
+	return n;
+}
+
 #undef malloc
 #undef free
 

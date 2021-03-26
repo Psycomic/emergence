@@ -146,7 +146,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	// Creating window and OpenGL context
 	scene->context = glfwCreateWindow(width, height, title, NULL, NULL);
-	bzero(&scene->gl, sizeof(StateContext));
+	m_bzero(&scene->gl, sizeof(StateContext));
 
 	if (scene->context == NULL) {
 		fprintf(stderr, "Failed to open a window\n");
@@ -531,7 +531,7 @@ static uint32_t rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 
 Window* window_create(Scene* scene, float width, float height, float* position, char* title) {
 	Window* window = malloc(sizeof(Window));
-	bzero(window, sizeof(Window));
+	m_bzero(window, sizeof(Window));
 
 	window->next = NULL;
 	window->previous = scene->last_window;
@@ -632,6 +632,7 @@ void window_scroll(Window* window, float amount) {
 
 	for (uint i = 0; i < window->widgets_count; i++)
 		widget_update_position(window->widgets[i], window);
+
 }
 
 void window_destroy(Scene* scene, Window* window) {

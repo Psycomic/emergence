@@ -75,6 +75,11 @@ void dynamic_array_remove(DynamicArray* arr, uint id);
 void dynamic_array_clear(DynamicArray* arr);
 void dynamic_array_destroy(DynamicArray* arr);
 
+char* m_strdup(const char* str);
+char* m_strndup(const char* str, size_t count);
+
+void m_bzero(void* dst, size_t size);
+
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);
 

@@ -33,7 +33,7 @@ LispObject* ulisp_make_symbol(const char* string) {
 	new_object->type = LISP_SYMBOL;
 
 	char **data = (char**)&new_object->data;
-	*data = strdup(string);
+	*data = m_strdup(string);
 
 	return new_object;
 }
@@ -190,7 +190,7 @@ LispObject* ulisp_read_list(const char* string) {
 				assert(parens_count >= 0);
 			} while(!(string[j++] == ')' && parens_count == 0));
 
-			list = ulisp_cons(ulisp_read_list(strndup(string + i + 1, count - 2)), list);
+			list = ulisp_cons(ulisp_read_list(m_strndup(string + i + 1, count - 2)), list);
 			i += count;
 		}
 		else {
@@ -206,7 +206,7 @@ LispObject* ulisp_read_list(const char* string) {
 			if (count == 0)
 				break;
 
-			list = ulisp_cons(ulisp_make_symbol(strndup(string + i, count)), list);
+			list = ulisp_cons(ulisp_make_symbol(m_strndup(string + i, count)), list);
 			i += count;
 		}
 	}
