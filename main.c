@@ -11,7 +11,7 @@
 #ifdef _WIN32
 #include <windows.h>
 
-void m_usleep(clock_t time) {
+void usleep(clock_t time) {
 	Sleep(time);
 }
 
@@ -19,14 +19,6 @@ void m_usleep(clock_t time) {
 #ifdef __linux__
 
 #include <unistd.h>
-
-void m_usleep(clock_t time) {
-	struct timespec req, rem;
-	req.tv_sec = 0;
-	req.tv_nsec = time;
-
-	nanosleep(&req, &rem);
-}
 
 #endif // __linux__
 
@@ -315,7 +307,7 @@ int main(void) {
 			printf("%ld FPS\n", CLOCKS_PER_SEC / *delta);
 
 		clock_t wait_time = max(spf - *delta, 0);
-		m_usleep(wait_time);
+		usleep(wait_time);
 
 		start = clock();
 	}

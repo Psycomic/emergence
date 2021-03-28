@@ -21,8 +21,15 @@ typedef struct {
 	LispObject *car, *cdr;
 } ConsCell;
 
+typedef struct {
+	LispObject* expression;
+	LispObject* arguments;
+} LispProc;
+
+extern LispObject *environnement;
+
 LispObject* ulisp_read_list(const char* string);
-LispObject* ulisp_eval(LispObject* expression);
+LispObject* ulisp_eval(LispObject* expression, LispObject* env);
 void ulisp_init(void);
 void ulisp_print(LispObject* obj, FILE* stream);
 
