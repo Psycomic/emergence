@@ -6,10 +6,13 @@
 #include <stdio.h>
 
 enum ObjectType {
-	LISP_CONS,
-	LISP_SYMBOL,
-	LISP_PROC,
-	LISP_PROC_BUILTIN
+	LISP_CONS = 1 << 0,
+	LISP_SYMBOL = 1 << 1,
+	LISP_PROC = 1 << 2,
+	LISP_PROC_BUILTIN = 1 << 3,
+	LISP_INTEGER = 1 << 4,
+	LISP_FLOAT = 1 << 5,
+	LISP_NUMBER = 1 << 6
 };
 
 typedef struct {
@@ -24,7 +27,13 @@ typedef struct {
 typedef struct {
 	LispObject* expression;
 	LispObject* arguments;
+	GLboolean is_macro;
 } LispProc;
+
+typedef struct {
+	uint hash;
+	char str[];
+} LispSymbol;
 
 extern LispObject *environnement;
 

@@ -9,7 +9,7 @@
 
 void execute_tests(void) {
 	// Hash table test
-	HashTable* table = hash_table_create(4);
+	HashTable* table = hash_table_create(3);
 
 	uint value_one = 10,
 		value_two = 20,
@@ -31,6 +31,13 @@ void execute_tests(void) {
 	assert(*(uint*)hash_table_get(table, "three") == value_three);
 	assert(*(uint*)hash_table_get(table, "four") == value_four);
 	assert(*(uint*)hash_table_get(table, "five") == value_five);
+
+	long val;
+	double floating;
+
+	assert(parse_number("12345", &val, &floating) >= 0);
+	assert(val == 12345);
+	assert(parse_number("1hello, there", &val, &floating) < 0);
 
 	char buffer[2048];
 	ulisp_init();

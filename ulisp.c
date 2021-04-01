@@ -6,11 +6,12 @@
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n')
 #define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, stdout); puts("");
 
-LispObject *environnement, *nil, *tee, *quote, *iffe, *begin, *lambda, *define;
+LispObject *environnement, *nil, *tee, *quote, *iffe, *begin, *lambda, *mlambda, *define;
 
 LispObject* ulisp_cons(LispObject* first, LispObject* second) {
 	LispObject* new_object = malloc(sizeof(LispObject) + 2 * sizeof(LispObject*));
 	new_object->type = LISP_CONS;
+
 	((ConsCell*)new_object->data)->car = first;
 	((ConsCell*)new_object->data)->cdr = second;
 
@@ -18,28 +19,57 @@ LispObject* ulisp_cons(LispObject* first, LispObject* second) {
 }
 
 LispObject* ulisp_car(LispObject* cons_obj) {
-	assert(cons_obj->type == LISP_CONS);
+	assert(cons_obj->type & LISP_CONS);
 
 	return ((ConsCell*)cons_obj->data)->car;
 }
 
 LispObject* ulisp_cdr(LispObject* cons_obj) {
-	assert(cons_obj->type == LISP_CONS);
+	assert(cons_obj->type & LISP_CONS);
 
 	return ((ConsCell*)cons_obj->data)->cdr;
 }
 
 LispObject* ulisp_make_symbol(const char* string) {
-	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(char*));
+	int string_length = strlen(string);
+
+	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(LispSymbol) + sizeof(char) * string_length + 1);
+
 	new_object->type = LISP_SYMBOL;
 
-	char **data = (char**)&new_object->data;
-	*data = m_strdup(string);
+	LispSymbol* symbol = (LispSymbol*)new_object->data;
+	strcpy(symbol->str, string);
+
+	symbol->hash = hash((uchar*)string);
 
 	return new_object;
 }
 
-LispObject* ulisp_make_lambda(LispObject* args, LispObject* body) {
+char* ulisp_symbol_string(LispObject* symbol) {
+	assert(symbol->type & LISP_SYMBOL);
+
+	return ((LispSymbol*)symbol->data)->str;
+}
+
+LispObject* ulisp_make_integer(long val) {
+	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(long));
+
+	new_object->type = LISP_INTEGER | LISP_NUMBER;
+	*(long*)new_object->data = val;
+
+	return new_object;
+}
+
+LispObject* ulisp_make_float(double val) {
+	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(double));
+
+	new_object->type = LISP_FLOAT | LISP_NUMBER;
+	*(double*)new_object->data = val;
+
+	return new_object;
+}
+
+LispObject* ulisp_make_lambda(LispObject* args, LispObject* body, GLboolean is_macro) {
 	LispObject* new_lambda = malloc(sizeof(LispObject) + sizeof(LispProc));
 	new_lambda->type = LISP_PROC;
 
@@ -47,23 +77,30 @@ LispObject* ulisp_make_lambda(LispObject* args, LispObject* body) {
 
 	proc->arguments = args;
 	proc->expression = body;
+	proc->is_macro = is_macro;
 
 	return new_lambda;
 }
 
 BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
-	if (obj1->type != LISP_SYMBOL || obj2->type != LISP_SYMBOL)
+	if (obj1 == obj2)
+		return GL_TRUE;
+
+	if (!(obj1->type & LISP_SYMBOL) ||
+		!(obj2->type & LISP_SYMBOL))
 		return GL_FALSE;
 
-	if (strcmp(*(char**)obj1->data, *(char**)obj2->data) == 0)
+	uint hash1 = ((LispSymbol*)obj1->data)->hash,
+		hash2 = ((LispSymbol*)obj2->data)->hash;
+
+	if (hash1 == hash2)
 		return GL_TRUE;
 	else
 		return GL_FALSE;
 }
 
 LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
-	assert(plist->type == LISP_CONS);
-	assert(symbol->type == LISP_SYMBOL);
+	assert(plist->type & LISP_CONS);
 
 	for (; plist != nil; plist = ulisp_cdr(plist)) {
 		LispObject* temp = ulisp_car(plist);
@@ -72,7 +109,7 @@ LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
 			return ulisp_cdr(temp);
 	}
 
-	printf("Not found: %s\n", *(char**)symbol->data);
+	printf("Not found: %s\n", ulisp_symbol_string(symbol));
 	return nil;
 }
 
@@ -91,6 +128,15 @@ LispObject* ulisp_nreverse(LispObject* obj) {
 	}
 
 	return last;
+}
+
+uint ulisp_length(LispObject* list) {
+	uint length = 0;
+
+	for(LispObject* i = list; i != nil; i = ulisp_cdr(i))
+		length++;
+
+	return length;
 }
 
 LispObject* ulisp_builtin_proc(void* function) {
@@ -127,6 +173,92 @@ LispObject* ulisp_prim_eq(LispObject* args) {
 		return nil;
 }
 
+LispObject* ulisp_prim_plus(LispObject* args) {
+	long sum = 0;
+	double fsum = 0.0;
+	GLboolean is_floating = GL_FALSE;
+
+	for(LispObject* i = args; i != nil; i = ulisp_cdr(i)) {
+		LispObject* number = ulisp_car(i);
+		assert(number->type & LISP_NUMBER);
+
+		if (number->type & LISP_FLOAT) {
+			if (!is_floating) {
+				is_floating = GL_TRUE;
+				fsum += sum;
+			}
+
+			fsum += *(double*)number->data;
+		}
+		else {
+			if (is_floating)
+				fsum += *(long*)number->data;
+			else
+				sum += *(long*)number->data;
+		}
+	}
+
+	if (is_floating)
+		return ulisp_make_float(fsum);
+
+	return ulisp_make_integer(sum);
+}
+
+LispObject* ulisp_prim_minus(LispObject* args) {
+	uint argc = ulisp_length(args);
+	assert(argc > 0);
+
+	LispObject* first = ulisp_car(args);
+	assert(first->type & LISP_INTEGER);
+
+	if (argc == 1) {
+		return ulisp_make_integer(-*(long*)first->data);
+	}
+	else {
+		long sum = *(long*)first->data;
+
+		for(LispObject* i = ulisp_cdr(args); i != nil; i = ulisp_cdr(i)) {
+			LispObject* number = ulisp_car(i);
+			assert(number->type & LISP_INTEGER);
+
+			sum -= *(long*)number->data;
+		}
+
+		return ulisp_make_integer(sum);
+	}
+}
+
+LispObject* ulisp_prim_mul(LispObject* args) {
+	long prod = 1;
+
+	for(LispObject* i = args; i != nil; i = ulisp_cdr(i)) {
+		LispObject* number = ulisp_car(i);
+		assert(number->type & LISP_INTEGER);
+
+		prod *= *(long*)number->data;
+	}
+
+	return ulisp_make_integer(prod);
+}
+
+LispObject* ulisp_prim_num_eq(LispObject* args) {
+	LispObject* a = ulisp_car(args);
+	LispObject* b = ulisp_car(ulisp_cdr(args));
+
+	assert(a->type & LISP_INTEGER && b->type & LISP_INTEGER);
+
+	if (*(long*)a->data == *(long*)b->data)
+		return tee;
+	else
+		return nil;
+}
+
+void env_push_fun(const char* name, void* function) {
+	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol(name),
+										  ulisp_builtin_proc(function)),
+							   environnement);
+}
+
 void ulisp_init(void) {
 	nil = ulisp_make_symbol("nil");
 	tee = ulisp_make_symbol("t");
@@ -134,34 +266,32 @@ void ulisp_init(void) {
 	iffe = ulisp_make_symbol("if");
 	begin = ulisp_make_symbol("begin");
 	lambda = ulisp_make_symbol("lambda");
+	mlambda = ulisp_make_symbol("mlambda");
 	define = ulisp_make_symbol("define");
 
 	environnement = ulisp_cons(ulisp_cons(nil, nil),
 							   ulisp_cons(ulisp_cons(tee, tee),
 										  nil));
 
-	LispObject* car = ulisp_builtin_proc(ulisp_prim_car);
-	LispObject* cdr = ulisp_builtin_proc(ulisp_prim_cdr);
-	LispObject* cons = ulisp_builtin_proc(ulisp_prim_cons);
-	LispObject* eq = ulisp_builtin_proc(ulisp_prim_eq);
-
-	// ((car . <PROC>) . ((cdr . <PROC>) . NIL))
-	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol("car"), car),
-							   ulisp_cons(ulisp_cons(ulisp_make_symbol("cdr"), cdr),
-										  ulisp_cons(ulisp_cons(ulisp_make_symbol("cons"), cons),
-													 ulisp_cons(ulisp_cons(ulisp_make_symbol("eq?"), eq),
-																environnement))));
+	env_push_fun("car", ulisp_prim_car);
+	env_push_fun("cdr", ulisp_prim_cdr);
+	env_push_fun("cons", ulisp_prim_cons);
+	env_push_fun("eq?", ulisp_prim_eq);
+	env_push_fun("+", ulisp_prim_plus);
+	env_push_fun("-", ulisp_prim_minus);
+	env_push_fun("*", ulisp_prim_mul);
+	env_push_fun("=", ulisp_prim_num_eq);
 }
 
 LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments) {
-	assert(proc->type == LISP_PROC || proc->type == LISP_PROC_BUILTIN);
-	assert(arguments->type == LISP_CONS || arguments == nil);
+	assert(proc->type & LISP_PROC || proc->type & LISP_PROC_BUILTIN);
+	assert(arguments->type & LISP_CONS || arguments == nil);
 
-	if (proc->type == LISP_PROC_BUILTIN) {
+	if (proc->type & LISP_PROC_BUILTIN) {
 		LispObject* (**function)(LispObject*) = (LispObject *(**)(LispObject *))&proc->data;
 		return (*function)(arguments);
 	}
-	else if (proc->type == LISP_PROC) {
+	else if (proc->type & LISP_PROC) {
 		LispProc* lisp_proc = (LispProc*)proc->data;
 		LispObject* new_env = env;
 
@@ -181,14 +311,32 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 	return NULL;
 }
 
-LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
-	if (expression->type == LISP_SYMBOL) {
-		return ulisp_assoc(env, expression);
+LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
+	if (expression->type & LISP_CONS && ulisp_car(expression)->type & LISP_SYMBOL) {
+		LispObject* proc = ulisp_assoc(env, ulisp_car(expression));
+
+		if (proc != nil && proc->type & LISP_PROC && ((LispProc*)proc->data)->is_macro)
+			return ulisp_macroexpand(ulisp_apply(proc, env, ulisp_cdr(expression)), env);
+		else
+			return expression;
 	}
 	else {
+		return expression;
+	}
+}
+
+LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
+	if (expression->type & LISP_SYMBOL) {
+		return ulisp_assoc(env, expression);
+	}
+	else if (expression->type & LISP_NUMBER) {
+		return expression;
+	}
+	else {
+		expression = ulisp_macroexpand(expression, env);
 		LispObject* applied_symbol = ulisp_car(expression);
 
-		if (applied_symbol->type == LISP_SYMBOL) {
+		if (applied_symbol->type & LISP_SYMBOL) {
 			if (ulisp_eq(applied_symbol, quote)) {
 				return ulisp_car(ulisp_cdr(expression));
 			}
@@ -212,7 +360,13 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 			}
 			else if (ulisp_eq(applied_symbol, lambda)) {
 				return ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
-										 ulisp_cdr(ulisp_cdr(expression)));
+										 ulisp_cdr(ulisp_cdr(expression)),
+										 GL_FALSE);
+			}
+			else if (ulisp_eq(applied_symbol, mlambda)) {
+				return ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
+										 ulisp_cdr(ulisp_cdr(expression)),
+										 GL_TRUE);
 			}
 			else if (ulisp_eq(applied_symbol, define)) {
 				LispObject* name = ulisp_car(ulisp_cdr(expression));
@@ -279,7 +433,22 @@ LispObject* ulisp_read_list_helper(const char* string) {
 			if (count == 0)
 				break;
 
-			list = ulisp_cons(ulisp_make_symbol(m_strndup(string + i, count)), list);
+			char* symbol_string = m_strndup(string + i, count);
+
+			long integer;
+			double floating;
+
+			int type = parse_number(symbol_string, &integer, &floating);
+
+			if (type == 0)
+				list = ulisp_cons(ulisp_make_integer(integer), list);
+			else if (type == 1)
+				list = ulisp_cons(ulisp_make_float(floating), list);
+			else
+				list = ulisp_cons(ulisp_make_symbol(symbol_string), list);
+
+			free(symbol_string);
+
 			i += count;
 		}
 	}
@@ -299,14 +468,14 @@ LispObject* ulisp_read_list(const char* string) {
 }
 
 void ulisp_print(LispObject* obj, FILE* stream) {
-	if (obj->type == LISP_SYMBOL) {
-		fprintf(stream, "%s", *((char**)obj->data));
+	if (obj->type & LISP_SYMBOL) {
+		fprintf(stream, "%s", ulisp_symbol_string(obj));
 	}
-	else if (obj->type == LISP_CONS) {
+	else if (obj->type & LISP_CONS) {
 		printf("(");
 
 		LispObject* c = obj;
-		for(; c->type == LISP_CONS; c = ulisp_cdr(c)) {
+		for(; c->type & LISP_CONS; c = ulisp_cdr(c)) {
 			ulisp_print(ulisp_car(c), stream);
 			printf(" ");
 		}
@@ -318,10 +487,10 @@ void ulisp_print(LispObject* obj, FILE* stream) {
 
 		printf(")");
 	}
-	else if (obj->type == LISP_PROC_BUILTIN) {
-		printf("<BUILTIN-PROC>");
+	else if (obj->type & LISP_PROC_BUILTIN) {
+		printf("<BUILTIN-PROC at %p>", *(void**)obj->data);
 	}
-	else if (obj->type == LISP_PROC) {
+	else if (obj->type & LISP_PROC) {
 		LispProc* proc = (LispProc*)obj->data;
 
 		printf("<PROC args: ");
@@ -329,5 +498,11 @@ void ulisp_print(LispObject* obj, FILE* stream) {
 		printf(", body: ");
 		ulisp_print(proc->expression, stdout);
 		printf(">");
+	}
+	else if (obj->type & LISP_INTEGER) {
+		printf("%ld", *(long*)obj->data);
+	}
+	else if (obj->type & LISP_FLOAT) {
+		printf("%g", *(double*)obj->data);
 	}
 }

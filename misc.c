@@ -135,15 +135,14 @@ void dynamic_array_destroy(DynamicArray* arr) {
 	arr->data = NULL;
 }
 
-uint str_hash(char* str, uint maxval) {
-	uint hash = 12;
+uint hash(uchar *str) {
+    uint hash = 5381;
+    int c;
 
-	do {
-		hash = hash << 8;
-		hash += *str;
-	} while (*(++str) != '\0');
+    while (c = *str++)
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 
-	return hash % maxval;
+    return hash;
 }
 
 HashTable* hash_table_create(uint size) {
@@ -166,7 +165,7 @@ HashTable* hash_table_create(uint size) {
 }
 
 int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
-	uint index = str_hash(key, table->size);
+	uint index = hash((uchar*)key) % table->size;
 
 	if (table->entries[index] == NULL) {	// If no collisions
 		if ((table->entries[index] = malloc(sizeof(HashTableEntry) + value_size)) == NULL)
@@ -213,14 +212,14 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 }
 
 void* hash_table_get(HashTable* table, char* key) {
-	uint index = str_hash(key, table->size);
+	uint index = hash((uchar*)key) % table->size;
 
 	HashTableEntry* entry = table->entries[index];
 
 	if (entry == NULL)
 		return NULL;
 
-	if (entry->next_entry == NULL && strcmp(key, entry->key) == 0)	// Sole entry in list
+	if (entry->next_entry == NULL || strcmp(key, entry->key) == 0)	// Sole entry in list
 		return entry->data;
 	else if (entry->next_entry == NULL)
 		return NULL;
@@ -256,13 +255,57 @@ char* m_strndup(const char* str, size_t count) {
 	return n;
 }
 
+int parse_number(char* str, long* integer, double* floating) {
+	int str_len = strlen(str);
+	GLboolean is_floating = GL_FALSE;
+
+	*integer = 0;
+
+	if (str_len <= 0)
+		return -1;
+
+	long base = 1;
+	if (*str == '-') {
+		if (str[1] == '\0')
+			return -1;
+
+		base = -1;
+		str++;
+		str_len--;
+	}
+
+	for (char* c = str + str_len; c-- != str;) {
+		if (!is_floating && *c == '.') {
+			is_floating = GL_TRUE;
+			*floating = ((double)*integer) / base;
+			base = 1;
+			continue;
+		}
+
+		if (*c < '0' || *c > '9')
+			return -1;
+
+		if (is_floating)
+			*floating += (*c - '0') * base;
+		else
+			*integer += (*c - '0') * base;
+
+		base *= 10;
+	}
+
+	if (is_floating)
+		return 1;
+
+	return 0;
+}
+
 #undef malloc
 #undef free
 
 void* debug_malloc(size_t size, const char* file, const uint line) {
 	void* return_value = malloc(size);
 
-	/* printf("Malloc %p at %s:%d\n", return_value, file, line); */
+	/* printf("Malloc %p, 0x%lx bytes at %s:%d\n", return_value, size, file, line); */
 
 	return return_value;
 }

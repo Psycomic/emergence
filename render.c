@@ -231,7 +231,8 @@ void scene_set_size(Scene* scene, float width, float height) {
 	float half_width = (float)width / 2,
 		half_height = (float)height / 2;
 
-	mat4_create_orthogonal(scene->camera.ortho_matrix, -half_width, half_width, -half_height, half_height, -2.f, 2.f);
+	mat4_create_orthogonal(scene->camera.ortho_matrix, -half_width, half_width,
+						   -half_height, half_height, -2.f, 2.f);
 
 	glViewport(0, 0, scene->camera.width, scene->camera.height);
 }
@@ -326,7 +327,9 @@ void scene_update_window_depths(Scene* scene) {
 		}
 
 		for (uint j = 0; j < window->text_bar_drawable->vertices_count; j++) {
-			float* vertex = (float*)window->text_bar_drawable->vertices + scene->window_text_bar_batch.vertex_size * j;
+			float* vertex = (float*)window->text_bar_drawable->vertices +
+				scene->window_text_bar_batch.vertex_size * j;
+
 			vertex[2] = window->depth + WINDOW_ELEMENT_DEPTH_OFFSET;
 		}
 
@@ -559,7 +562,8 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 		{ 0.6f, 0.6f, 0.6f }
 	};
 
-	window->title = text_create(&scene->text_batch, &monospaced_font, title, 15.f, window->position, title_color);
+	window->title = text_create(&scene->text_batch, &monospaced_font,
+								title, 15.f, window->position, title_color);
 
 	float* background_drawable_vertices = malloc(sizeof(float) * 4 * WINDOW_BACKGROUND_VERTEX_SIZE);
 
@@ -572,8 +576,8 @@ Window* window_create(Scene* scene, float width, float height, float* position, 
 	background_drawable_vertices[4 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
 	background_drawable_vertices[5 + WINDOW_BACKGROUND_VERTEX_SIZE * 3] = 1.f;
 
-	window->background_drawable = batch_drawable_create(&scene->windows_batch, background_drawable_vertices, 4,
-														rectangle_elements, 6);
+	window->background_drawable = batch_drawable_create(&scene->windows_batch, background_drawable_vertices,
+														4, rectangle_elements, 6);
 
 	float* text_bar_vertices = malloc(sizeof(float) * 6 * 2);
 	static uint32_t text_bar_elements[] = { 0, 1 };
@@ -642,7 +646,8 @@ void window_destroy(Scene* scene, Window* window) {
 		};
 
 		Window* error_window = window_create(scene, 400.f, 100.f, position, "ERROR");
-		widget_label_create(error_window, scene, NULL, "ATTEMPTED TO DELETE\nSOLE WINDOW", 14.f, 5.f, red, LAYOUT_PACK);
+		widget_label_create(error_window, scene, NULL, "ATTEMPTED TO DELETE\nSOLE WINDOW",
+							14.f, 5.f, red, LAYOUT_PACK);
 	}
 	else {
 		if (window->on_close != NULL)
@@ -659,8 +664,7 @@ void window_destroy(Scene* scene, Window* window) {
 		text_destroy(window->title);
 		batch_drawable_destroy(window->background_drawable);
 
-		// Reajusting the windows array
-
+		// Reajusting the windows List
 		if (window->previous != NULL)
 			window->previous->next = window->next;
 
@@ -1023,13 +1027,20 @@ void render_initialize(void) {
 
 	static Vector3 axis_position = { { 0.f, 0.f, 0.f } };
 
-	axis_shader = shader_create("./shaders/vertex_uniform_color.glsl", "./shaders/fragment_uniform_color.glsl");
-	ui_background_shader = shader_create("./shaders/vertex_batch_shader.glsl", "./shaders/fragment_batch_shader.glsl");
-	ui_text_shader = shader_create("./shaders/vertex_ui_text.glsl", "./shaders/fragment_ui_text.glsl");
-	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_button.glsl");
-	color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl");
-	text_bar_shader = shader_create("./shaders/vertex_text_bar.glsl", "./shaders/fragment_text_bar.glsl");
-	single_color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_single_color.glsl");
+	axis_shader = shader_create("./shaders/vertex_uniform_color.glsl",
+								"./shaders/fragment_uniform_color.glsl");
+	ui_background_shader = shader_create("./shaders/vertex_batch_shader.glsl",
+										 "./shaders/fragment_batch_shader.glsl");
+	ui_text_shader = shader_create("./shaders/vertex_ui_text.glsl",
+								   "./shaders/fragment_ui_text.glsl");
+	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl",
+									 "./shaders/fragment_ui_button.glsl");
+	color_shader = shader_create("./shaders/vertex_ui_background.glsl",
+								 "./shaders/fragment_uniform_color.glsl");
+	text_bar_shader = shader_create("./shaders/vertex_text_bar.glsl",
+									"./shaders/fragment_text_bar.glsl");
+	single_color_shader = shader_create("./shaders/vertex_ui_background.glsl",
+										"./shaders/fragment_single_color.glsl");
 
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
 	material_set_uniform_vec3(axis_material, AXIS_MODEL_COLOR_UNIFORM, blue);

@@ -43,9 +43,7 @@ typedef struct {
 
 typedef struct HashTableEntry {
 	char* key;
-
 	struct HashTableEntry* next_entry;
-
 	char data[];
 } HashTableEntry;
 
@@ -78,7 +76,12 @@ void dynamic_array_destroy(DynamicArray* arr);
 char* m_strdup(const char* str);
 char* m_strndup(const char* str, size_t count);
 
+// Returns 0 if integer, 1 if float, and -1 if error
+int parse_number(char* str, long* integer, double* floating);
+
 void m_bzero(void* dst, size_t size);
+
+uint hash(uchar *str);
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);
