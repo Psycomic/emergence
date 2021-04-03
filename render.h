@@ -115,26 +115,26 @@ typedef struct Window {
 // What you see on the screen. It is basically the container of every
 // graphical aspect of the game : the 3D view and the 2D UI.
 typedef struct Scene {
+	Batch windows_batch;		// Respectively the batch to draw window backgrounds, the batch to
+	Batch text_batch;			// draw text and the batch to draw the title bar of the windows
+	Batch window_text_bar_batch;
+
 	StateContext gl;
-
 	DynamicArray drawables;	// Drawables array
-
-	uint64_t windows_count;
-
-	Window* last_window;
-	Window* selected_window;
-
 	Camera camera;
-
-	Batch windows_batch;		// Respectively the batch to draw
-								// window backgrounds, the batch to
-	Batch text_batch;			// draw text and the batch to draw the
-	Batch window_text_bar_batch; // title bar of the windows
 
 	GLFWwindow* context;
 
+	Window* last_window;
+	Window* selected_window;
+	uint64_t windows_count;
+
+	uint quad_vao, quad_vbo;
+
 	uint glfw_last_character;
 	uint flags;
+	uint fbo;
+	uint fbo_color_buffer;
 } Scene;
 
 extern const Vector3 white;

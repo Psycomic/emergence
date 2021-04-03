@@ -63,10 +63,6 @@ void rectangle_vertices_set(float* rectangle_vertices, float width, float height
 	rectangle_vertices[stride * 3] = width + x; rectangle_vertices[stride * 3 + 1] = height + y;
 }
 
-Drawable* drawable_allocate(uint buffer_count) {
-	return malloc(sizeof(Drawable) + buffer_count * sizeof(Buffer));
-}
-
 /* Create an abstraction over basic openGL calls */
 void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
 				   Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
@@ -299,6 +295,9 @@ void get_opengl_errors_f(const char* file, int line) {
 			break;
 		case GL_INVALID_FRAMEBUFFER_OPERATION:
 			printf("INVALID FRAMEBUFFER OPERATION!\n");
+			break;
+		default:
+			printf("Unknown error");
 			break;
 		}
 

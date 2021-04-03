@@ -104,8 +104,8 @@ void new_window_callback(Widget* widget, Event* evt) {
 int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
 
-	main_file_contents = read_file("main.c");
-	main_file_contents[3000] = '\0';
+	main_file_contents = read_file("lisp/core.ul");
+	/* main_file_contents[3000] = '\0'; */
 
 	if (initialize_everything() != 0)
 		return -1;
@@ -176,7 +176,7 @@ int main(void) {
 	update_fractal();
 
 	// Creating a window and initialize an opengl context
-	if ((scene = scene_create(camera_position, 800, 600, "Emergence")) == NULL)
+	if ((scene = scene_create(camera_position, 1200, 900, "Emergence")) == NULL)
 		return -1;
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");

@@ -43,6 +43,7 @@ static GLuint color_shader;
 static GLuint axis_shader;
 static GLuint text_bar_shader;
 static GLuint single_color_shader;
+static GLuint screen_shader;
 
 static Font monospaced_font;
 
@@ -170,6 +171,34 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	glfwSwapInterval(1);			// Disable double buffering
 
+	// Initializing framebuffer
+	glGenFramebuffers(1, &scene->fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, scene->fbo);
+
+	glGenTextures(1, &scene->fbo_color_buffer);
+	glBindTexture(GL_TEXTURE_2D, scene->fbo_color_buffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene->fbo_color_buffer, 0);
+
+	uint rbo;
+	glGenRenderbuffers(1, &rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete!\n");
+		return NULL;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 	// OpenGL settings
 	StateGlEnable(&scene->gl, GL_BLEND);			// Enable blend
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
@@ -191,9 +220,27 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	scene->last_window = NULL;
 
+	float quadVertices[] = {
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+		1.0f, -1.0f,  1.0f, 0.0f,
+
+        -1.0f,  1.0f,  0.0f, 1.0f,
+		1.0f, -1.0f,  1.0f, 0.0f,
+		1.0f,  1.0f,  1.0f, 1.0f
+    };
+
+    glGenVertexArrays(1, &scene->quad_vao);
+    glGenBuffers(1, &scene->quad_vbo);
+    glBindVertexArray(scene->quad_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, scene->quad_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
 	Material* window_batch_material = material_create(ui_background_shader, NULL, 0);
-
-
 	uint64_t windows_attributes_sizes[] = {
 		3, 1, 2, 2 // Position, transparency, texture coords, quad size
 	};
@@ -250,6 +297,8 @@ void scene_next_window(Scene* scene) {
 }
 
 void scene_draw(Scene* scene, Vector3 clear_color) {
+	glBindFramebuffer(GL_FRAMEBUFFER, scene->fbo);
+
 	StateGlEnable(&scene->gl, GL_STENCIL_TEST);
 	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
 
@@ -306,6 +355,18 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		glStencilMask(0xFF);
 		glStencilFunc(GL_ALWAYS, 1, 0xFF);
 	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	glClearColor(1.f, 0.0f, 1.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	StateGlDisable(&scene->gl, GL_DEPTH_TEST);
+
+	glUseProgram(screen_shader);
+	glBindVertexArray(scene->quad_vao);
+	glBindTexture(GL_TEXTURE_2D, scene->fbo_color_buffer);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 // Set windows' depth correspondingly to their priority rank
@@ -1027,20 +1088,14 @@ void render_initialize(void) {
 
 	static Vector3 axis_position = { { 0.f, 0.f, 0.f } };
 
-	axis_shader = shader_create("./shaders/vertex_uniform_color.glsl",
-								"./shaders/fragment_uniform_color.glsl");
-	ui_background_shader = shader_create("./shaders/vertex_batch_shader.glsl",
-										 "./shaders/fragment_batch_shader.glsl");
-	ui_text_shader = shader_create("./shaders/vertex_ui_text.glsl",
-								   "./shaders/fragment_ui_text.glsl");
-	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl",
-									 "./shaders/fragment_ui_button.glsl");
-	color_shader = shader_create("./shaders/vertex_ui_background.glsl",
-								 "./shaders/fragment_uniform_color.glsl");
-	text_bar_shader = shader_create("./shaders/vertex_text_bar.glsl",
-									"./shaders/fragment_text_bar.glsl");
-	single_color_shader = shader_create("./shaders/vertex_ui_background.glsl",
-										"./shaders/fragment_single_color.glsl");
+	axis_shader = shader_create("./shaders/vertex_uniform_color.glsl", "./shaders/fragment_uniform_color.glsl");
+	ui_background_shader = shader_create("./shaders/vertex_batch_shader.glsl", "./shaders/fragment_batch_shader.glsl");
+	ui_text_shader = shader_create("./shaders/vertex_ui_text.glsl", "./shaders/fragment_ui_text.glsl");
+	ui_button_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_ui_button.glsl");
+	color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_uniform_color.glsl");
+	text_bar_shader = shader_create("./shaders/vertex_text_bar.glsl", "./shaders/fragment_text_bar.glsl");
+	single_color_shader = shader_create("./shaders/vertex_ui_background.glsl", "./shaders/fragment_single_color.glsl");
+	screen_shader = shader_create("./shaders/vertex_screen.glsl", "./shaders/fragment_screen.glsl");
 
 	axis_material = material_create(axis_shader, axis_uniforms, ARRAY_SIZE(axis_uniforms));
 	material_set_uniform_vec3(axis_material, AXIS_MODEL_COLOR_UNIFORM, blue);
