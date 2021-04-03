@@ -105,7 +105,6 @@ int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
 
 	main_file_contents = read_file("lisp/core.ul");
-	/* main_file_contents[3000] = '\0'; */
 
 	if (initialize_everything() != 0)
 		return -1;

@@ -135,6 +135,7 @@ typedef struct Scene {
 	uint flags;
 	uint fbo;
 	uint fbo_color_buffer;
+	uint rbo;
 } Scene;
 
 extern const Vector3 white;

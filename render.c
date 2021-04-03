@@ -141,6 +141,18 @@ void scene_quit(Scene* scene) {
 	scene->flags |= SCENE_EVENT_QUIT;
 }
 
+void scene_update_framebuffer(Scene* scene, int width, int height) {
+	glBindTexture(GL_TEXTURE_2D, scene->fbo_color_buffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindRenderbuffer(GL_RENDERBUFFER, scene->rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
 Scene* scene_create(Vector3 camera_position, int width, int height, const char* title) {
 	Scene* scene = malloc(sizeof(Scene)); // Allocating the scene object
 	assert(scene != NULL);
@@ -176,21 +188,12 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	glBindFramebuffer(GL_FRAMEBUFFER, scene->fbo);
 
 	glGenTextures(1, &scene->fbo_color_buffer);
-	glBindTexture(GL_TEXTURE_2D, scene->fbo_color_buffer);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glGenRenderbuffers(1, &scene->rbo);
+
+	scene_update_framebuffer(scene, width, height);
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene->fbo_color_buffer, 0);
-
-	uint rbo;
-	glGenRenderbuffers(1, &rbo);
-	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, scene->rbo);
 
 	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 		printf("ERROR::FRAMEBUFFER:: Framebuffer is not complete!\n");
@@ -282,6 +285,7 @@ void scene_set_size(Scene* scene, float width, float height) {
 						   -half_height, half_height, -2.f, 2.f);
 
 	glViewport(0, 0, scene->camera.width, scene->camera.height);
+	scene_update_framebuffer(scene, width, height);
 }
 
 void scene_next_window(Scene* scene) {
