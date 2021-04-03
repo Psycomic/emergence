@@ -3,14 +3,15 @@
 #include <assert.h>
 #include <string.h>
 
-#define IS_BLANK(x) ((x) == ' ' || (x) == '\n')
+#define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 #define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, stdout); puts("");
 
-LispObject *environnement, *nil, *tee, *quote, *iffe, *begin, *lambda, *mlambda, *define;
+LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
+	*lambda, *mlambda, *define, *rest, *not_found;
 
 LispObject* ulisp_cons(LispObject* first, LispObject* second) {
 	LispObject* new_object = malloc(sizeof(LispObject) + 2 * sizeof(LispObject*));
-	new_object->type = LISP_CONS;
+	new_object->type = LISP_CONS | LISP_LIST;
 
 	((ConsCell*)new_object->data)->car = first;
 	((ConsCell*)new_object->data)->cdr = second;
@@ -100,7 +101,7 @@ BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
 }
 
 LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
-	assert(plist->type & LISP_CONS);
+	assert(plist->type & LISP_LIST);
 
 	for (; plist != nil; plist = ulisp_cdr(plist)) {
 		LispObject* temp = ulisp_car(plist);
@@ -109,8 +110,7 @@ LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
 			return ulisp_cdr(temp);
 	}
 
-	printf("Not found: %s\n", ulisp_symbol_string(symbol));
-	return nil;
+	return not_found;
 }
 
 LispObject* ulisp_nreverse(LispObject* obj) {
@@ -205,38 +205,77 @@ LispObject* ulisp_prim_plus(LispObject* args) {
 }
 
 LispObject* ulisp_prim_minus(LispObject* args) {
-	uint argc = ulisp_length(args);
-	assert(argc > 0);
+	long sum;
+	double fsum;
+	GLboolean is_floating;
 
 	LispObject* first = ulisp_car(args);
-	assert(first->type & LISP_INTEGER);
+	if (first->type & LISP_INTEGER) {
+		sum = *(long*)first->data;
+		fsum = *(long*)first->data;
 
-	if (argc == 1) {
-		return ulisp_make_integer(-*(long*)first->data);
+		is_floating = GL_FALSE;
 	}
-	else {
-		long sum = *(long*)first->data;
+	else if (first->type & LISP_FLOAT) {
+		sum = *(double*)first->data;
+		fsum = *(double*)first->data;
 
-		for(LispObject* i = ulisp_cdr(args); i != nil; i = ulisp_cdr(i)) {
-			LispObject* number = ulisp_car(i);
-			assert(number->type & LISP_INTEGER);
+		is_floating = GL_TRUE;
+	}
 
-			sum -= *(long*)number->data;
+	for(LispObject* i = ulisp_cdr(args); i != nil; i = ulisp_cdr(i)) {
+		LispObject* number = ulisp_car(i);
+		assert(number->type & LISP_NUMBER);
+
+		if (number->type & LISP_FLOAT) {
+			if (!is_floating) {
+				is_floating = GL_TRUE;
+				fsum += sum;
+			}
+
+			fsum -= *(double*)number->data;
 		}
-
-		return ulisp_make_integer(sum);
+		else {
+			if (is_floating)
+				fsum -= *(long*)number->data;
+			else
+				sum -= *(long*)number->data;
+		}
 	}
+
+	if (is_floating)
+		return ulisp_make_float(fsum);
+
+	return ulisp_make_integer(sum);
 }
 
 LispObject* ulisp_prim_mul(LispObject* args) {
 	long prod = 1;
+	double fprod = 1.0;
+	GLboolean is_floating = GL_FALSE;
 
 	for(LispObject* i = args; i != nil; i = ulisp_cdr(i)) {
 		LispObject* number = ulisp_car(i);
-		assert(number->type & LISP_INTEGER);
+		assert(number->type & LISP_NUMBER);
 
-		prod *= *(long*)number->data;
+		if (number->type & LISP_FLOAT) {
+			if (!is_floating) {
+				is_floating = GL_TRUE;
+				fprod *= prod;
+			}
+
+			fprod *= *(double*)number->data;
+		}
+		else {
+			if (is_floating)
+				fprod *= *(long*)number->data;
+			else
+				prod *= *(long*)number->data;
+		}
 	}
+
+	if (is_floating)
+		return ulisp_make_float(fprod);
 
 	return ulisp_make_integer(prod);
 }
@@ -245,12 +284,60 @@ LispObject* ulisp_prim_num_eq(LispObject* args) {
 	LispObject* a = ulisp_car(args);
 	LispObject* b = ulisp_car(ulisp_cdr(args));
 
-	assert(a->type & LISP_INTEGER && b->type & LISP_INTEGER);
+	assert(a->type & LISP_NUMBER && b->type & LISP_NUMBER);
 
-	if (*(long*)a->data == *(long*)b->data)
-		return tee;
-	else
-		return nil;
+	if (a->type & LISP_INTEGER) {
+		if (*(long*)a->data == *(long*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+	else {
+	if (*(double*)a->data == *(double*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+}
+
+LispObject* ulisp_prim_num_inf(LispObject* args) {
+	LispObject* a = ulisp_car(args);
+	LispObject* b = ulisp_car(ulisp_cdr(args));
+
+	assert(a->type & LISP_NUMBER && b->type & LISP_NUMBER);
+
+	if (a->type & LISP_INTEGER) {
+		if (*(long*)a->data < *(long*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+	else {
+	if (*(double*)a->data < *(double*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+}
+
+LispObject* ulisp_prim_num_sup(LispObject* args) {
+	LispObject* a = ulisp_car(args);
+	LispObject* b = ulisp_car(ulisp_cdr(args));
+
+	assert(a->type & LISP_NUMBER && b->type & LISP_NUMBER);
+
+	if (a->type & LISP_INTEGER) {
+		if (*(long*)a->data > *(long*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+	else {
+	if (*(double*)a->data > *(double*)b->data)
+			return tee;
+		else
+			return nil;
+	}
 }
 
 void env_push_fun(const char* name, void* function) {
@@ -261,6 +348,8 @@ void env_push_fun(const char* name, void* function) {
 
 void ulisp_init(void) {
 	nil = ulisp_make_symbol("nil");
+	nil->type |= LISP_LIST;
+
 	tee = ulisp_make_symbol("t");
 	quote = ulisp_make_symbol("quote");
 	iffe = ulisp_make_symbol("if");
@@ -268,6 +357,8 @@ void ulisp_init(void) {
 	lambda = ulisp_make_symbol("lambda");
 	mlambda = ulisp_make_symbol("mlambda");
 	define = ulisp_make_symbol("define");
+	rest = ulisp_make_symbol("&rest");
+	not_found = ulisp_make_symbol("not-found");
 
 	environnement = ulisp_cons(ulisp_cons(nil, nil),
 							   ulisp_cons(ulisp_cons(tee, tee),
@@ -281,11 +372,27 @@ void ulisp_init(void) {
 	env_push_fun("-", ulisp_prim_minus);
 	env_push_fun("*", ulisp_prim_mul);
 	env_push_fun("=", ulisp_prim_num_eq);
+	env_push_fun(">", ulisp_prim_num_sup);
+	env_push_fun("<", ulisp_prim_num_inf);
+
+	ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil);
+}
+
+LispObject* ulisp_append(LispObject* a, LispObject* b) {
+	assert(a->type & LISP_LIST && b->type & LISP_LIST);
+
+	if (ulisp_eq(a, nil))
+		return b;
+	else if (ulisp_eq(b, nil))
+		return a;
+	else
+		return ulisp_cons(ulisp_car(a),
+						  ulisp_append(ulisp_cdr(a), b));
 }
 
 LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments) {
 	assert(proc->type & LISP_PROC || proc->type & LISP_PROC_BUILTIN);
-	assert(arguments->type & LISP_CONS || arguments == nil);
+	assert(arguments->type & LISP_LIST);
 
 	if (proc->type & LISP_PROC_BUILTIN) {
 		LispObject* (**function)(LispObject*) = (LispObject *(**)(LispObject *))&proc->data;
@@ -299,7 +406,18 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 			*arg_name = lisp_proc->arguments;
 
 		while (applied_arg != nil && arg_name != nil) {
-			new_env = ulisp_cons(ulisp_cons(ulisp_car(arg_name), ulisp_car(applied_arg)), new_env);
+			LispObject* arg = ulisp_car(arg_name);
+
+			if (ulisp_eq(arg, rest)) {
+				new_env = ulisp_cons(ulisp_cons(ulisp_car(ulisp_cdr(arg_name)),
+												applied_arg),
+									 new_env);
+
+				break;
+			}
+
+			new_env = ulisp_cons(ulisp_cons(ulisp_car(arg_name),
+											ulisp_car(applied_arg)), new_env);
 
 			applied_arg = ulisp_cdr(applied_arg);
 			arg_name = ulisp_cdr(arg_name);
@@ -313,7 +431,7 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 
 LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
 	if (expression->type & LISP_CONS && ulisp_car(expression)->type & LISP_SYMBOL) {
-		LispObject* proc = ulisp_assoc(env, ulisp_car(expression));
+		LispObject* proc = ulisp_assoc(ulisp_append(env, environnement), ulisp_car(expression));
 
 		if (proc != nil && proc->type & LISP_PROC && ((LispProc*)proc->data)->is_macro)
 			return ulisp_macroexpand(ulisp_apply(proc, env, ulisp_cdr(expression)), env);
@@ -327,13 +445,22 @@ LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
 
 LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 	if (expression->type & LISP_SYMBOL) {
-		return ulisp_assoc(env, expression);
+		LispObject* exp = ulisp_assoc(ulisp_append(env, environnement), expression);
+
+		if (ulisp_eq(exp, not_found)) {
+			printf("Not found: %s\n", ulisp_symbol_string(expression));
+			ulisp_print(env, stdout);
+			puts("");
+		}
+
+		return exp;
 	}
 	else if (expression->type & LISP_NUMBER) {
 		return expression;
 	}
 	else {
 		expression = ulisp_macroexpand(expression, env);
+
 		LispObject* applied_symbol = ulisp_car(expression);
 
 		if (applied_symbol->type & LISP_SYMBOL) {
@@ -373,9 +500,7 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 				LispObject* value = ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(expression))), env);
 
 				LispObject* pair = ulisp_cons(name, value);
-
 				environnement = ulisp_cons(pair, environnement);
-				env = ulisp_cons(pair, env);
 
 				return name;
 			}

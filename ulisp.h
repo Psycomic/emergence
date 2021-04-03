@@ -12,7 +12,8 @@ enum ObjectType {
 	LISP_PROC_BUILTIN = 1 << 3,
 	LISP_INTEGER = 1 << 4,
 	LISP_FLOAT = 1 << 5,
-	LISP_NUMBER = 1 << 6
+	LISP_NUMBER = 1 << 6,
+	LISP_LIST = 1 << 7
 };
 
 typedef struct {
@@ -35,7 +36,7 @@ typedef struct {
 	char str[];
 } LispSymbol;
 
-extern LispObject *environnement;
+extern LispObject *nil;
 
 LispObject* ulisp_read_list(const char* string);
 LispObject* ulisp_eval(LispObject* expression, LispObject* env);

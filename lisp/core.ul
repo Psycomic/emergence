@@ -1,0 +1,49 @@
+(define list
+	(lambda (&rest args)
+	  args))
+
+(define null?
+	(lambda (x)
+	  (if x nil t)))
+
+(define append
+	(lambda (a b)
+	  (if (null? a)
+		  b
+		  (if (null? b)
+			  a
+			  (cons (car a)
+					(append (cdr a) b))))))
+
+(define '
+  (mlambda (sym)
+		   (list (quote quote) sym)))
+
+(define defun
+  (mlambda (name lambda-list &rest body)
+		   (list (' define) name
+				 (append (list (' lambda) lambda-list)
+						 body))))
+
+(define defmacro
+  (mlambda (name lambda-list &rest body)
+		   (list (' define) name
+				 (append (list (' mlambda) lambda-list)
+						 body))))
+
+(defun map (fn lst)
+  (if (null? lst)
+	  nil
+	  (cons (fn (car lst))
+			(map fn (cdr lst)))))
+
+(defun 1+ (x)
+  (+ x 1))
+
+(defun 1- (x)
+  (- x 1))
+
+(defun ! (x)
+  (if (< x 1)
+	  1
+	  (* x (! (1- x)))))

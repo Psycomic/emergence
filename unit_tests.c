@@ -48,7 +48,7 @@ void execute_tests(void) {
 		if (strcmp(buffer, ":q\n") == 0)
 			break;
 
-		LispObject* obj = ulisp_eval(ulisp_read_list(buffer), environnement);
+		LispObject* obj = ulisp_eval(ulisp_read_list(buffer), nil);
 		ulisp_print(obj, stdout);
  	}
 }
