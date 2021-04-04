@@ -370,6 +370,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	glUseProgram(screen_shader);
 	glBindVertexArray(scene->quad_vao);
 	glBindTexture(GL_TEXTURE_2D, scene->fbo_color_buffer);
+	glUniform1f(glGetUniformLocation(screen_shader, "time"), global_time);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 

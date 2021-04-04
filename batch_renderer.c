@@ -182,7 +182,7 @@ void batch_draw_drawable(BatchDrawable* batch_drawable, StateContext* gl, float*
 
 	glBindVertexArray(batch->vao);
 	glDrawElements(batch->draw_type, batch_drawable->elements_count,
-		GL_UNSIGNED_INT, (void*)batch_drawable->index_buffer_offset);
+				   GL_UNSIGNED_INT, (void*)batch_drawable->index_buffer_offset);
 	glBindVertexArray(0);
 
 	get_opengl_errors();
