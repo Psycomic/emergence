@@ -78,14 +78,17 @@ void dynamic_array_create_fn(DynamicArray* arr, size_t element_size) {
 	arr->data = malloc(arr->capacity * arr->element_size);
 }
 
-void* dynamic_array_push_back(DynamicArray* arr) {
-	if (arr->size == arr->capacity) {
-		arr->capacity *= 2;
+void* dynamic_array_push_back(DynamicArray* arr, size_t count) {
+	if (arr->size + count >= arr->capacity) {
+		arr->capacity = arr->capacity * 2 + count;
 
 		arr->data = realloc(arr->data, arr->capacity * arr->element_size);
 	}
 
-	return ((uchar*)arr->data) + arr->size++ * arr->element_size;
+	void* return_data = ((uchar*)arr->data) + arr->size * arr->element_size;
+	arr->size += count;
+
+	return return_data;
 }
 
 void* dynamic_array_at(DynamicArray* arr, uint index) {
@@ -122,9 +125,6 @@ void dynamic_array_remove(DynamicArray* arr, uint id) {
 
 void dynamic_array_clear(DynamicArray* arr) {
 	arr->size = 0;
-	arr->capacity = DYNAMIC_ARRAY_DEFAULT_CAPACITY;
-
-	arr->data = realloc(arr->data, arr->element_size * arr->capacity);
 }
 
 void dynamic_array_destroy(DynamicArray* arr) {
@@ -139,7 +139,7 @@ uint hash(uchar *str) {
     uint hash = 5381;
     int c;
 
-    while (c = *str++)
+    while ((c = *str++))
         hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 
     return hash;

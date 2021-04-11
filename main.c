@@ -18,7 +18,7 @@ void usleep(clock_t time) {
 #endif // _WIN32
 #ifdef __linux__
 
-#include <unistd.h>
+extern int usleep (unsigned int __useconds);
 
 #endif // __linux__
 
@@ -27,6 +27,7 @@ void usleep(clock_t time) {
 #include "physics.h"
 #include "images.h"
 #include "noise.h"
+#include "psyche.h"
 
 #define WORLD_STEP 0.1f
 
@@ -281,9 +282,30 @@ int main(void) {
 
 	uint64_t count = 0;
 
+	ps_init((Vector2) { { 1200, 900 } });
+
 	clock_t start = clock();
 	while (!scene_should_close(scene)) {
 		scene_draw(scene, background_color);
+
+		ps_begin_path();		/* Red image */
+		ps_line_to(-100, -100);
+		ps_line_to(100, -100);
+		ps_line_to(100, 100);
+		ps_line_to(-100, 100);
+		ps_close_path();
+
+ 		ps_fill((Vector4){ { 1.f, 1.f, 1.f, 1.f } }, PS_TEXTURED_POLY);
+
+		ps_begin_path();		/* Blue circle */
+		for (float i = 0.f; i < M_PI * 2; i += 0.1f)
+			ps_line_to(cosf(i) * 100, sinf(i) * 100);
+		ps_close_path();
+
+ 		ps_fill((Vector4){ { 0.f, 0.f, 1.f, 1.f } }, PS_FILLED_POLY);
+
+		ps_render();
+
 		scene_handle_events(scene, window);
 
 		glfwSwapBuffers(window);
@@ -297,7 +319,7 @@ int main(void) {
 		}
 
 		clock_t end = clock();
-		clock_t* delta = dynamic_array_push_back(&frames);
+		clock_t* delta = dynamic_array_push_back(&frames, 1);
 		*delta = end - start;
 
 		global_time += ((float)*delta) / CLOCKS_PER_SEC;

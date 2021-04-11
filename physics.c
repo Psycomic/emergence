@@ -5,7 +5,6 @@
 #include <stdlib.h>
 
 #include "linear_algebra.h"
-#include "stack_allocator.h"
 
 #define DEFAULT_WORLD_CAPACITY 10
 

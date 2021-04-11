@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include <string.h>
 
@@ -28,6 +29,11 @@ void vector2_neg(Vector2* dest, Vector2 a) {
 	dest->x = -a.x;
 	dest->y = -a.y;
 }
+
+void vector2_scalar_mul(Vector2* dest, Vector2 a, float s) {
+	dest->x = a.x * s;
+	dest->y = a.y * s;
+};
 
 void vector2_rotate(Vector2* dest, Vector2 a, float angle) {
 	float angle_cos = cosf(angle),
@@ -435,4 +441,29 @@ Collision shape_shape_collide(Shape* shape1, Shape* shape2) {
 	}
 
 	return result;
+}
+
+Vector4 get_aabb(Vector2* vertices, uint64_t vertices_count) {
+	Vector4 aabb = {
+		.x = FLT_MAX,
+		.y = FLT_MAX,
+		.z = -FLT_MAX,
+		.w = -FLT_MAX
+	};
+
+	for (uint i = 0; i < vertices_count; i++) {
+		Vector2 position = vertices[i];
+
+		if (position.x < aabb.x)
+			aabb.x = position.x;
+		if (position.y < aabb.y)
+			aabb.y = position.y;
+
+		if (position.x > aabb.z)
+			aabb.z = position.x;
+		if (position.y > aabb.w)
+			aabb.w = position.y;
+	}
+
+	return aabb;
 }

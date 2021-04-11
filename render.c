@@ -10,10 +10,10 @@
 
 #include "misc.h"
 #include "linear_algebra.h"
-#include "stack_allocator.h"
 #include "render.h"
 #include "drawable.h"
 #include "batch_renderer.h"
+#include "psyche.h"
 
 #define SCENE_DEFAULT_CAPACITY 10
 #define CAMERA_SPEED 0.1f
@@ -414,7 +414,7 @@ Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint ele
 								Material* material, GLenum mode, Vector3* position, GLuint* textures,
 								uint textures_count, uint flags)
 {
-	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables);
+	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables, 1);
 
 	*drawable_pos = malloc(sizeof(Drawable) + sizeof(Buffer) * declarations_count);
 

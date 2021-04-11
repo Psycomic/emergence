@@ -2,6 +2,7 @@
 #define LINEAR_ALGEBRA_HEADER
 
 typedef unsigned int uint;
+typedef unsigned long uint64_t;
 typedef unsigned char BOOL;
 
 /// A collection of 3 floats for linear algebra
@@ -41,6 +42,7 @@ typedef struct {
 void vector2_add(Vector2* dest, Vector2 a, Vector2 b);
 void vector2_sub(Vector2* dest, Vector2 a, Vector2 b);
 void vector2_neg(Vector2* dest, Vector2 a);
+void vector2_scalar_mul(Vector2* dest, Vector2 a, float s);
 void vector2_rotate(Vector2* dest, Vector2 a, float angle);
 
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b);
@@ -71,5 +73,7 @@ float triangle_line_distance(Vector3 triangle_normal, Vector3 triangle_point, Ve
 
 Collision triangle_triangle_collide(Vector3* triangle1, Vector3* triangle2);
 Collision shape_shape_collide(Shape* shape1, Shape* shape2);
+
+Vector4 get_aabb(Vector2* vertices, uint64_t vertices_count);
 
 #endif
