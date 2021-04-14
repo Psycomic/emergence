@@ -5,20 +5,22 @@
 #include <assert.h>
 #include <math.h>
 
-GLuint ps_vbo;
-GLuint ps_ibo;
+static GLuint ps_vbo;
+static GLuint ps_ibo;
 
-GLuint ps_vao;
+static GLuint ps_vao;
 
-GLuint ps_shader;
-GLuint ps_matrix_location;
-GLuint ps_texture_location;
+static GLuint ps_shader;
+static GLuint ps_matrix_location;
+static GLuint ps_texture_location;
 
-PsDrawData ps_ctx;
-PsPath ps_current_path;
-PsAtlas ps_atlas;
+static PsDrawData ps_ctx;
+static PsAtlas ps_atlas;
 
-GLuint ps_default_texture;
+static PsPath ps_current_path;
+
+static PsFont ps_monospaced_font;
+static PsFont ps_current_font;
 
 extern float global_time;
 
@@ -41,39 +43,68 @@ void ps_draw_list_init(PsDrawList* list) {
 	ps_draw_cmd_init(cmd, 0);
 }
 
-void ps_atlas_init(const char* image_path) {
-	Image image;
-	if (image_load_bmp(&image, image_path) != 0)
-		assert(0);
+void ps_atlas_init(Image* image) {
+	ps_atlas.width = image->width;
+	ps_atlas.height = image->height;
 
-	ps_atlas.width = image.width;
-	ps_atlas.height = image.height;
+	image->data[0] = 255;
+	image->data[1] = 255;
+	image->data[2] = 255;
+	image->data[3] = 255;
 
-	image.data[0] = 255;
-	image.data[1] = 255;
-	image.data[2] = 255;
+	ps_atlas.texture_id = texture_create(image);
+}
 
-	ps_atlas.texture_id = texture_create(&image);
+void ps_resized(float width, float height) {
+	ps_ctx.display_size.x = width;
+	ps_ctx.display_size.y = height;
+}
+
+void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t glyph_height, uint32_t width, uint32_t height) {
+	font->glyph_width = glyph_width;
+	font->glyph_height = glyph_height;
+	font->texture_width = width;
+	font->texture_height = height;
+
+	if (image_load_bmp(&font->text_atlas, path)) {
+		fprintf(stderr, "Failed to load font %s!\n", path);
+		exit(-1);
+	}
+
+	uint8_t* new_data = malloc(font->text_atlas.height * font->text_atlas.width * 4);
+	uint8_t* old_data = font->text_atlas.data;
+
+	for (uint64_t i = 0; i < font->text_atlas.height; i++) {
+		for (uint64_t j = 0; j < font->text_atlas.width; j++) {
+			new_data[i * font->text_atlas.width * 4 + j * 4]     = 255;
+			new_data[i * font->text_atlas.width * 4 + j * 4 + 1] = 255;
+			new_data[i * font->text_atlas.width * 4 + j * 4 + 2] = 255;
+			new_data[i * font->text_atlas.width * 4 + j * 4 + 3] = old_data[i * font->text_atlas.width * 3 + j * 3 + 2];
+		}
+	}
+
+	free(font->text_atlas.data);
+
+	font->text_atlas.data = new_data;
+	font->text_atlas.color_encoding = GL_BGRA;
 }
 
 void ps_init(Vector2 display_size) {
-	ps_atlas_init("./images/lain.bmp");
-
+	// Creating buffers
 	glGenBuffers(1, &ps_vbo);
 	glGenBuffers(1, &ps_ibo);
 
+	// Creating shader
 	ps_shader = shader_create("shaders/vertex_psyche.glsl", "shaders/fragment_psyche.glsl");
 	ps_matrix_location = glGetUniformLocation(ps_shader, "matrix_transform");
 	ps_texture_location = glGetUniformLocation(ps_shader, "tex");
 
 	glGenVertexArrays(1, &ps_vao);
-
 	m_bzero(&ps_ctx, sizeof(ps_ctx));
-
 	ps_ctx.display_size = display_size;
 
 	// Initializing draw lists with one draw list
-	ps_ctx.draw_lists = calloc(32, sizeof(PsDrawList*));
+	ps_ctx.draw_lists = calloc(5, sizeof(PsDrawList*));
 	ps_ctx.draw_lists[ps_ctx.draw_lists_count++] = calloc(1, sizeof(PsDrawList));
 
 	ps_draw_list_init(ps_ctx.draw_lists[0]);
@@ -81,6 +112,12 @@ void ps_init(Vector2 display_size) {
 	m_bzero(&ps_current_path, sizeof(ps_current_path));
 	DYNAMIC_ARRAY_CREATE(&ps_current_path.points, Vector2);
 	ps_current_path.thickness = 5.f;
+
+	// Initializing font
+	ps_font_init(&ps_monospaced_font, "./fonts/Monospace.bmp", 19, 32, 304, 512);
+	ps_current_font = ps_monospaced_font;
+
+	ps_atlas_init(&ps_current_font.text_atlas);
 }
 
 void ps_draw_list_clear(PsDrawList* cmd_list) {
@@ -185,8 +222,6 @@ void ps_fill(Vector4 color, uint32_t flags) {
 		.y = 0.f
 	};
 
-	printf("Pixel %.2f %.2f\n", white_pixel.x, white_pixel.y);
-
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
@@ -233,4 +268,100 @@ void ps_fill(Vector4 color, uint32_t flags) {
 	cmd->elements_count += elements_count;
 
 	ps_current_path.flags &= ~PS_PATH_BEING_USED;
+}
+
+void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
+	uint64_t text_length = strlen(str),
+		line_return_count;
+
+	const char* s = str;
+
+	for (line_return_count = 0; s[line_return_count];
+		 s[line_return_count] == '\n' ? line_return_count++ : *s++);
+
+	text_length -= line_return_count;
+
+	PsDrawList* list = ps_ctx.draw_lists[0];
+	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
+
+	PsVert* text_vertices = dynamic_array_push_back(&list->vbo, text_length * 4);
+	PsIndex* text_indexes = dynamic_array_push_back(&list->ibo, text_length * 6);
+
+	const float	glyph_width = ps_current_font.glyph_width,
+		glyph_height = ps_current_font.glyph_height,
+		height = ps_current_font.texture_height,
+		width = ps_current_font.texture_width,
+		half_width = width / glyph_width,
+		half_height = height / glyph_height;
+
+	const int divisor = width / glyph_width;
+
+	int y_stride = 0;
+	uint64_t element_index = 0;
+
+	const float size_height = size,
+		size_width = size * (glyph_width / glyph_height);
+
+	for (uint64_t i = 0, j = 0; str[j] != '\0'; j++) {
+		if (str[j] == '\n') {
+			y_stride--;
+			i = 0;
+		}
+		else {
+			char index = str[j];
+
+			float x_pos = ((index % divisor) * glyph_width) / width,
+				y_pos = (1.f - 1 / half_height) - ((index / divisor) * glyph_height) / height;
+
+			Vector2 uv_up_left = { { x_pos, y_pos } };
+			Vector2 uv_up_right = { { x_pos + 1.f / half_width, y_pos } };
+			Vector2 uv_down_left = { { x_pos, (y_pos + (1.f / half_height)) } };
+			Vector2 uv_down_right = { { x_pos + 1.f / half_width, (y_pos + (1.f / half_height)) } };
+
+			Vector2 vertex_up_left = { { i * size_width, -size_height + y_stride * size_height } };
+			Vector2 vertex_up_right = { { i * size_width + size_width, -size_height + y_stride * size_height } };
+			Vector2 vertex_down_left = { { i * size_width, y_stride * size_height } };
+			Vector2 vertex_down_right = { { i * size_width + size_width, y_stride * size_height } };
+
+			vector2_add(&vertex_up_left, vertex_up_left, position);
+			vector2_add(&vertex_down_left, vertex_down_left, position);
+			vector2_add(&vertex_up_right, vertex_up_right, position);
+			vector2_add(&vertex_down_right, vertex_down_right, position);
+
+#define VERTEX(x) text_vertices[element_index * 4 + x]
+#define INDEX(x)  text_indexes[element_index * 6 + x]
+
+			VERTEX(0).color = color;
+			VERTEX(0).position = vertex_up_left;
+			VERTEX(0).uv_coords = uv_up_left;
+
+			VERTEX(1).color = color;
+			VERTEX(1).position = vertex_down_left;
+			VERTEX(1).uv_coords = uv_down_left;
+
+			VERTEX(2).color = color;
+			VERTEX(2).position = vertex_down_right;
+			VERTEX(2).uv_coords = uv_down_right;
+
+			VERTEX(3).color = color;
+			VERTEX(3).position = vertex_up_right;
+			VERTEX(3).uv_coords = uv_up_right;
+
+			INDEX(0) = list->ibo_last_index + element_index * 4 + 0;
+			INDEX(1) = list->ibo_last_index + element_index * 4 + 3;
+			INDEX(2) = list->ibo_last_index + element_index * 4 + 1;
+			INDEX(3) = list->ibo_last_index + element_index * 4 + 3;
+			INDEX(4) = list->ibo_last_index + element_index * 4 + 2;
+			INDEX(5) = list->ibo_last_index + element_index * 4 + 1;
+
+#undef VERTEX
+#undef INDEX
+
+			i++;
+			element_index++;
+		}
+	}
+
+	list->ibo_last_index += text_length * 4;
+	cmd->elements_count += text_length * 6;
 }

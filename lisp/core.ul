@@ -47,3 +47,8 @@
   (if (< x 1)
 	  1
 	  (* x (! (1- x)))))
+
+(defun range (min max)
+  (if (> min max)
+	  nil
+	  (cons min (range (1+ min) max))))

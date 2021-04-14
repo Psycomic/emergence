@@ -111,20 +111,15 @@ int initialize_everything() {
 	return 0;
 }
 
-void character_callback(GLFWwindow* window, unsigned int codepoint) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
+void scene_character_callback(Scene* scene, unsigned int codepoint) {
 	scene->glfw_last_character = codepoint;
 }
 
-void resize_callback(GLFWwindow* window, int width, int height) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
+void scene_resize_callback(Scene* scene, int width, int height) {
 	scene_set_size(scene, width, height);
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-	Scene* scene = glfwGetWindowUserPointer(window);
+void scene_scroll_callback(Scene* scene, float xoffset, float yoffset) {
 	window_scroll(scene->selected_window, -yoffset * 20.f);
 }
 
@@ -165,11 +160,6 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 		fprintf(stderr, "Failed to open a window\n");
 		return NULL;
 	}
-
-	glfwSetCharCallback(scene->context, character_callback);
-	glfwSetWindowSizeCallback(scene->context, resize_callback);
-
-	glfwSetScrollCallback(scene->context, scroll_callback);
 
 	glfwSetWindowUserPointer(scene->context, scene);
 	glfwGetWindowSize(scene->context, &width, &height);

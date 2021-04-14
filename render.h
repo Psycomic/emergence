@@ -162,6 +162,10 @@ void scene_handle_events(Scene* scene, GLFWwindow* window);
 void scene_set_size(Scene* scene, float width, float height);
 void scene_update_window_depths(Scene* scene);
 
+void scene_character_callback(Scene* scene, unsigned int codepoint);
+void scene_resize_callback(Scene* scene, int width, int height);
+void scene_scroll_callback(Scene* scene, float xoffset, float yoffset);
+
 Window* window_create(Scene* scene, float width, float height, float* position, char* title);
 void window_set_on_close(Window* window, void (*on_close)());
 void window_set_position(Window* window, float x, float y);

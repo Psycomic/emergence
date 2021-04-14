@@ -49,6 +49,22 @@ float terrain_noise(float x, float y) {
 	return octavien_noise(octaves, 7, 4, x, y, 2.f, 0.7) * sinf(x * 10.f);
 }
 
+void character_callback(GLFWwindow* window, unsigned int codepoint) {
+	Scene* scene = glfwGetWindowUserPointer(window);
+	scene_character_callback(scene, codepoint);
+}
+
+void resize_callback(GLFWwindow* window, int width, int height) {
+	Scene* scene = glfwGetWindowUserPointer(window);
+	scene_resize_callback(scene, width, height);
+	ps_resized(width, height);
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+	Scene* scene = glfwGetWindowUserPointer(window);
+	scene_scroll_callback(scene, xoffset, yoffset);
+}
+
 static Scene* scene;
 static Vector3* hopalong_points;
 static Vector3* hopalong_color;
@@ -179,6 +195,10 @@ int main(void) {
 	if ((scene = scene_create(camera_position, 1200, 900, "Emergence")) == NULL)
 		return -1;
 
+	glfwSetCharCallback(scene->context, character_callback);
+	glfwSetWindowSizeCallback(scene->context, resize_callback);
+	glfwSetScrollCallback(scene->context, scroll_callback);
+
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
 
@@ -285,24 +305,31 @@ int main(void) {
 	ps_init((Vector2) { { 1200, 900 } });
 
 	clock_t start = clock();
+	clock_t fps = 0;
+
 	while (!scene_should_close(scene)) {
 		scene_draw(scene, background_color);
 
 		ps_begin_path();		/* Red image */
-		ps_line_to(-100, -100);
-		ps_line_to(100, -100);
 		ps_line_to(100, 100);
-		ps_line_to(-100, 100);
+		ps_line_to(450, 100);
+		ps_line_to(450, 450);
+		ps_line_to(100, 450);
 		ps_close_path();
 
- 		ps_fill((Vector4){ { 1.f, 1.f, 1.f, 1.f } }, PS_TEXTURED_POLY);
+ 		ps_fill((Vector4){ { 1.f, 1.f, 1.f, 1.f } }, PS_FILLED_POLY);
 
-		ps_begin_path();		/* Blue circle */
+		ps_begin_path();		// Blue circle
 		for (float i = 0.f; i < M_PI * 2; i += 0.1f)
-			ps_line_to(cosf(i) * 100, sinf(i) * 100);
+			ps_line_to(cosf(i) * 100 - 100, sinf(i) * 100 - 100);
 		ps_close_path();
 
  		ps_fill((Vector4){ { 0.f, 0.f, 1.f, 1.f } }, PS_FILLED_POLY);
+
+		char buf[256];
+		snprintf(buf, sizeof(buf), "%lu FPS", fps);
+
+		ps_text(buf, (Vector2) { { 0.f, 0.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
 		ps_render();
 
@@ -325,7 +352,7 @@ int main(void) {
 		global_time += ((float)*delta) / CLOCKS_PER_SEC;
 
 		if (count++ % 10 == 0)
-			printf("%ld FPS\n", CLOCKS_PER_SEC / *delta);
+			fps = CLOCKS_PER_SEC / *delta;
 
 		clock_t wait_time = max(spf - *delta, 0);
 		usleep(wait_time);

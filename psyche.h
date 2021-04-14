@@ -1,6 +1,7 @@
 #include <GL/glew.h>
 
 #include "misc.h"
+#include "images.h"
 
 #include <stdio.h>
 
@@ -61,10 +62,24 @@ typedef struct {
 	uint32_t flags;
 } PsPath;
 
+typedef struct {
+	Image text_atlas;
+
+	uint32_t glyph_width;
+	uint32_t glyph_height;
+
+	uint32_t texture_height;
+	uint32_t texture_width;
+} PsFont;
+
 void ps_init(Vector2 display_size);
 void ps_render();
+void ps_resized(float width, float height);
+
+void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t glyph_height, uint32_t width, uint32_t height);
 
 void ps_begin_path();
 void ps_line_to(float x, float y);
 void ps_close_path();
 void ps_fill(Vector4 color, uint32_t flags);
+void ps_text(const char* str, Vector2 position, float size, Vector4 color);

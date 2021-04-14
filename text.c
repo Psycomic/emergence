@@ -170,17 +170,25 @@ Text* text_create(Batch* batch, Font* font, char* string, float size, Vector2 po
 #define GET_INDEX(arr, index) arr[element_index * vertex_size * 4 + index]
 
 			// Initializing vertices: two triangles
-			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0]; GET_INDEX(drawable_vertices, 1) = vertex_up_left[1]; // Set position
-			GET_INDEX(drawable_vertices, 3) = uv_up_left[0]; GET_INDEX(drawable_vertices, 4) = uv_up_left[1];
+			GET_INDEX(drawable_vertices, 0) = vertex_up_left[0];
+			GET_INDEX(drawable_vertices, 1) = vertex_up_left[1]; // Set position
+			GET_INDEX(drawable_vertices, 3) = uv_up_left[0];
+			GET_INDEX(drawable_vertices, 4) = uv_up_left[1];
 
-			GET_INDEX(drawable_vertices, 9) = vertex_down_left[0]; GET_INDEX(drawable_vertices, 10) = vertex_down_left[1];
-			GET_INDEX(drawable_vertices, 12) = uv_down_left[0]; GET_INDEX(drawable_vertices, 13) = uv_down_left[1];
+			GET_INDEX(drawable_vertices, 9) = vertex_down_left[0];
+			GET_INDEX(drawable_vertices, 10) = vertex_down_left[1];
+			GET_INDEX(drawable_vertices, 12) = uv_down_left[0];
+			GET_INDEX(drawable_vertices, 13) = uv_down_left[1];
 
-			GET_INDEX(drawable_vertices, 18) = vertex_down_right[0]; GET_INDEX(drawable_vertices, 19) = vertex_down_right[1];
-			GET_INDEX(drawable_vertices, 21) = uv_down_right[0]; GET_INDEX(drawable_vertices, 22) = uv_down_right[1];
+			GET_INDEX(drawable_vertices, 18) = vertex_down_right[0];
+			GET_INDEX(drawable_vertices, 19) = vertex_down_right[1];
+			GET_INDEX(drawable_vertices, 21) = uv_down_right[0];
+			GET_INDEX(drawable_vertices, 22) = uv_down_right[1];
 
-			GET_INDEX(drawable_vertices, 27) = vertex_up_right[0]; GET_INDEX(drawable_vertices, 28) = vertex_up_right[1];
-			GET_INDEX(drawable_vertices, 30) = uv_up_right[0]; GET_INDEX(drawable_vertices, 31) = uv_up_right[1];
+			GET_INDEX(drawable_vertices, 27) = vertex_up_right[0];
+			GET_INDEX(drawable_vertices, 28) = vertex_up_right[1];
+			GET_INDEX(drawable_vertices, 30) = uv_up_right[0];
+			GET_INDEX(drawable_vertices, 31) = uv_up_right[1];
 
 			// Initializing elements
 			drawable_elements[element_index * 6 + 0] = element_index * 4 + 0;
