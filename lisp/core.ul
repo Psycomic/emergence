@@ -52,3 +52,18 @@
   (if (> min max)
 	  nil
 	  (cons min (range (1+ min) max))))
+
+(defun fizzbuzz-helper (n max)
+  (if (> n max)
+	  nil
+	  (cons (if (= (mod n 3) 0)
+				(if (= (mod n 5) 0)
+					(quote fizzbuzz)
+					(quote fizz))
+				(if (= (mod n 5) 0)
+					(quote buzz)
+					n))
+			(fizzbuzz-helper (1+ n) max))))
+
+(defun fizzbuzz (max)
+  (fizzbuzz-helper 0 max))

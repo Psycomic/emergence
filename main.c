@@ -307,29 +307,17 @@ int main(void) {
 	clock_t start = clock();
 	clock_t fps = 0;
 
+	PsWindow* ps_window = ps_window_create("Hello, world!");
+
 	while (!scene_should_close(scene)) {
 		scene_draw(scene, background_color);
-
-		ps_begin_path();		/* Red image */
-		ps_line_to(100, 100);
-		ps_line_to(450, 100);
-		ps_line_to(450, 450);
-		ps_line_to(100, 450);
-		ps_close_path();
-
- 		ps_fill((Vector4){ { 1.f, 1.f, 1.f, 1.f } }, PS_FILLED_POLY);
-
-		ps_begin_path();		// Blue circle
-		for (float i = 0.f; i < M_PI * 2; i += 0.1f)
-			ps_line_to(cosf(i) * 100 - 100, sinf(i) * 100 - 100);
-		ps_close_path();
-
- 		ps_fill((Vector4){ { 0.f, 0.f, 1.f, 1.f } }, PS_FILLED_POLY);
 
 		char buf[256];
 		snprintf(buf, sizeof(buf), "%lu FPS", fps);
 
 		ps_text(buf, (Vector2) { { 0.f, 0.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
+
+		ps_draw_gui();
 
 		ps_render();
 

@@ -1,9 +1,91 @@
-#include "psyche.h"
 #include "drawable.h"
 
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
+
+#define _PSYCHE_INTERNAL
+#include "psyche.h"
+#undef _PSYCHE_INTERNAL
+
+extern void exit(int status);
+extern void *calloc(size_t nmemb, size_t size);
+
+#define OFFSET_OF(s, m) (void*)(&((s*)NULL)->m)
+#define TODO() do { fprintf(stderr, "Feature not implemented!\n"); exit(-1); } while(0);
+
+typedef struct {
+	Vector2 position;
+	Vector2 uv_coords;
+	Vector4 color;
+} PsVert;
+
+typedef uint PsIndex;
+
+typedef struct {
+	GLuint texture_id;
+
+	uint32_t width;
+	uint32_t height;
+} PsAtlas;
+
+typedef struct {
+	Vector4 clip_rect;
+
+	uint64_t ibo_offset;
+	uint64_t elements_count;
+} PsDrawCmd;
+
+typedef struct {
+	DynamicArray vbo;			// 	PsVert* vbo
+	DynamicArray ibo;			// 	PsIndex* ibo
+	DynamicArray commands;		//  PsDrawCmd* commands
+
+	uint64_t ibo_last_index;
+	uint32_t vbo_last_size;
+	uint32_t ibo_last_size;
+} PsDrawList;
+
+typedef struct {
+	PsDrawList** draw_lists;
+	uint64_t draw_lists_count;
+
+	Vector2 display_size;
+} PsDrawData;
+
+typedef struct {
+	DynamicArray points;		// Vector2*
+	float thickness;
+
+	uint32_t flags;
+} PsPath;
+
+typedef struct {
+	Image text_atlas;
+
+	uint32_t glyph_width;
+	uint32_t glyph_height;
+
+	uint32_t texture_height;
+	uint32_t texture_width;
+} PsFont;
+
+typedef void PsWidget;
+
+typedef struct {
+	DynamicArray widgets;		// PsWidget*
+
+	Vector2 size;
+	Vector2 position;
+
+	char* title;
+} PsWindow;
+
+#define PS_MAX_WINDOWS 256
+
+static PsWindow* ps_windows[PS_MAX_WINDOWS] = {};
+static uint64_t ps_windows_count = 0;
 
 static GLuint ps_vbo;
 static GLuint ps_ibo;
@@ -21,6 +103,11 @@ static PsPath ps_current_path;
 
 static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
+
+static Vector2 ps_white_pixel = {
+	.x = 0.f,
+	.y = 0.f
+};
 
 extern float global_time;
 
@@ -217,11 +304,6 @@ void ps_close_path() {
 void ps_fill(Vector4 color, uint32_t flags) {
 	assert(ps_current_path.flags & PS_PATH_BEING_USED);
 
-	Vector2 white_pixel = {
-		.x = 0.f,
-		.y = 0.f
-	};
-
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
@@ -247,7 +329,7 @@ void ps_fill(Vector4 color, uint32_t flags) {
 			new_verts[i].uv_coords.y = (position->y - aabb.y) / height;
 		}
 		else {
-			new_verts[i].uv_coords = white_pixel;
+			new_verts[i].uv_coords = ps_white_pixel;
 		}
 	}
 
@@ -268,6 +350,44 @@ void ps_fill(Vector4 color, uint32_t flags) {
 	cmd->elements_count += elements_count;
 
 	ps_current_path.flags &= ~PS_PATH_BEING_USED;
+}
+
+void ps_fill_rect(float x, float y, float w, float h, Vector4 color) {
+	PsDrawList* list = ps_ctx.draw_lists[0];
+	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
+
+	PsVert* rect_verts = dynamic_array_push_back(&list->vbo, 4);
+	PsIndex* rect_indexes = dynamic_array_push_back(&list->ibo, 6);
+
+	rect_verts[0].position.x = x;
+	rect_verts[0].position.y = y;
+	rect_verts[0].uv_coords = ps_white_pixel;
+	rect_verts[0].color = color;
+
+	rect_verts[1].position.x = x + w;
+	rect_verts[1].position.y = y;
+	rect_verts[1].uv_coords = ps_white_pixel;
+	rect_verts[1].color = color;
+
+	rect_verts[2].position.x = x + w;
+	rect_verts[2].position.y = y + h;
+	rect_verts[2].uv_coords = ps_white_pixel;
+	rect_verts[2].color = color;
+
+	rect_verts[3].position.x = x;
+	rect_verts[3].position.y = y + h;
+	rect_verts[3].uv_coords = ps_white_pixel;
+	rect_verts[3].color = color;
+
+	rect_indexes[0] = list->ibo_last_index + 0;
+	rect_indexes[1] = list->ibo_last_index + 3;
+	rect_indexes[2] = list->ibo_last_index + 1;
+	rect_indexes[3] = list->ibo_last_index + 3;
+	rect_indexes[4] = list->ibo_last_index + 2;
+	rect_indexes[5] = list->ibo_last_index + 1;
+
+	cmd->elements_count += 6;
+	list->ibo_last_index += 4;
 }
 
 void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
@@ -364,4 +484,61 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 
 	list->ibo_last_index += text_length * 4;
 	cmd->elements_count += text_length * 6;
+}
+
+PsWindow* ps_window_create(char* title) {
+	PsWindow* window = malloc(sizeof(PsWindow));
+	ps_windows[ps_windows_count++] = window;
+
+	window->size.x = 400.f;
+	window->size.y = 200.f;
+
+	window->position.x = -window->size.x / 2;
+	window->position.y = -window->size.y / 2;
+
+	window->title = title;
+
+	DYNAMIC_ARRAY_CREATE(&window->widgets, PsWidget*);
+
+	return window;
+}
+
+void ps_window_destroy(PsWindow* window) {
+	free(window);
+
+	uint64_t i;
+	for (i = 0; i < ps_windows_count; i++)
+		if (ps_windows[i] == window)
+			break;
+
+	ps_windows[i] = ps_windows[--ps_windows_count];
+}
+
+void ps_widget_draw(PsWidget* widget) {}
+
+static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 1.f, 1.f } };
+static Vector4 ps_window_title_color = { { 1.f, 1.f, 1.f, 1.f } };
+static float ps_window_border_size = 5.f;
+
+void ps_window_draw(PsWindow* window) {
+	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, ps_window_background_color);
+
+	Vector2 title_position;
+	title_position.y = window->position.y + window->size.y;
+	title_position.x = window->position.x;
+
+	ps_fill_rect(window->position.x, window->position.y, window->size.x, ps_window_border_size, ps_window_title_color);
+	ps_fill_rect(window->position.x, window->position.y + window->size.y, window->size.x, ps_window_border_size, ps_window_title_color);
+	ps_fill_rect(window->position.x, window->position.y, ps_window_border_size, window->size.y, ps_window_title_color);
+	ps_fill_rect(window->position.x + window->size.x - ps_window_border_size, window->position.y, ps_window_border_size, window->size.y, ps_window_title_color);
+
+	ps_text(window->title, title_position, 20.f, ps_window_title_color);
+
+	for (uint64_t i = 0; i < window->widgets.size; i++)
+		ps_widget_draw(dynamic_array_at(&window->widgets, i));
+}
+
+void ps_draw_gui() {
+	for (uint64_t i = 0; i < ps_windows_count; i++)
+		ps_window_draw(ps_windows[i]);
 }

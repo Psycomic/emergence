@@ -340,6 +340,11 @@ LispObject* ulisp_prim_num_sup(LispObject* args) {
 	}
 }
 
+LispObject* ulisp_prim_num_mod(LispObject* args) {
+	return ulisp_make_integer(*(long*)ulisp_car(args)->data %
+							  *(long*)ulisp_car(ulisp_cdr(args))->data);
+}
+
 void env_push_fun(const char* name, void* function) {
 	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol(name),
 										  ulisp_builtin_proc(function)),
@@ -374,6 +379,7 @@ void ulisp_init(void) {
 	env_push_fun("=", ulisp_prim_num_eq);
 	env_push_fun(">", ulisp_prim_num_sup);
 	env_push_fun("<", ulisp_prim_num_inf);
+	env_push_fun("mod", ulisp_prim_num_mod);
 
 	ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil);
 }
