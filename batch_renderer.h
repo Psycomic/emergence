@@ -52,8 +52,8 @@ void batch_init(Batch* batch, GLuint draw_type, Material* material, size_t verte
 				size_t index_buffer_capacity, uint64_t* vertex_attributes_sizes, uint64_t vertex_attributes_count);
 BatchDrawable* batch_drawable_create(Batch* batch, void* vertices, uint64_t vertices_count,
 									 uint32_t* elements, uint64_t elements_count);
-void batch_draw(Batch* batch, StateContext* gl, float* view_matrix);
-void batch_draw_drawable(BatchDrawable* batch_drawable, StateContext* gl, float* view_matrix);
+void batch_draw(Batch* batch, float* view_matrix);
+void batch_draw_drawable(BatchDrawable* batch_drawable, float* view_matrix);
 void batch_drawable_update(BatchDrawable* batch_drawable);
 void batch_drawable_destroy(BatchDrawable* batch_drawable);
 

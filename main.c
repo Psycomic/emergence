@@ -69,7 +69,6 @@ static Scene* scene;
 static Vector3* hopalong_points;
 static Vector3* hopalong_color;
 static Drawable* hopalong_drawable;
-static Widget* terrain_presentation_label;
 
 void update_fractal(void) {
 	static const float scale = 4.f;
@@ -94,37 +93,12 @@ void update_fractal(void) {
 	}
 }
 
-void update_callback(Widget* widget, Event* evt) {
-	update_fractal();
-
-	drawable_update(hopalong_drawable);
-}
-
-void quit_callback(Widget* widget, Event* evt) {
-	scene_quit(scene);
-}
-
 static char* main_file_contents = NULL;
-
-void new_window_callback(Widget* widget, Event* evt) {
-	float new_window_position[] = {
-		random_float() * 800 - 400.f,
-		random_float() * 600 - 300.f
-	};
-
-	Window* new_window = window_create(scene, 500.f, 400.f, new_window_position, "NEW WINDOW");
-	widget_label_create(new_window, scene, NULL,
-						main_file_contents,
-						15.f, 1.f, white, LAYOUT_PACK);
-}
 
 int main(void) {
 	srand((uint)time(NULL));	// Seed for random number generation
 
 	main_file_contents = read_file("lisp/core.ul");
-
-	if (initialize_everything() != 0)
-		return -1;
 
  #ifdef _DEBUG
 	execute_tests();			// Unit tests
@@ -135,7 +109,7 @@ int main(void) {
 
 	if (image_load_bmp(&copland_os_image, "./images/copland_os_enterprise.bmp") < 0)
 		goto error;
-	if (image_load_bmp(&lain_image, "./images/copland_os_enterprise.bmp") < 0)
+	if (image_load_bmp(&lain_image, "./images/lain.bmp") < 0)
 		goto error;
 
 	Vector3 camera_position = { { 0.f, 0.f, 0.f } };
@@ -204,8 +178,8 @@ int main(void) {
 
 	GLuint lain_texture, copland_os_texture;
 
-	Material *texture_material1 = material_create(texture_shader, NULL, 0),
-		*texture_material2 = material_create(texture_shader, NULL, 0);
+	Material* texture_material1 = material_create(texture_shader, NULL, 0);
+	Material* texture_material2 = material_create(texture_shader, NULL, 0);
 
 	lain_texture = texture_create(&lain_image);
 	copland_os_texture = texture_create(&copland_os_image);
@@ -225,12 +199,8 @@ int main(void) {
 		{ texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW }
 	};
 
-	Drawable *triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1,
-														 GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1,
-														 DRAWABLE_SHOW_AXIS),
-		*triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2,
-													texture_material2, GL_TRIANGLES, &triangle2_shape.position,
-													&copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
+	Drawable* triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
+	Drawable* triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	Material* terrain_material = material_create(color_shader, NULL, 0);
 
@@ -240,56 +210,16 @@ int main(void) {
 	};
 
 	Vector3 terrain_position = { { 0.f, -5.f, 0.f } };
-
-	scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6,
-						  terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES,
-						  &terrain_position, NULL, 0, 0x0);
+	scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
 
 	Material* hopalong_material = material_create(color_shader, NULL, 0);
-
 	ArrayBufferDeclaration hopalong_buffers[] = {
 		{hopalong_points, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 0, GL_STATIC_DRAW},
 		{hopalong_color, sizeof(Vector3) * ITERATIONS_NUMBER, 3, 1, GL_STATIC_DRAW}
 	};
 
 	Vector3	hopalong_position = { { 10.f, 0.f, 5.f } };
-	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers,
-											  ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS,
-											  &hopalong_position, NULL, 0, 0x0);
-
-	float window1_position[] = { 0.5f, 0.2f };
-	float window2_position[] = { 0.1f, 0.2f };
-
-	Window* terrain_window = window_create(scene, 478.f, 237.f, window1_position, "Edit fractal");
-
-	Widget* terrain_presentation = widget_label_create(terrain_window, scene, NULL,
-													   "Edit the hopalong fractal\n", 30.f, 0.f, red, LAYOUT_PACK);
-
-	terrain_presentation_label = widget_label_create(terrain_window, scene, terrain_presentation,
-													 "This is a computer-generated fractal\n"
-													 "called the hopalong fractal",
-													 20.f, 5.f, white, LAYOUT_PACK);
-
-	Widget* randomize_button = widget_button_create(terrain_window, scene, terrain_presentation, "Randomize",
-													20.f, 5.f, 5.f, LAYOUT_PACK);
-	Widget* quit_button = widget_button_create(terrain_window, scene, terrain_presentation, "Quit game",
-											   20.f, 5.f, 5.f, LAYOUT_PACK);
-	Widget* new_window_button = widget_button_create(terrain_window, scene, terrain_presentation, "New window",
-													 20.f, 5.f, 5.f, LAYOUT_PACK);
-
-	widget_set_on_click_up(randomize_button, update_callback);
-	widget_set_on_click_up(quit_button, quit_callback);
-	widget_set_on_click_up(new_window_button, new_window_callback);
-
-	Window* test_window = window_create(scene, 400.f, 200.f, window2_position, "Hello, world!");
-	Widget* test_title = widget_label_create(test_window, scene, NULL, "This is a big title!", 30.f, 0.f, green, LAYOUT_PACK);
-
-	Widget* test_text = widget_label_create(test_window, scene, NULL,
-											"This is some random text to make\n"
-											"this window stand out",
-											20.f, 5.f, black, LAYOUT_PACK);
-
-	Widget* test_button = widget_button_create(test_window, scene, test_text, "Test button", 20.f, 5.f, 5.f, LAYOUT_PACK);
+	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 
@@ -315,7 +245,7 @@ int main(void) {
 		char buf[256];
 		snprintf(buf, sizeof(buf), "%lu FPS", fps);
 
-		ps_text(buf, (Vector2) { { 0.f, 0.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
+		ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
 		ps_draw_gui();
 

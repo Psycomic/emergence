@@ -124,10 +124,10 @@ void drawable_destroy(Drawable* drawable) {
 	free(drawable);
 }
 
-void drawable_draw(Drawable* drawable, StateContext* gl) {
+void drawable_draw(Drawable* drawable) {
 	for (uint i = 0; i < drawable->textures_count; i++) {
-		StateGlActiveTexure(gl, GL_TEXTURE0 + i);
-		StateGlBindTexture(gl, GL_TEXTURE_2D, drawable->textures[i]);
+		glActiveTexture(GL_TEXTURE0 + i);
+		glBindTexture(GL_TEXTURE_2D, drawable->textures[i]);
 	}
 
 	glBindVertexArray(drawable->vertex_array);
@@ -197,79 +197,6 @@ uint drawable_flags(Drawable* drawable) {
 
 void* drawable_buffer_data(Drawable* drawable, uint buffer_id) {
 	return drawable->buffers[buffer_id].data;
-}
-
-void StateGlEnable(StateContext* gl, GLuint thing) {
-	uint64_t state = 0;
-
-	switch (thing) {
-	case GL_BLEND:
-		state = STATE_GL_BLEND;
-		break;
-	case GL_DEPTH_TEST:
-		state = STATE_GL_DEPTH_TEST;
-		break;
-	case GL_CULL_FACE:
-		state = STATE_GL_CULL_FACE;
-		break;
-	case GL_STENCIL_TEST:
-		state = STATE_GL_STENCIL_TEST;
-		break;
-	default:
-		assert(1);
-	}
-
-	if (!(gl->state & state))
-		glEnable(thing);
-
-	gl->state |= state;
-}
-
-void StateGlDisable(StateContext* gl, GLuint thing) {
-	uint64_t state = 0;
-
-	switch (thing) {
-	case GL_BLEND:
-		state = STATE_GL_BLEND;
-		break;
-	case GL_DEPTH_TEST:
-		state = STATE_GL_DEPTH_TEST;
-		break;
-	case GL_CULL_FACE:
-		state = STATE_GL_CULL_FACE;
-		break;
-	case GL_STENCIL_TEST:
-		state = STATE_GL_STENCIL_TEST;
-		break;
-	default:
-		assert(1);
-	}
-
-	if (gl->state & state)
-		glDisable(thing);
-
-	gl->state &= ~state;
-}
-
-void StateGlActiveTexure(StateContext* gl, GLuint texture_id) {
-	if (gl->active_texture != texture_id)
-		glActiveTexture(texture_id);
-
-	gl->active_texture = texture_id;
-}
-
-void StateGlBindTexture(StateContext* gl, GLuint type, GLuint texture) {
-	if (gl->bound_texture != texture)
-		glBindTexture(type, texture);
-
-	gl->bound_texture = texture;
-}
-
-void StateGlUseProgram(StateContext* gl, GLuint program_id) {
-	if (gl->bound_program != program_id)
-		glUseProgram(program_id);
-
-	gl->bound_program = program_id;
 }
 
 void get_opengl_errors_f(const char* file, int line) {
@@ -478,8 +405,8 @@ void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec) {
 	glUniform3f(material->uniforms[uniform_id].location, vec.x, vec.y, vec.z);
 }
 
-void material_use(Material* material, StateContext* gl, float* model_matrix, float* view_position_matrix) {
-	StateGlUseProgram(gl, material->program_id);
+void material_use(Material* material, float* model_matrix, float* view_position_matrix) {
+	glUseProgram(material->program_id);
 
 	if (view_position_matrix)
 		glUniformMatrix4fv(material->view_position_matrix_location, 1, GL_FALSE, view_position_matrix);

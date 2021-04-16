@@ -60,15 +60,6 @@ typedef struct {
 #define STATE_GL_STENCIL_TEST	(1 << 3)
 
 typedef struct {
-	uint64_t state;
-
-	GLuint bound_texture;
-	GLuint active_texture;
-	GLuint bound_program;
-	GLuint bound_vertex_array;
-} StateContext;
-
-typedef struct {
 	Buffer elements_buffer;
 
 	Material* material;
@@ -90,11 +81,6 @@ typedef struct {
 #define DRAWABLE_SHOW_AXIS (1 << 1)
 #define DRAWABLE_NO_DEPTH_TEST (1 << 2)
 
-void StateGlEnable(StateContext* gl, GLuint thing);
-void StateGlDisable(StateContext* gl, GLuint thing);
-void StateGlActiveTexure(StateContext* gl, GLuint texture_id);
-void StateGlBindTexture(StateContext* gl, GLuint type, GLuint texture);
-
 GLuint shader_create(const char* vertex_shader_path, const char* fragment_shader_path);
 
 Material* material_create(GLuint shader, char** uniforms_position, uint uniforms_count);
@@ -103,7 +89,7 @@ void material_set_uniform_vec2(Material* material, uint program_id, Vector2 vec)
 void material_set_uniform_float(Material* material, uint program_id, float f);
 void material_uniform_vec2(Material* material, uint uniform_id, Vector2 vec);
 void material_uniform_vec3(Material* material, uint uniform_id, Vector3 vec);
-void material_use(Material* material, StateContext* gl, float* model_matrix, float* position_view_matrix);
+void material_use(Material* material, float* model_matrix, float* position_view_matrix);
 
 GLuint texture_create(Image* image);
 
@@ -118,20 +104,14 @@ void get_opengl_errors_f();
 void drawable_update(Drawable* drawable);
 void drawable_update_buffer(Drawable* drawable, uint buffer_id);
 
-void drawable_draw(Drawable* drawable, StateContext* gl);
+void drawable_draw(Drawable* drawable);
 void drawable_destroy(Drawable* drawable);
 
-void drawable_init(Drawable* drawable, unsigned short* elements,
-				   uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
-				   Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
-void drawable_rectangle_texture_init(Drawable* drawable, float width, float height,
-									 Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count,
-									 float* texture_uv, uint flags);
-void drawable_rectangle_init(Drawable* drawable, float width, float height,
-							 Material* material, GLenum mode, Vector3* position, uint flags);
+void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags);
+void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags);
+void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, uint flags);
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height);
-void rectangle_vertices_set(float* rectangle_vertices, float width, float height,
-							uint32_t stride, float x, float y);
+void rectangle_vertices_set(float* rectangle_vertices, float width, float height, uint32_t stride, float x, float y);
 
 #endif // !DRAWABLE_HEADER

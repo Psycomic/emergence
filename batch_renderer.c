@@ -163,10 +163,10 @@ void batch_drawable_update(BatchDrawable* batch_drawable) {
 	get_opengl_errors();
 }
 
-void batch_draw(Batch* batch, StateContext* gl, float* view_matrix) {
+void batch_draw(Batch* batch, float* view_matrix) {
 	size_t elements_size = batch->index_buffer_size / sizeof(uint32_t);
 
-	material_use(batch->material, gl, NULL, view_matrix);
+	material_use(batch->material, NULL, view_matrix);
 
 	glBindVertexArray(batch->vao);
 	glDrawElements(batch->draw_type, elements_size, GL_UNSIGNED_INT, NULL);
@@ -175,10 +175,10 @@ void batch_draw(Batch* batch, StateContext* gl, float* view_matrix) {
 	get_opengl_errors();
 }
 
-void batch_draw_drawable(BatchDrawable* batch_drawable, StateContext* gl, float* view_matrix) {
+void batch_draw_drawable(BatchDrawable* batch_drawable, float* view_matrix) {
 	Batch* batch = batch_drawable->batch;
 
-	material_use(batch->material, gl, NULL, view_matrix);
+	material_use(batch->material, NULL, view_matrix);
 
 	glBindVertexArray(batch->vao);
 	glDrawElements(batch->draw_type, batch_drawable->elements_count,

@@ -241,6 +241,7 @@ void ps_render() {
 
 	glUseProgram(ps_shader);
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glDisable(GL_CULL_FACE);
 
 	glUniformMatrix4fv(ps_matrix_location, 1, GL_FALSE, ortho_matrix);
 	glUniform1i(ps_texture_location, 0);
