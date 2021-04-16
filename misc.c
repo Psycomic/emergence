@@ -29,15 +29,6 @@ char* read_file(const char* filename) {
 	return buffer;
 }
 
-float gaussian_random() {
-	float sum = 0.f;
-
-	for (uint i = 0; i < 12; i++)
-		sum += random_float();
-
-	return sum - 6.f;
-}
-
 float clampf(float x, float min, float max) {
 	if (x < min)
 		return min;
@@ -45,12 +36,6 @@ float clampf(float x, float min, float max) {
 		return max;
 	else
 		return x;
-}
-
-void random_arrayf(float* destination, uint size) {
-	for (uint i = 0; i < size; ++i) {
-		destination[i] = random_float();
-	}
 }
 
 void memory_multiple_copy_f(float* src, float* dst, uint repeat, uint size) {
@@ -302,7 +287,7 @@ int parse_number(char* str, long* integer, double* floating) {
 #undef malloc
 #undef free
 
-void* debug_malloc(size_t size, const char* file, const uint line) {
+inline void* debug_malloc(size_t size, const char* file, const uint line) {
 	void* return_value = malloc(size);
 
 	/* printf("Malloc %p, 0x%lx bytes at %s:%d\n", return_value, size, file, line); */
@@ -310,7 +295,7 @@ void* debug_malloc(size_t size, const char* file, const uint line) {
 	return return_value;
 }
 
-void debug_free(void* ptr, const char* file, const uint line) {
+inline void debug_free(void* ptr, const char* file, const uint line) {
 	/* printf("Free %p at %s:%d\n", ptr, file, line); */
 
 	free(ptr);

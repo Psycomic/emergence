@@ -205,10 +205,11 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
 
-	glEnable(GL_CULL_FACE);
 	for (uint i = 0; i < scene->drawables.size; i++) {
 		Drawable* drawable = *(Drawable**)dynamic_array_at(&scene->drawables, i);
 		uint flags = drawable->flags;
@@ -231,6 +232,8 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		}
 	}
 
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	glClearColor(1.f, 0.0f, 1.0f, 1.0f);
@@ -246,7 +249,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 }
 
 // Add drawable to scene
-Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
+Drawable* scene_create_drawable(Scene* scene, uint* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
 	Drawable** drawable_pos = dynamic_array_push_back(&scene->drawables, 1);
 
 	*drawable_pos = malloc(sizeof(Drawable) + sizeof(Buffer) * declarations_count);
@@ -299,7 +302,7 @@ void render_initialize(void) {
 		{ { 0.f, 0.f, 1.f } }
 	};
 
-	static unsigned short axis_elements[] = {
+	static uint axis_elements[] = {
 		0, 1, 0, 2, 0, 3
 	};
 

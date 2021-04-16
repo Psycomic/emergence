@@ -2,11 +2,10 @@
 #include <GLFW/glfw3.h>
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
 #include <math.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -28,10 +27,11 @@ extern int usleep (unsigned int __useconds);
 #include "images.h"
 #include "noise.h"
 #include "psyche.h"
+#include "random.h"
 
 #define WORLD_STEP 0.1f
 
-#define TERRAIN_SIZE 255
+#define TERRAIN_SIZE 500
 
 #define POINTS_COUNT 100
 
@@ -40,13 +40,17 @@ extern int usleep (unsigned int __useconds);
 #define RINGS_NUMBER 3
 
 float points[POINTS_COUNT * 2];
-float* octaves[7];
+Octaves octaves;
 float global_time = 0.f;
 
 void execute_tests(void);
 
 float terrain_noise(float x, float y) {
-	return octavien_noise(octaves, 7, 4, x, y, 2.f, 0.7) * sinf(x * 10.f);
+	return clampf(distortion_noise(&octaves, x, y, 0.01f, 0.15f) + 0.5f, 0.f, 1.f);
+}
+
+float terrain_ridged_noise(float x, float y) {
+	return clampf(ridged_noise(&octaves, x, y) + 0.5f, 0.f, 1.f);
 }
 
 void character_callback(GLFWwindow* window, unsigned int codepoint) {
@@ -96,7 +100,7 @@ void update_fractal(void) {
 static char* main_file_contents = NULL;
 
 int main(void) {
-	srand((uint)time(NULL));	// Seed for random number generation
+	random_seed(time(NULL));
 
 	main_file_contents = read_file("lisp/core.ul");
 
@@ -142,22 +146,26 @@ int main(void) {
 	world_body_add(physic_world, &triangle2_shape, 1.f);
 
 	Vector3* terrain_vertices = malloc(sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE);
-	unsigned short* terrain_indexes = malloc(sizeof(unsigned short) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
+	uint* terrain_indexes = malloc(sizeof(uint) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
 	Vector3* terrain_color = malloc(sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
 
 	random_arrayf(points, 2 * POINTS_COUNT);
+	octaves_init(&octaves, 8, 5, 2.f, 0.5f);
 
-	octavien_initialize_gradient(octaves, 4, TERRAIN_SIZE, 2.f);
+	Image noise_image;
+	noise_image_create(&noise_image, 500, terrain_noise);
+	image_write_to_file(&noise_image, "./images/noise.ppm");
 
-	terrain_create(terrain_vertices, TERRAIN_SIZE, 10.f, 40.f, &terrain_noise);
+	float terrain_width = 80.f, terrain_height = 7.f;
+	terrain_create(terrain_vertices, TERRAIN_SIZE, terrain_height, terrain_width, &terrain_noise);
 	terrain_elements(terrain_indexes, TERRAIN_SIZE);
 
 	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
-		float height = (terrain_vertices[terrain_indexes[i]].y + 2.f) / 7.f;
+		float height = terrain_vertices[terrain_indexes[i]].y / terrain_height;
 
 		terrain_color[terrain_indexes[i]].x = height;
 		terrain_color[terrain_indexes[i]].y = 0.f;
-		terrain_color[terrain_indexes[i]].z = 1.f;
+		terrain_color[terrain_indexes[i]].z = 1 - height;
 	}
 
 	hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
@@ -247,7 +255,7 @@ int main(void) {
 
 		ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
-		ps_draw_gui();
+		/* ps_draw_gui(); */
 
 		ps_render();
 

@@ -5,6 +5,26 @@
 #include "images.h"
 #include "misc.h"
 
+void image_blank_init(Image* image, uint32_t width, uint32_t height, GLuint color_encoding) {
+	image->color_encoding = color_encoding;
+	image->width = width;
+	image->height = height;
+
+	image->data = malloc(sizeof(uchar) * 3 * width * height);
+}
+
+int image_write_to_file(Image* image, const char* path) {
+	FILE* f = fopen(path, "w");
+	if (f == NULL)
+		return -1;
+
+	fprintf(f, "P6\n%u %u\n255\n", image->width, image->height);
+	fwrite(image->data, 3, image->width * image->height, f);
+
+	fclose(f);
+	return 0;
+}
+
 int image_load_bmp(Image* image, const char* path) {
 	uchar* file_contents = (uchar*)read_file(path);
 

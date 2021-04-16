@@ -34,7 +34,7 @@ void scene_quit(Scene *scene);
 int scene_should_close(Scene* scene);
 // Create a scene instance
 Scene* scene_create(Vector3 camera_position, int width, int height, const char* title);
-Drawable* scene_create_drawable(Scene* scene, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_number, Material* material, GLenum mode, Vector3* position, GLuint* textures,	uint textures_count, uint flags);
+Drawable* scene_create_drawable(Scene* scene, uint* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_number, Material* material, GLenum mode, Vector3* position, GLuint* textures,	uint textures_count, uint flags);
 
 // The main function of the whole renderer logic
 void scene_draw(Scene* scene, Vector3 clear_color);

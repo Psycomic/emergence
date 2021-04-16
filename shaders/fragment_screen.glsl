@@ -6,12 +6,10 @@ in vec2 TexCoords;
 uniform sampler2D screenTexture;
 uniform float time;
 
-float remapped_sin(float x) {
-	return clamp((sin(x) + 1.9) / 2, 0, 1);
-}
-
 void main() {
 	vec4 color = texture(screenTexture, TexCoords);
+	// float avg = (color.x + color.y + color.z) / 3.f;
 
-    FragColor = vec4(color.xy, color.z * remapped_sin((TexCoords.y + time) * 1000), 1.0);
+    // FragColor = vec4(avg, avg, avg, 1.0);
+	FragColor = color;
 }

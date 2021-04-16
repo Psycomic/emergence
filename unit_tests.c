@@ -2,6 +2,7 @@
 #include "batch_renderer.h"
 #include "render.h"
 #include "ulisp.h"
+#include "random.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -38,6 +39,12 @@ void execute_tests(void) {
 	assert(parse_number("12345", &val, &floating) >= 0);
 	assert(val == 12345);
 	assert(parse_number("1hello, there", &val, &floating) < 0);
+
+	for (uint64_t i = 0; i < 10; i++) {
+		printf("Random float: %.2f\n", random_float());
+	}
+
+	printf("\n");
 
 	char buffer[2048];
 	ulisp_init();

@@ -13,7 +13,7 @@
 
 #define DRAWBLE_MAX_BUFFER_COUNT 256
 
-static unsigned short rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
+static uint rectangle_elements[] = { 0, 1, 2, 1, 3, 2 };
 
 Buffer array_buffer_create(uint size, int type, void* data, GLuint update_rate) {
 	GLuint array_buffer;
@@ -67,7 +67,7 @@ void rectangle_vertices_set(float* rectangle_vertices, float width, float height
 }
 
 /* Create an abstraction over basic openGL calls */
-void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
+void drawable_init(Drawable* drawable, uint* elements, uint elements_number, ArrayBufferDeclaration* declarations, uint declarations_count,
 				   Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, uint flags) {
 	drawable->buffer_count = declarations_count;
 	drawable->material = material;
@@ -100,7 +100,7 @@ void drawable_init(Drawable* drawable, unsigned short* elements, uint elements_n
 	drawable->elements_count = elements_number;
 
 	if (elements != NULL) {
-		drawable->elements_buffer = array_buffer_create(elements_number * sizeof(unsigned short), GL_ELEMENT_ARRAY_BUFFER, elements, GL_STATIC_DRAW);
+		drawable->elements_buffer = array_buffer_create(elements_number * sizeof(uint), GL_ELEMENT_ARRAY_BUFFER, elements, GL_STATIC_DRAW);
 		drawable->flags |= DRAWABLE_USES_ELEMENTS;
 	}
 	else {
@@ -133,7 +133,7 @@ void drawable_draw(Drawable* drawable) {
 	glBindVertexArray(drawable->vertex_array);
 
 	if ((drawable->flags & DRAWABLE_USES_ELEMENTS) > 0)
-		glDrawElements(drawable->draw_mode, drawable->elements_count, GL_UNSIGNED_SHORT, NULL);
+		glDrawElements(drawable->draw_mode, drawable->elements_count, GL_UNSIGNED_INT, NULL);
 	else
 		glDrawArrays(drawable->draw_mode, 0, drawable->elements_count);
 }
@@ -147,9 +147,7 @@ void drawable_update(Drawable* drawable) {
 		array_buffer_update(&drawable->buffers[i]);
 }
 
-void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode,
-							 Vector3* position, uint flags)
-{
+void drawable_rectangle_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, uint flags) {
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
 	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
@@ -157,13 +155,10 @@ void drawable_rectangle_init(Drawable* drawable, float width, float height, Mate
 		{rectangle_vertices, sizeof(float) * 8, 2, 0, GL_DYNAMIC_DRAW},
 	};
 
-	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 1, material, mode,
-				  position, NULL, 0, flags);
+	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 1, material, mode, position, NULL, 0, flags);
 }
 
-void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode,
-									 Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags)
-{
+void drawable_rectangle_texture_init(Drawable* drawable, float width, float height, Material* material, GLenum mode, Vector3* position, GLuint* textures, uint textures_count, float* texture_uv, uint flags) {
 	float* rectangle_vertices = malloc(sizeof(float) * 8);
 	rectangle_vertices_set(rectangle_vertices, width, height, 2, 0.f, 0.f);
 
@@ -172,8 +167,7 @@ void drawable_rectangle_texture_init(Drawable* drawable, float width, float heig
 		{texture_uv, sizeof(float) * 8, 2, 1, GL_STATIC_DRAW}
 	};
 
-	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 2, material, mode,
-				  position, textures, textures_count, flags);
+	drawable_init(drawable, rectangle_elements, ARRAY_SIZE(rectangle_elements), rectangle_buffers, 2, material, mode, position, textures, textures_count, flags);
 }
 
 void drawable_rectangle_set_size(Drawable* rectangle, float width, float height) {
