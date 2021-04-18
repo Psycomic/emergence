@@ -11,7 +11,7 @@
 LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
 	*lambda, *mlambda, *define, *rest, *not_found;
 
-#define WORKSPACESIZE 1024
+#define WORKSPACESIZE 8192
 
 static uint64_t free_space = WORKSPACESIZE;
 static uint32_t cons_cell_size = sizeof(LispObject) + sizeof(ConsCell);
@@ -21,6 +21,7 @@ static Stack gc_stack;
 
 LispObject* ulisp_car(LispObject* pair);
 LispObject* ulisp_cdr(LispObject* object);
+void ulisp_gc(LispObject* cons_cell);
 
 void free_list_init() {
 	workspace = malloc(cons_cell_size * free_space);
@@ -46,6 +47,8 @@ void free_list_init() {
 }
 
 LispObject* free_list_alloc() {
+	assert(free_space > 0);
+
 	LispObject* obj = free_list;
 	free_list = ulisp_car(free_list);
 	free_space--;
@@ -82,12 +85,6 @@ void free_list_free(LispObject* object) {
 	free_space++;
 }
 
-/* Bug is: the objects don't get unmarked in the free_list_sweep phase
- * because it only unmarks the objects presents in the workspace, and right
- * now that is just the cons cell, not the procedures. The procedures get freed,
- * and everything is to re-do
- */
-
 void free_list_sweep() {
 	free_list = nil;
 	free_space = 0;
@@ -102,16 +99,17 @@ void free_list_sweep() {
 	}
 }
 
-void ulisp_gc(LispObject* form, LispObject* env) {
+void ulisp_gc(LispObject* cons_cell) {
 	printf("Garbage collection...\n");
 
-	/* mark_object(form); */
 	for (uint64_t i = 0; i < gc_stack.top; i++)
 		mark_object(gc_stack.data[i]);
 
-	mark_object(env);
+	mark_object(cons_cell);
 	mark_object(environnement);
 	free_list_sweep();
+
+	printf("Now having %lu free space!\n", free_space);
 }
 
 LispObject* ulisp_cons(LispObject* first, LispObject* second) {
@@ -121,6 +119,9 @@ LispObject* ulisp_cons(LispObject* first, LispObject* second) {
 
 	((ConsCell*)new_object->data)->car = first;
 	((ConsCell*)new_object->data)->cdr = second;
+
+	if (free_space <= 20)
+		ulisp_gc(new_object);
 
 	return new_object;
 }
@@ -494,18 +495,6 @@ void ulisp_init(void) {
 	ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil);
 }
 
-LispObject* ulisp_append(LispObject* a, LispObject* b) {
-	assert(a->type & LISP_LIST && b->type & LISP_LIST);
-
-	if (ulisp_eq(a, nil))
-		return b;
-	else if (ulisp_eq(b, nil))
-		return a;
-	else
-		return ulisp_cons(ulisp_car(a),
-						  ulisp_append(ulisp_cdr(a), b));
-}
-
 LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments) {
 	assert(proc->type & LISP_PROC || proc->type & LISP_PROC_BUILTIN);
 	assert(arguments->type & LISP_LIST);
@@ -521,25 +510,36 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 		LispObject *applied_arg = arguments,
 			*arg_name = lisp_proc->arguments;
 
+		uint32_t push_count = 0;
 		while (applied_arg != nil && arg_name != nil) {
+			printf("apply:Free space %lu\n", free_space);
 			LispObject* arg = ulisp_car(arg_name);
 
 			if (ulisp_eq(arg, rest)) {
-				new_env = ulisp_cons(ulisp_cons(ulisp_car(ulisp_cdr(arg_name)),
-												applied_arg),
-									 new_env);
+				new_env = ulisp_cons(
+					ulisp_cons(ulisp_car(ulisp_cdr(arg_name)),
+							   applied_arg),
+					new_env);
 
+				stack_push(&gc_stack, new_env);
+				push_count++;
 				break;
 			}
 
-			new_env = ulisp_cons(ulisp_cons(ulisp_car(arg_name),
-											ulisp_car(applied_arg)), new_env);
+			new_env = ulisp_cons(
+				ulisp_cons(ulisp_car(arg_name),
+						   ulisp_car(applied_arg)), new_env);
+
+			stack_push(&gc_stack, new_env);
+			push_count++;
 
 			applied_arg = ulisp_cdr(applied_arg);
 			arg_name = ulisp_cdr(arg_name);
 		}
 
-		return ulisp_eval(ulisp_cons(begin, lisp_proc->expression), new_env);
+		LispObject* result = ulisp_eval(ulisp_cons(begin, lisp_proc->expression), new_env);
+		stack_pop(&gc_stack, push_count);
+		return result;
 	}
 
 	return NULL;
@@ -547,7 +547,9 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 
 LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
 	if (expression->type & LISP_CONS && ulisp_car(expression)->type & LISP_SYMBOL) {
-		LispObject* proc = ulisp_assoc(ulisp_append(env, environnement), ulisp_car(expression));
+		LispObject* proc = ulisp_assoc(env, ulisp_car(expression));
+		if (ulisp_eq(proc, not_found))
+			proc = ulisp_assoc(environnement, ulisp_car(expression));
 
 		if (proc != nil && proc->type & LISP_PROC && ((LispProc*)proc->data)->is_macro)
 			return ulisp_macroexpand(ulisp_apply(proc, env, ulisp_cdr(expression)), env);
@@ -560,19 +562,15 @@ LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
 }
 
 LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
-	ulisp_print(expression, stdout);
-	printf("\n");
-
 	stack_push(&gc_stack, expression);
-	printf("Free space: %lu\n", free_space);
-
+	stack_push(&gc_stack, env);
 	LispObject* result;
 
-	if (free_space <= 100)
-		ulisp_gc(expression, env);
-
 	if (expression->type & LISP_SYMBOL) {
-		LispObject* exp = ulisp_assoc(ulisp_append(env, environnement), expression);
+		LispObject* exp = ulisp_assoc(env, expression);
+
+		if (ulisp_eq(exp, not_found))
+			exp = ulisp_assoc(environnement, expression);
 
 		if (ulisp_eq(exp, not_found)) {
 			printf("Not found: %s\n", ulisp_symbol_string(expression));
@@ -663,7 +661,7 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 	}
 
 end:
-	stack_pop(&gc_stack, 1);
+	stack_pop(&gc_stack, 2);
 	return result;
 }
 

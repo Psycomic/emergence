@@ -15,6 +15,7 @@ bld/
 docs/emergence-paper.aux
 docs/emergence-paper.log
 docs/emergence-paper.pdf
+images/noise.ppm
 
 Emergence_Debug
 Emergence_Release

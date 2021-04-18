@@ -104,7 +104,8 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	Scene* scene = malloc(sizeof(Scene)); // Allocating the scene object
 	assert(scene != NULL);
 
-	assert(initialize_everything() == 0);
+	int return_code = initialize_everything();
+	assert(return_code == 0);
 
 	// Creating window and OpenGL context
 	scene->context = glfwCreateWindow(width, height, title, NULL, NULL);

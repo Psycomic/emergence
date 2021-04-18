@@ -103,7 +103,6 @@ int main(void) {
 	random_seed(time(NULL));
 
 	main_file_contents = read_file("lisp/core.ul");
-
 	execute_tests();			// Unit tests
 
 	Image lain_image;
