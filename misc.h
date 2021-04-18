@@ -52,6 +52,12 @@ typedef struct {
 	uint size;
 } HashTable;
 
+typedef struct {
+	void** data;
+	uint64_t capacity;
+	uint64_t top;
+} Stack;
+
 char* read_file(const char* filename);
 
 float clampf(float x, float min, float max);
@@ -86,5 +92,9 @@ void debug_free(void* ptr, const char* file, const uint line);
 HashTable* hash_table_create(uint size);
 int hash_table_set(HashTable* table, char* key, void* value, uint value_size);
 void* hash_table_get(HashTable* table, char* key);
+
+void stack_init(Stack* stack);
+void stack_push(Stack* stack, void* value);
+void stack_pop(Stack* stack, uint64_t count);
 
 #endif

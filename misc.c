@@ -284,6 +284,27 @@ int parse_number(char* str, long* integer, double* floating) {
 	return 0;
 }
 
+#define STACK_DEFAULT_CAPACITY 1024
+
+void stack_init(Stack* stack) {
+	stack->capacity = STACK_DEFAULT_CAPACITY;
+	stack->data = malloc(sizeof(void*) * stack->capacity);
+	stack->top = 0;
+}
+
+void stack_push(Stack* stack, void* value) {
+	stack->data[stack->top++] = value;
+
+	if (stack->top >= stack->capacity) {
+		stack->capacity *= 2;
+		stack->data = realloc(stack->data, sizeof(void*) * stack->capacity);
+	}
+}
+
+void stack_pop(Stack* stack, uint64_t count) {
+	stack->top -= count;
+}
+
 #undef malloc
 #undef free
 

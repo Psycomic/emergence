@@ -8,4 +8,4 @@ debug:
 	${CC} *.c -o ${TARGET_DEBUG} -g -D _DEBUG ${LFLAGS}
 
 release:
-	${CC} *.c -o ${TARGET_RELEASE} -O3 ${LFLAGS}
+	${CC} *.c -o ${TARGET_RELEASE} -O3 -DNDEBUG ${LFLAGS}

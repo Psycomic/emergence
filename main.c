@@ -104,9 +104,7 @@ int main(void) {
 
 	main_file_contents = read_file("lisp/core.ul");
 
- #ifdef _DEBUG
 	execute_tests();			// Unit tests
- #endif
 
 	Image lain_image;
 	Image copland_os_image;

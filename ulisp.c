@@ -5,12 +5,118 @@
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 #define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, stdout); puts("");
+#define CAR(o) ((ConsCell*)(o)->data)->car
+#define CDR(o) ((ConsCell*)(o)->data)->cdr
 
 LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
 	*lambda, *mlambda, *define, *rest, *not_found;
 
+#define WORKSPACESIZE 1024
+
+static uint64_t free_space = WORKSPACESIZE;
+static uint32_t cons_cell_size = sizeof(LispObject) + sizeof(ConsCell);
+static LispObject* free_list;
+static uchar* workspace;
+static Stack gc_stack;
+
+LispObject* ulisp_car(LispObject* pair);
+LispObject* ulisp_cdr(LispObject* object);
+
+void free_list_init() {
+	workspace = malloc(cons_cell_size * free_space);
+	assert(workspace != NULL);
+
+	free_list = (LispObject*)workspace;
+
+	LispObject* free_list_ptr = free_list;
+
+	for (uint64_t i = 0; i < free_space - 1; i++) {
+		free_list_ptr->type = LISP_CONS;
+		LispObject* next_free_list_ptr = (LispObject*)((uchar*)free_list_ptr + cons_cell_size);
+
+		CAR(free_list_ptr) = next_free_list_ptr;
+		CDR(free_list_ptr) = nil;
+
+		free_list_ptr = next_free_list_ptr;
+	}
+
+	free_list_ptr->type = LISP_CONS;
+	CAR(free_list_ptr) = nil;
+	CDR(free_list_ptr) = nil;
+}
+
+LispObject* free_list_alloc() {
+	LispObject* obj = free_list;
+	free_list = ulisp_car(free_list);
+	free_space--;
+
+	return obj;
+}
+
+void mark_object(LispObject* object) {
+mark:
+	if (object->type & GC_MARKED) return;
+
+	if (object->type & LISP_CONS) {
+		object->type |= GC_MARKED;
+
+		mark_object(ulisp_car(object));
+		object = ulisp_cdr(object);
+		goto mark;
+	}
+	else if (object->type & LISP_PROC) {
+		LispProc* proc = object->data;
+
+		mark_object(proc->arguments);
+		mark_object(proc->expression);
+	}
+}
+
+void free_list_free(LispObject* object) {
+	CDR(object) = nil;
+	CAR(object) = free_list;
+
+	object->type = LISP_CONS;
+
+	free_list = object;
+	free_space++;
+}
+
+/* Bug is: the objects don't get unmarked in the free_list_sweep phase
+ * because it only unmarks the objects presents in the workspace, and right
+ * now that is just the cons cell, not the procedures. The procedures get freed,
+ * and everything is to re-do
+ */
+
+void free_list_sweep() {
+	free_list = nil;
+	free_space = 0;
+
+	for (int i = WORKSPACESIZE - 1; i >= 0; i--) {
+		LispObject* obj = (uchar*)workspace + i * cons_cell_size;
+
+		if (!(obj->type & GC_MARKED))
+			free_list_free(obj);
+		else
+			obj->type &= ~GC_MARKED;
+	}
+}
+
+void ulisp_gc(LispObject* form, LispObject* env) {
+	printf("Garbage collection...\n");
+
+	/* mark_object(form); */
+	for (uint64_t i = 0; i < gc_stack.top; i++)
+		mark_object(gc_stack.data[i]);
+
+	mark_object(env);
+	mark_object(environnement);
+	free_list_sweep();
+}
+
 LispObject* ulisp_cons(LispObject* first, LispObject* second) {
-	LispObject* new_object = malloc(sizeof(LispObject) + 2 * sizeof(LispObject*));
+	LispObject* new_object = free_list_alloc();
+
 	new_object->type = LISP_CONS | LISP_LIST;
 
 	((ConsCell*)new_object->data)->car = first;
@@ -205,8 +311,8 @@ LispObject* ulisp_prim_plus(LispObject* args) {
 }
 
 LispObject* ulisp_prim_minus(LispObject* args) {
-	long sum;
-	double fsum;
+	long sum = 0;
+	double fsum = 0.f;
 	GLboolean is_floating;
 
 	LispObject* first = ulisp_car(args);
@@ -333,7 +439,7 @@ LispObject* ulisp_prim_num_sup(LispObject* args) {
 			return nil;
 	}
 	else {
-	if (*(double*)a->data > *(double*)b->data)
+		if (*(double*)a->data > *(double*)b->data)
 			return tee;
 		else
 			return nil;
@@ -352,6 +458,8 @@ void env_push_fun(const char* name, void* function) {
 }
 
 void ulisp_init(void) {
+	stack_init(&gc_stack);
+
 	nil = ulisp_make_symbol("nil");
 	nil->type |= LISP_LIST;
 
@@ -364,6 +472,8 @@ void ulisp_init(void) {
 	define = ulisp_make_symbol("define");
 	rest = ulisp_make_symbol("&rest");
 	not_found = ulisp_make_symbol("not-found");
+
+	free_list_init();
 
 	environnement = ulisp_cons(ulisp_cons(nil, nil),
 							   ulisp_cons(ulisp_cons(tee, tee),
@@ -450,6 +560,17 @@ LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
 }
 
 LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
+	ulisp_print(expression, stdout);
+	printf("\n");
+
+	stack_push(&gc_stack, expression);
+	printf("Free space: %lu\n", free_space);
+
+	LispObject* result;
+
+	if (free_space <= 100)
+		ulisp_gc(expression, env);
+
 	if (expression->type & LISP_SYMBOL) {
 		LispObject* exp = ulisp_assoc(ulisp_append(env, environnement), expression);
 
@@ -459,10 +580,12 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 			puts("");
 		}
 
-		return exp;
+		result = exp;
+		goto end;
 	}
 	else if (expression->type & LISP_NUMBER) {
-		return expression;
+		result = expression;
+		goto end;
 	}
 	else {
 		expression = ulisp_macroexpand(expression, env);
@@ -471,17 +594,24 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 
 		if (applied_symbol->type & LISP_SYMBOL) {
 			if (ulisp_eq(applied_symbol, quote)) {
-				return ulisp_car(ulisp_cdr(expression));
+				result = ulisp_car(ulisp_cdr(expression));
+				goto end;
 			}
 			else if (ulisp_eq(applied_symbol, iffe)) {
 				LispObject* arguments = ulisp_cdr(expression);
 
-				if (!ulisp_eq(ulisp_eval(ulisp_car(arguments), env), nil))
-					return ulisp_eval(ulisp_car(ulisp_cdr(arguments)), env);
-				else if (!ulisp_eq(ulisp_cdr(ulisp_cdr(arguments)), nil))
-					return ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(arguments))), env);
-				else
-					return nil;
+				if (!ulisp_eq(ulisp_eval(ulisp_car(arguments), env), nil)) {
+					result = ulisp_eval(ulisp_car(ulisp_cdr(arguments)), env);
+					goto end;
+				}
+				else if (!ulisp_eq(ulisp_cdr(ulisp_cdr(arguments)), nil)) {
+					result = ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(arguments))), env);
+					goto end;
+				}
+				else {
+					result = nil;
+					goto end;
+				}
 			}
 			else if (ulisp_eq(applied_symbol, begin))  {
 				LispObject* last_obj = nil;
@@ -489,17 +619,20 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 				for(LispObject* form = ulisp_cdr(expression); form != nil; form = ulisp_cdr(form))
 					last_obj = ulisp_eval(ulisp_car(form), env);
 
-				return last_obj;
+				result = last_obj;
+				goto end;
 			}
 			else if (ulisp_eq(applied_symbol, lambda)) {
-				return ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
-										 ulisp_cdr(ulisp_cdr(expression)),
-										 GL_FALSE);
+				result = ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
+										   ulisp_cdr(ulisp_cdr(expression)),
+										   GL_FALSE);
+				goto end;
 			}
 			else if (ulisp_eq(applied_symbol, mlambda)) {
-				return ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
-										 ulisp_cdr(ulisp_cdr(expression)),
-										 GL_TRUE);
+				result = ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
+										   ulisp_cdr(ulisp_cdr(expression)),
+										   GL_TRUE);
+				goto end;
 			}
 			else if (ulisp_eq(applied_symbol, define)) {
 				LispObject* name = ulisp_car(ulisp_cdr(expression));
@@ -508,18 +641,30 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 				LispObject* pair = ulisp_cons(name, value);
 				environnement = ulisp_cons(pair, environnement);
 
-				return name;
+				result = name;
+				goto end;
 			}
 		}
 
 		LispObject* proc = ulisp_eval(applied_symbol, env);
 		LispObject* evaluated_args = nil;
+		uint32_t args_count = 0;
 
-		for(LispObject* argument = ulisp_cdr(expression); argument != nil; argument = ulisp_cdr(argument))
+		for(LispObject* argument = ulisp_cdr(expression); argument != nil; argument = ulisp_cdr(argument)) {
+			stack_push(&gc_stack, evaluated_args);
 			evaluated_args = ulisp_cons(ulisp_eval(ulisp_car(argument), env), evaluated_args);
+			args_count++;
+		}
 
-		return ulisp_apply(proc, env, ulisp_nreverse(evaluated_args));
+		stack_pop(&gc_stack, args_count);
+
+		result = ulisp_apply(proc, env, ulisp_nreverse(evaluated_args));
+		goto end;
 	}
+
+end:
+	stack_pop(&gc_stack, 1);
+	return result;
 }
 
 LispObject* ulisp_read_list_helper(const char* string) {
@@ -598,42 +743,55 @@ LispObject* ulisp_read_list(const char* string) {
 	return expression;
 }
 
+#ifdef _DEBUG
+char* ulisp_debug_print(LispObject* obj) {
+	char* buffer = NULL;
+	size_t bufferSize = 0;
+	FILE* myStream = open_memstream(&buffer, &bufferSize);
+	ulisp_print(obj, myStream);
+
+	fclose(myStream);
+
+	return buffer;
+}
+#endif
+
 void ulisp_print(LispObject* obj, FILE* stream) {
 	if (obj->type & LISP_SYMBOL) {
 		fprintf(stream, "%s", ulisp_symbol_string(obj));
 	}
 	else if (obj->type & LISP_CONS) {
-		printf("(");
+		fprintf(stream, "(");
 
 		LispObject* c = obj;
 		for(; c->type & LISP_CONS; c = ulisp_cdr(c)) {
 			ulisp_print(ulisp_car(c), stream);
-			printf(" ");
+			fprintf(stream, " ");
 		}
 
 		if (!ulisp_eq(c, nil)) {
-			printf(" . ");
+			fprintf(stream, " . ");
 			ulisp_print(c, stream);
 		}
 
-		printf(")");
+		fprintf(stream, ")");
 	}
 	else if (obj->type & LISP_PROC_BUILTIN) {
-		printf("<BUILTIN-PROC at %p>", *(void**)obj->data);
+		fprintf(stream, "<BUILTIN-PROC at %p>", *(void**)obj->data);
 	}
 	else if (obj->type & LISP_PROC) {
 		LispProc* proc = (LispProc*)obj->data;
 
-		printf("<PROC args: ");
-		ulisp_print(proc->arguments, stdout);
-		printf(", body: ");
-		ulisp_print(proc->expression, stdout);
-		printf(">");
+		fprintf(stream, "<PROC args: ");
+		ulisp_print(proc->arguments, stream);
+		fprintf(stream, ", body: ");
+		ulisp_print(proc->expression, stream);
+		fprintf(stream, ">");
 	}
 	else if (obj->type & LISP_INTEGER) {
-		printf("%ld", *(long*)obj->data);
+		fprintf(stream, "%ld", *(long*)obj->data);
 	}
 	else if (obj->type & LISP_FLOAT) {
-		printf("%g", *(double*)obj->data);
+		fprintf(stream, "%g", *(double*)obj->data);
 	}
 }

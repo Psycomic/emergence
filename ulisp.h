@@ -13,7 +13,8 @@ enum ObjectType {
 	LISP_INTEGER = 1 << 4,
 	LISP_FLOAT = 1 << 5,
 	LISP_NUMBER = 1 << 6,
-	LISP_LIST = 1 << 7
+	LISP_LIST = 1 << 7,
+	GC_MARKED = 1 << 8
 };
 
 typedef struct {
