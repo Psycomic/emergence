@@ -336,6 +336,14 @@ LispObject* ulisp_prim_minus(LispObject* args) {
 		is_floating = GL_TRUE;
 	}
 
+	if (ulisp_cdr(args) == nil) {
+		if (is_floating)
+			return ulisp_make_float(-fsum);
+		else
+			return ulisp_make_integer(-sum);
+	}
+
+
 	for(LispObject* i = ulisp_cdr(args); i != nil; i = ulisp_cdr(i)) {
 		LispObject* number = ulisp_car(i);
 		assert(number->type & LISP_NUMBER);
@@ -393,6 +401,24 @@ LispObject* ulisp_prim_mul(LispObject* args) {
 	return ulisp_make_integer(prod);
 }
 
+LispObject* ulisp_prim_div(LispObject* args) {
+	LispObject *first = ulisp_car(args),
+		*second = ulisp_car(ulisp_cdr(args));
+
+	assert(first->type & LISP_NUMBER && second->type & LISP_NUMBER);
+
+	if (first->type & LISP_FLOAT && second->type & LISP_FLOAT)
+		return ulisp_make_float(*(double*)first->data / *(double*)second->data);
+	if (first->type & LISP_FLOAT && second->type & LISP_INTEGER)
+ 		return ulisp_make_float(*(double*)first->data / *(long*)second->data);
+	if (first->type & LISP_INTEGER && second->type & LISP_FLOAT)
+ 		return ulisp_make_float(*(long*)first->data / *(double*)second->data);
+	if (first->type & LISP_INTEGER && second->type & LISP_INTEGER)
+ 		return ulisp_make_float(*(long*)first->data / *(long*)second->data);
+
+	return NULL;
+}
+
 LispObject* ulisp_prim_num_eq(LispObject* args) {
 	LispObject* a = ulisp_car(args);
 	LispObject* b = ulisp_car(ulisp_cdr(args));
@@ -419,18 +445,32 @@ LispObject* ulisp_prim_num_inf(LispObject* args) {
 
 	assert(a->type & LISP_NUMBER && b->type & LISP_NUMBER);
 
-	if (a->type & LISP_INTEGER) {
+	if (a->type & LISP_INTEGER && b->type & LISP_INTEGER) {
 		if (*(long*)a->data < *(long*)b->data)
 			return tee;
 		else
 			return nil;
 	}
-	else {
-	if (*(double*)a->data < *(double*)b->data)
+	else if (a->type & LISP_FLOAT && b->type & LISP_FLOAT) {
+		if (*(double*)a->data < *(double*)b->data)
 			return tee;
 		else
 			return nil;
 	}
+	else if (a->type & LISP_INTEGER && b->type & LISP_FLOAT) {
+		if (*(long*)a->data < *(double*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+	else if (a->type & LISP_FLOAT && b->type & LISP_INTEGER) {
+		if (*(double*)a->data < *(long*)b->data)
+			return tee;
+		else
+			return nil;
+	}
+
+	return NULL;
 }
 
 LispObject* ulisp_prim_num_sup(LispObject* args) {
@@ -493,6 +533,7 @@ void ulisp_init(void) {
 	env_push_fun("+", ulisp_prim_plus);
 	env_push_fun("-", ulisp_prim_minus);
 	env_push_fun("*", ulisp_prim_mul);
+	env_push_fun("/", ulisp_prim_div);
 	env_push_fun("=", ulisp_prim_num_eq);
 	env_push_fun(">", ulisp_prim_num_sup);
 	env_push_fun("<", ulisp_prim_num_inf);
@@ -518,7 +559,6 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 
 		uint32_t push_count = 0;
 		while (applied_arg != nil && arg_name != nil) {
-			printf("apply:Free space %lu\n", free_space);
 			LispObject* arg = ulisp_car(arg_name);
 
 			if (ulisp_eq(arg, rest)) {
@@ -795,6 +835,6 @@ void ulisp_print(LispObject* obj, FILE* stream) {
 		fprintf(stream, "%ld", *(long*)obj->data);
 	}
 	else if (obj->type & LISP_FLOAT) {
-		fprintf(stream, "%g", *(double*)obj->data);
+		fprintf(stream, "%gf", *(double*)obj->data);
 	}
 }
