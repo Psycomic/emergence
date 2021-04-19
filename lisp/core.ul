@@ -48,6 +48,11 @@
 	  1
 	  (* x (! (1- x)))))
 
+(defmacro let (bindings &rest body)
+  (append (list (append (list (quote lambda) (map car bindings))
+						body))
+		  (map (lambda (x) (car (cdr x))) bindings)))
+
 (defun range (min max)
   (if (> min max)
 	  nil

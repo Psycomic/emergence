@@ -29,6 +29,7 @@ typedef struct {
 typedef struct {
 	LispObject* expression;
 	LispObject* arguments;
+	LispObject* environnement;
 	GLboolean is_macro;
 } LispProc;
 

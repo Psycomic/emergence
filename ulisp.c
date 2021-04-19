@@ -183,7 +183,7 @@ LispObject* ulisp_make_float(double val) {
 	return new_object;
 }
 
-LispObject* ulisp_make_lambda(LispObject* args, LispObject* body, GLboolean is_macro) {
+LispObject* ulisp_make_lambda(LispObject* args, LispObject* body, LispObject* env, GLboolean is_macro) {
 	LispObject* new_lambda = malloc(sizeof(LispObject) + sizeof(LispProc));
 	new_lambda->type = LISP_PROC;
 
@@ -191,6 +191,7 @@ LispObject* ulisp_make_lambda(LispObject* args, LispObject* body, GLboolean is_m
 
 	proc->arguments = args;
 	proc->expression = body;
+	proc->environnement = env;
 	proc->is_macro = is_macro;
 
 	return new_lambda;
@@ -542,7 +543,7 @@ void ulisp_init(void) {
 	ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil);
 }
 
-LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments) {
+LispObject* ulisp_apply(LispObject* proc, LispObject* arguments) {
 	assert(proc->type & LISP_PROC || proc->type & LISP_PROC_BUILTIN);
 	assert(arguments->type & LISP_LIST);
 
@@ -552,7 +553,7 @@ LispObject* ulisp_apply(LispObject* proc, LispObject* env, LispObject* arguments
 	}
 	else if (proc->type & LISP_PROC) {
 		LispProc* lisp_proc = (LispProc*)proc->data;
-		LispObject* new_env = env;
+		LispObject* new_env = lisp_proc->environnement;
 
 		LispObject *applied_arg = arguments,
 			*arg_name = lisp_proc->arguments;
@@ -598,7 +599,7 @@ LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
 			proc = ulisp_assoc(environnement, ulisp_car(expression));
 
 		if (proc != nil && proc->type & LISP_PROC && ((LispProc*)proc->data)->is_macro)
-			return ulisp_macroexpand(ulisp_apply(proc, env, ulisp_cdr(expression)), env);
+			return ulisp_macroexpand(ulisp_apply(proc, ulisp_cdr(expression)), env);
 		else
 			return expression;
 	}
@@ -669,12 +670,14 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 			else if (ulisp_eq(applied_symbol, lambda)) {
 				result = ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
 										   ulisp_cdr(ulisp_cdr(expression)),
+										   env,
 										   GL_FALSE);
 				goto end;
 			}
 			else if (ulisp_eq(applied_symbol, mlambda)) {
 				result = ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
 										   ulisp_cdr(ulisp_cdr(expression)),
+										   nil,
 										   GL_TRUE);
 				goto end;
 			}
@@ -700,7 +703,7 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 			args_count++;
 		}
 
-		result = ulisp_apply(proc, env, ulisp_nreverse(evaluated_args));
+		result = ulisp_apply(proc, ulisp_nreverse(evaluated_args));
 		stack_pop(&gc_stack, args_count);
 		goto end;
 	}
