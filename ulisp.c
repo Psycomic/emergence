@@ -11,9 +11,10 @@
 LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
 	*lambda, *mlambda, *define, *rest, *not_found;
 
-#define WORKSPACESIZE 8192
+#define DEFAULT_WORKSPACESIZE (2 << 16)
 
-static uint64_t free_space = WORKSPACESIZE;
+static uint64_t workspace_size = DEFAULT_WORKSPACESIZE;
+static uint64_t free_space = DEFAULT_WORKSPACESIZE;
 static uint32_t cons_cell_size = sizeof(LispObject) + sizeof(ConsCell);
 static LispObject* free_list;
 static uchar* workspace;
@@ -89,7 +90,7 @@ void free_list_sweep() {
 	free_list = nil;
 	free_space = 0;
 
-	for (int i = WORKSPACESIZE - 1; i >= 0; i--) {
+	for (int i = workspace_size - 1; i >= 0; i--) {
 		LispObject* obj = (uchar*)workspace + i * cons_cell_size;
 
 		if (!(obj->type & GC_MARKED))
@@ -110,6 +111,11 @@ void ulisp_gc(LispObject* cons_cell) {
 	free_list_sweep();
 
 	printf("Now having %lu free space!\n", free_space);
+
+/* 	if (free_space < 20) { */
+/* 		uchar* new_space = malloc(cons_cell_size * workspace_size); */
+/* 		workspace  */
+/* 	} */
 }
 
 LispObject* ulisp_cons(LispObject* first, LispObject* second) {
@@ -654,9 +660,8 @@ LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
 			args_count++;
 		}
 
-		stack_pop(&gc_stack, args_count);
-
 		result = ulisp_apply(proc, env, ulisp_nreverse(evaluated_args));
+		stack_pop(&gc_stack, args_count);
 		goto end;
 	}
 
