@@ -1,9 +1,11 @@
 #include "drawable.h"
+#include "random.h"
 
 #include <string.h>
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <GLFW/glfw3.h>
 
 #define _PSYCHE_INTERNAL
 #include "psyche.h"
@@ -14,6 +16,11 @@ extern void *calloc(size_t nmemb, size_t size);
 
 #define OFFSET_OF(s, m) (void*)(&((s*)NULL)->m)
 #define TODO() do { fprintf(stderr, "Feature not implemented!\n"); exit(-1); } while(0);
+
+#define PS_WINDOW_SELECTED_BIT  (1 << 0)
+#define PS_WINDOW_DRAGGING_BIT  (1 << 1)
+#define PS_WINDOW_SELECTION_BIT (1 << 2)
+#define PS_WINDOW_RESIZE_BIT    (1 << 3)
 
 typedef struct {
 	Vector2 position;
@@ -52,6 +59,7 @@ typedef struct {
 	uint64_t draw_lists_count;
 
 	Vector2 display_size;
+	GLFWwindow* gl_context;
 } PsDrawData;
 
 typedef struct {
@@ -80,9 +88,11 @@ typedef struct {
 	Vector2 position;
 
 	char* title;
+
+	uint32_t flags;
 } PsWindow;
 
-#define PS_MAX_WINDOWS 256
+#define PS_MAX_WINDOWS 255
 
 static PsWindow* ps_windows[PS_MAX_WINDOWS] = {};
 static uint64_t ps_windows_count = 0;
@@ -104,12 +114,17 @@ static PsPath ps_current_path;
 static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
 
+static uint last_character;
+
 static Vector2 ps_white_pixel = {
 	.x = 0.f,
 	.y = 0.f
 };
 
 extern float global_time;
+
+void ps_draw_gui();
+void ps_handle_events();
 
 void ps_draw_cmd_init(PsDrawCmd* cmd, uint64_t ibo_offset) {
 	m_bzero(cmd, sizeof(PsDrawCmd));
@@ -142,9 +157,17 @@ void ps_atlas_init(Image* image) {
 	ps_atlas.texture_id = texture_create(image);
 }
 
-void ps_resized(float width, float height) {
+void ps_resized_callback(float width, float height) {
 	ps_ctx.display_size.x = width;
 	ps_ctx.display_size.y = height;
+}
+
+void ps_character_callback(uint codepoint) {
+	last_character = codepoint;
+}
+
+void ps_scroll_callback(float yoffset) {
+	/* TODO */
 }
 
 void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t glyph_height, uint32_t width, uint32_t height) {
@@ -176,21 +199,24 @@ void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t
 	font->text_atlas.color_encoding = GL_BGRA;
 }
 
-void ps_init(Vector2 display_size) {
-	// Creating buffers
+void ps_init(GLFWwindow* gl_context) {
 	glGenBuffers(1, &ps_vbo);
 	glGenBuffers(1, &ps_ibo);
 
-	// Creating shader
 	ps_shader = shader_create("shaders/vertex_psyche.glsl", "shaders/fragment_psyche.glsl");
 	ps_matrix_location = glGetUniformLocation(ps_shader, "matrix_transform");
 	ps_texture_location = glGetUniformLocation(ps_shader, "tex");
 
 	glGenVertexArrays(1, &ps_vao);
 	m_bzero(&ps_ctx, sizeof(ps_ctx));
-	ps_ctx.display_size = display_size;
 
-	// Initializing draw lists with one draw list
+	ps_ctx.gl_context = gl_context;
+
+	int width, height;
+	glfwGetWindowSize(ps_ctx.gl_context, &width, &height);
+
+	ps_ctx.display_size = (Vector2) { { width, height } };
+
 	ps_ctx.draw_lists = calloc(5, sizeof(PsDrawList*));
 	ps_ctx.draw_lists[ps_ctx.draw_lists_count++] = calloc(1, sizeof(PsDrawList));
 
@@ -200,7 +226,6 @@ void ps_init(Vector2 display_size) {
 	DYNAMIC_ARRAY_CREATE(&ps_current_path.points, Vector2);
 	ps_current_path.thickness = 5.f;
 
-	// Initializing font
 	ps_font_init(&ps_monospaced_font, "./fonts/Monospace.bmp", 19, 32, 304, 512);
 	ps_current_font = ps_monospaced_font;
 
@@ -219,6 +244,10 @@ void ps_draw_cmd_clear(PsDrawCmd* cmd) {
 }
 
 void ps_render() {
+	ps_handle_events();
+
+	ps_draw_gui();
+
 	GLint last_vertex_array; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
 	GLint last_polygon_mode[2]; glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
 
@@ -487,17 +516,26 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 	cmd->elements_count += text_length * 6;
 }
 
+#define WINDOW_DEFAULT_WIDTH 400.f
+#define WINDOW_DEFAULT_HEIGHT 200.f
+
 PsWindow* ps_window_create(char* title) {
 	PsWindow* window = malloc(sizeof(PsWindow));
 	ps_windows[ps_windows_count++] = window;
 
-	window->size.x = 400.f;
-	window->size.y = 200.f;
+	assert(ps_windows_count < PS_MAX_WINDOWS);
 
-	window->position.x = -window->size.x / 2;
-	window->position.y = -window->size.y / 2;
+	window->size.x = WINDOW_DEFAULT_WIDTH;
+	window->size.y = WINDOW_DEFAULT_HEIGHT;
+
+	float half_width = ps_ctx.display_size.x / 2,
+		half_height = ps_ctx.display_size.y / 2;
+
+	window->position.x = random_uniform(-half_width, half_width - window->size.x);
+	window->position.y = random_uniform(-half_height, half_height - window->size.y);
 
 	window->title = title;
+	window->flags = 0;
 
 	DYNAMIC_ARRAY_CREATE(&window->widgets, PsWidget*);
 
@@ -512,34 +550,202 @@ void ps_window_destroy(PsWindow* window) {
 		if (ps_windows[i] == window)
 			break;
 
+	free(ps_windows[i]);
 	ps_windows[i] = ps_windows[--ps_windows_count];
 }
 
 void ps_widget_draw(PsWidget* widget) {}
 
-static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 1.f, 1.f } };
-static Vector4 ps_window_title_color = { { 1.f, 1.f, 1.f, 1.f } };
-static float ps_window_border_size = 5.f;
+static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 1.f, 0.8f } };
+static Vector4 ps_window_border_color = { { 1.f, 1.f, 1.f, 1.f } };
+static Vector4 ps_window_title_color = { { 0.f, 0.f, 0.f, 1.f } };
+static float ps_window_border_size = 2.f;
+
+Vector2 ps_window_position_offset(PsWindow* window) {
+	return (Vector2) {
+		{
+			window->position.x,
+			window->position.y + window->size.y + ps_window_border_size,
+		}
+	};
+}
+
+Vector2 ps_window_title_position(PsWindow* window) {
+	Vector2 offset = ps_window_position_offset(window);
+	offset.x += 10.f;
+	offset.y += 16.f;
+
+	return offset;
+}
+
+BOOL ps_window_inside(PsWindow* window, Vector2 point) {
+	float x1 = window->position.x,
+		y1 = window->position.y,
+		x2 = x1 + window->size.x + ps_window_border_size,
+		y2 = y1 + window->size.y + ps_window_border_size + 20.f;
+
+	return point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2;
+}
+
+BOOL ps_window_title_inside(PsWindow* window, Vector2 point) {
+	float x1 = window->position.x,
+		y1 = window->position.y + window->size.y,
+		x2 = x1 + window->size.x + ps_window_border_size,
+		y2 = y1 + ps_window_border_size + 20.f;
+
+	return point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2;
+}
+
+BOOL ps_window_border_inside(PsWindow* window, Vector2 point, uint8_t* out_border) {
+	BOOL collide_left = point.x >= window->position.x && point.x <= window->position.x + ps_window_border_size &&
+		point.y >= window->position.y && point.y <= window->position.y + window->size.y;
+
+	BOOL collide_right = point.x >= window->position.x + window->size.x &&
+		point.x <= window->position.x + window->size.x + ps_window_border_size &&
+		point.y >= window->position.y && point.y <= window->position.y + window->size.y;
+
+	BOOL collide_down = point.x >= window->position.x && point.x <= window->position.x + window->size.x &&
+		point.y >= window->position.y - ps_window_border_size && point.y <= window->position.y;
+
+	if (collide_left) {
+		*out_border = 0;
+		return GL_TRUE;
+	}
+	else if (collide_right) {
+		*out_border = 1;
+		return GL_TRUE;
+	}
+	else if (collide_down) {
+		*out_border = 2;
+		return GL_TRUE;
+	}
+	else {
+		*out_border = 69;
+		return GL_FALSE;
+	}
+}
 
 void ps_window_draw(PsWindow* window) {
-	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, ps_window_background_color);
+	float global_transparency = 0.5f;
 
-	Vector2 title_position;
-	title_position.y = window->position.y + window->size.y;
-	title_position.x = window->position.x;
+	if (window->flags & PS_WINDOW_SELECTED_BIT)
+		global_transparency = 1.f;
 
-	ps_fill_rect(window->position.x, window->position.y, window->size.x, ps_window_border_size, ps_window_title_color);
-	ps_fill_rect(window->position.x, window->position.y + window->size.y, window->size.x, ps_window_border_size, ps_window_title_color);
-	ps_fill_rect(window->position.x, window->position.y, ps_window_border_size, window->size.y, ps_window_title_color);
-	ps_fill_rect(window->position.x + window->size.x - ps_window_border_size, window->position.y, ps_window_border_size, window->size.y, ps_window_title_color);
+	Vector4 background_color = ps_window_background_color,
+		border_color = ps_window_border_color,
+		title_color = ps_window_title_color;
 
-	ps_text(window->title, title_position, 20.f, ps_window_title_color);
+	background_color.w *= global_transparency;
+	border_color.w *= global_transparency;
+	title_color.w *= global_transparency;
+
+	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, background_color);
+
+	Vector2 title_position = ps_window_title_position(window);
+
+	ps_fill_rect(window->position.x, window->position.y, window->size.x, ps_window_border_size, border_color);
+	ps_fill_rect(window->position.x, window->position.y + window->size.y, window->size.x, ps_window_border_size + 20.f, border_color);
+	ps_fill_rect(window->position.x, window->position.y, ps_window_border_size, window->size.y, border_color);
+	ps_fill_rect(window->position.x + window->size.x - ps_window_border_size, window->position.y, ps_window_border_size, window->size.y, border_color);
+
+	ps_text(window->title, title_position, 18.f, title_color);
 
 	for (uint64_t i = 0; i < window->widgets.size; i++)
 		ps_widget_draw(dynamic_array_at(&window->widgets, i));
 }
 
 void ps_draw_gui() {
-	for (uint64_t i = 0; i < ps_windows_count; i++)
+	ps_windows[ps_windows_count - 1]->flags |= PS_WINDOW_SELECTED_BIT;
+
+	for (uint64_t i = 0; i < ps_windows_count; i++) {
 		ps_window_draw(ps_windows[i]);
+		ps_windows[i]->flags &= ~PS_WINDOW_SELECTED_BIT;
+	}
+}
+
+void ps_window_switch_to(uint64_t id) {
+	PsWindow* temp = ps_windows[id];
+
+	for (uint32_t i = id; i < ps_windows_count - 1; i++) {
+		ps_windows[i] = ps_windows[i + 1];
+	}
+
+	ps_windows[ps_windows_count - 1] = temp;
+}
+
+void ps_handle_events() {
+	double xpos, ypos;
+	glfwGetCursorPos(ps_ctx.gl_context, &xpos, &ypos);
+
+	Vector2 pointer_position = {
+		{
+			xpos - ps_ctx.display_size.x / 2,
+			ps_ctx.display_size.y / 2 - ypos
+		}
+	};
+
+	int state = glfwGetMouseButton(ps_ctx.gl_context, GLFW_MOUSE_BUTTON_LEFT);
+	PsWindow* selected_window = ps_windows[ps_windows_count - 1];
+
+	static Vector2 window_drag_anchor = {};
+	static Vector2 window_original_size = {};
+
+	static uint8_t border = 6;
+
+	if (state == GLFW_PRESS) {
+		if (selected_window->flags & PS_WINDOW_DRAGGING_BIT ||
+			ps_window_title_inside(selected_window, pointer_position))
+		{
+			if (!(selected_window->flags & PS_WINDOW_DRAGGING_BIT))
+				vector2_sub(&window_drag_anchor, selected_window->position, pointer_position);
+
+			selected_window->flags |= PS_WINDOW_DRAGGING_BIT;
+			vector2_add(&selected_window->position, pointer_position, window_drag_anchor);
+		}
+		else if (selected_window->flags & PS_WINDOW_RESIZE_BIT ||
+				 ps_window_border_inside(selected_window, pointer_position, &border))
+		{
+			if (!(selected_window->flags & PS_WINDOW_DRAGGING_BIT)) {
+				window_original_size = selected_window->size;
+				window_drag_anchor = selected_window->position;
+			}
+
+			selected_window->flags |= PS_WINDOW_RESIZE_BIT;
+
+			if (border == 0) {
+				float old_size = selected_window->size.x;
+				selected_window->size.x = (window_drag_anchor.x + window_original_size.x) - pointer_position.x;
+
+				selected_window->position.x += old_size - selected_window->size.x;
+			}
+			else if (border == 1) {
+				selected_window->size.x = pointer_position.x - selected_window->position.x;
+			}
+			else if (border == 2) {
+				float old_size = selected_window->size.y;
+				selected_window->size.y = (window_drag_anchor.y + window_original_size.y) - pointer_position.y;
+
+				selected_window->position.y += old_size - selected_window->size.y;
+			}
+		}
+		else if (selected_window->flags & PS_WINDOW_SELECTION_BIT ||
+				 ps_window_inside(selected_window, pointer_position))
+		{
+			selected_window->flags |= PS_WINDOW_SELECTION_BIT;
+			// TODO
+		}
+		else {
+			for (int i = ps_windows_count - 1; i >= 0; i--) {
+				if (ps_window_inside(ps_windows[i], pointer_position)) {
+					if (i != ps_windows_count - 1)
+						ps_window_switch_to(i);
+
+					break;
+				}
+			}
+		}
+	}
+	if (state == GLFW_RELEASE) {
+		selected_window->flags &= ~(PS_WINDOW_DRAGGING_BIT | PS_WINDOW_SELECTION_BIT | PS_WINDOW_RESIZE_BIT);
+	}
 }

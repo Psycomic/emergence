@@ -10,6 +10,9 @@
 #include "camera.h"
 #include "misc.h"
 
+#define SCENE_EVENT_QUIT	(1 << 0)
+#define SCENE_GUI_MODE		(1 << 1)
+
 // What you see on the screen. It is basically the container of every
 // graphical aspect of the game : the 3D view and the 2D UI.
 typedef struct Scene {

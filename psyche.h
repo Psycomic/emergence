@@ -1,4 +1,5 @@
 #include <GL/glew.h>
+#include <GLFW/glfw3.h>
 
 #include "misc.h"
 #include "images.h"
@@ -11,9 +12,11 @@
 #ifndef _PSYCHE_INTERNAL
 typedef void PsWindow;
 
-void ps_init(Vector2 display_size);
+void ps_init(GLFWwindow* gl_context);
 void ps_render();
-void ps_resized(float width, float height);
+void ps_resized_callback(float width, float height);
+void ps_character_callback(uint codepoint);
+void ps_scroll_callback(float yoffset);
 
 void ps_begin_path();
 void ps_line_to(float x, float y);

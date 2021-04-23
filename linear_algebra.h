@@ -1,9 +1,10 @@
 #ifndef LINEAR_ALGEBRA_HEADER
 #define LINEAR_ALGEBRA_HEADER
 
-typedef unsigned int uint;
-typedef unsigned long uint64_t;
+#include <inttypes.h>
+
 typedef unsigned char BOOL;
+typedef unsigned int uint;
 
 /// A collection of 3 floats for linear algebra
 typedef union {

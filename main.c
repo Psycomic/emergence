@@ -55,18 +55,23 @@ float terrain_ridged_noise(float x, float y) {
 
 void character_callback(GLFWwindow* window, unsigned int codepoint) {
 	Scene* scene = glfwGetWindowUserPointer(window);
+
 	scene_character_callback(scene, codepoint);
+	ps_character_callback(codepoint);
 }
 
 void resize_callback(GLFWwindow* window, int width, int height) {
 	Scene* scene = glfwGetWindowUserPointer(window);
+
 	scene_resize_callback(scene, width, height);
-	ps_resized(width, height);
+	ps_resized_callback(width, height);
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 	Scene* scene = glfwGetWindowUserPointer(window);
+
 	scene_scroll_callback(scene, xoffset, yoffset);
+	ps_scroll_callback(yoffset);
 }
 
 static Scene* scene;
@@ -237,12 +242,17 @@ int main(void) {
 
 	uint64_t count = 0;
 
-	ps_init((Vector2) { { 1200, 900 } });
+	ps_init(window);
 
 	clock_t start = clock();
 	clock_t fps = 0;
 
-	PsWindow* ps_window = ps_window_create("Hello, world!");
+	for (uint i = 0; i < 5; i++) {
+		char buffer[256];
+		snprintf(buffer, sizeof(buffer), "Hello N%d", i);
+
+		ps_window_create(m_strdup(buffer));
+	}
 
 	while (!scene_should_close(scene)) {
 		scene_draw(scene, background_color);
@@ -252,9 +262,8 @@ int main(void) {
 
 		ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
-		/* ps_draw_gui(); */
-
-		ps_render();
+		if (scene->flags & SCENE_GUI_MODE)
+			ps_render();
 
 		scene_handle_events(scene, window);
 

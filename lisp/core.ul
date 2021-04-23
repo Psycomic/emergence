@@ -31,6 +31,23 @@
 				 (append (list (' mlambda) lambda-list)
 						 body))))
 
+(defmacro let (bindings &rest body)
+  (append (list (append (list (quote lambda) (map car bindings))
+						body))
+		  (map (lambda (x) (car (cdr x))) bindings)))
+
+(defun cond-helper (clauses)
+  (let ((c (car clauses)))
+	(if (null? (cdr clauses))
+		(list (' if) (car c)
+			  (car (cdr c)))
+	    (list (' if) (car c)
+			  (car (cdr c))
+			  (cond-helper (cdr clauses))))))
+
+(defmacro cond (&rest clauses)
+  (cond-helper clauses))
+
 (defun map (fn lst)
   (if (null? lst)
 	  nil
@@ -47,11 +64,6 @@
   (if (< x 1)
 	  1
 	  (* x (! (1- x)))))
-
-(defmacro let (bindings &rest body)
-  (append (list (append (list (quote lambda) (map car bindings))
-						body))
-		  (map (lambda (x) (car (cdr x))) bindings)))
 
 (defun range (min max)
   (if (> min max)
@@ -85,7 +97,7 @@
   (/ (+ x y) 2))
 
 (defun good-enough? (guess x)
-  (< (abs (- (square guess) x)) 0.001))
+  (< (abs (- (square guess) x)) 0.00001))
 
 (defun abs (x)
   (if (< x 0.0)

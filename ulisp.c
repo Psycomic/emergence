@@ -73,6 +73,7 @@ mark:
 
 		mark_object(proc->arguments);
 		mark_object(proc->expression);
+		mark_object(proc->environnement);
 	}
 }
 

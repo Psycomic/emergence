@@ -19,8 +19,6 @@
 #define CAMERA_SPEED 0.1f
 #define MOUSE_SENSIBILLITY 0.01f
 
-#define SCENE_EVENT_QUIT		(1 << 0)
-
 #define WINDOW_ELEMENT_DEPTH_OFFSET 0.001f
 
 #define WINDOW_BACKGROUND_VERTEX_SIZE 8
@@ -206,7 +204,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	/* glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); */
 
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
@@ -233,7 +231,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		}
 	}
 
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	/* glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); */
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -261,31 +259,35 @@ Drawable* scene_create_drawable(Scene* scene, uint* elements, uint elements_numb
 
 // Handle every event happening in the scene. TODO: Cleanup
 void scene_handle_events(Scene* scene, GLFWwindow* window) {
+	if (scene->glfw_last_character == 'e') {
+		if (scene->flags & SCENE_GUI_MODE)
+			scene->flags &= ~SCENE_GUI_MODE;
+		else
+			scene->flags |= SCENE_GUI_MODE;
+	}
+
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
 
-	int width, height;
-	glfwGetWindowSize(window, &width, &height);
+	if (!(scene->flags & SCENE_GUI_MODE)) {
+		Vector3 camera_direction;
+		camera_get_direction(&scene->camera, &camera_direction, CAMERA_SPEED);
 
-	Vector3 camera_direction;
-	camera_get_direction(&scene->camera, &camera_direction, CAMERA_SPEED);
+		if (glfwGetKey(window, GLFW_KEY_W)) {
+			camera_translate(&scene->camera, camera_direction);
+		}
+		if (glfwGetKey(window, GLFW_KEY_S)) {
+			vector3_neg(&camera_direction);
+			camera_translate(&scene->camera, camera_direction);
+		}
 
-	// Keyboard input handling
-	if (glfwGetKey(window, GLFW_KEY_W)) {
-		camera_translate(&scene->camera, camera_direction);
+		if (last_xpos == -1.0 || last_ypos == -1.0) {
+			last_xpos = xpos;
+			last_ypos = ypos;
+		}
+
+		camera_rotate(&scene->camera, ((float)ypos - last_ypos) * MOUSE_SENSIBILLITY, -((float)xpos - last_xpos) * MOUSE_SENSIBILLITY);
 	}
-	if (glfwGetKey(window, GLFW_KEY_S)) {
-		vector3_neg(&camera_direction);
-		camera_translate(&scene->camera, camera_direction);
-	}
-
-	if (last_xpos == -1.0 || last_ypos == -1.0) {
-		last_xpos = xpos;
-		last_ypos = ypos;
-	}
-
-	// Rotate the camera proporitionaly to the mouse position
-	camera_rotate(&scene->camera, ((float)ypos - last_ypos) * MOUSE_SENSIBILLITY, -((float)xpos - last_xpos) * MOUSE_SENSIBILLITY);
 
 	last_xpos = xpos;
 	last_ypos = ypos;
