@@ -10,10 +10,14 @@
 #define DYNAMIC_ARRAY_AT(ARR, INDEX, TYPE) ((TYPE*)dynamic_array_at(ARR, INDEX))
 #define CONS(A, B) cons(&A, sizeof(A), B)
 
-#define SUPER(INSTANCE) &INSTANCE->header
+#define SUPER(INSTANCE) (&(INSTANCE)->header)
 
 #define max(a, b) (a) > (b) ? (a) : (b)
 #define min(a, b) (a) < (b) ? (a) : (b)
+
+#define ASSERT_CONCAT_(a, b) a##b
+#define ASSERT_CONCAT(a, b) ASSERT_CONCAT_(a, b)
+#define ct_assert(e) enum { ASSERT_CONCAT(assert_line_, __LINE__) = 1/(!!(e)) }
 
 #ifdef _DEBUG
 

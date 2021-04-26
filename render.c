@@ -14,10 +14,11 @@
 #include "drawable.h"
 #include "batch_renderer.h"
 #include "psyche.h"
+#include "window.h"
 
 #define SCENE_DEFAULT_CAPACITY 10
 #define CAMERA_SPEED 0.1f
-#define MOUSE_SENSIBILLITY 0.01f
+#define MOUSE_SENSIBILLITY 0.005f
 
 #define WINDOW_ELEMENT_DEPTH_OFFSET 0.001f
 
@@ -46,40 +47,8 @@ extern float global_time;
 void render_initialize(void);
 float random_float(void);
 
-int initialize_everything() {
-	glewExperimental = 1;
-
-	if (!glfwInit()) {
-		fprintf(stderr, "GLFW not initialized correctly !\n");
-		return -1;
-	}
-
-	glfwWindowHint(GLFW_SAMPLES, 4); // 4x antialiasing
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // We want OpenGL 3.3
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-
-	return 0;
-}
-
-void scene_character_callback(Scene* scene, unsigned int codepoint) {
-	scene->glfw_last_character = codepoint;
-}
-
 void scene_resize_callback(Scene* scene, int width, int height) {
 	scene_set_size(scene, width, height);
-}
-
-void scene_scroll_callback(Scene* scene, float xoffset, float yoffset) {
-// Pass
-}
-
-GLFWwindow* scene_context(Scene* scene) {
-	return scene->context;
-}
-
-int scene_should_close(Scene* scene) {
-	return glfwWindowShouldClose(scene->context) ||	scene->flags & SCENE_EVENT_QUIT;
 }
 
 void scene_quit(Scene* scene) {
@@ -98,32 +67,9 @@ void scene_update_framebuffer(Scene* scene, int width, int height) {
 	glBindRenderbuffer(GL_RENDERBUFFER, 0);
 }
 
-Scene* scene_create(Vector3 camera_position, int width, int height, const char* title) {
+Scene* scene_create(Vector3 camera_position) {
 	Scene* scene = malloc(sizeof(Scene)); // Allocating the scene object
 	assert(scene != NULL);
-
-	int return_code = initialize_everything();
-	assert(return_code == 0);
-
-	// Creating window and OpenGL context
-	scene->context = glfwCreateWindow(width, height, title, NULL, NULL);
-
-	if (scene->context == NULL) {
-		fprintf(stderr, "Failed to open a window\n");
-		return NULL;
-	}
-
-	glfwSetWindowUserPointer(scene->context, scene);
-	glfwGetWindowSize(scene->context, &width, &height);
-
-	glfwMakeContextCurrent(scene->context); // Make window the current context
-
-	if (glewInit() != GLEW_OK) {
-		fprintf(stderr, "Failed to initialize GLEW\n");
-		return NULL;
-	}
-
-	glfwSwapInterval(1);			// Disable double buffering
 
 	// Initializing framebuffer
 	glGenFramebuffers(1, &scene->fbo);
@@ -132,7 +78,7 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 	glGenTextures(1, &scene->fbo_color_buffer);
 	glGenRenderbuffers(1, &scene->rbo);
 
-	scene_update_framebuffer(scene, width, height);
+	scene_update_framebuffer(scene, g_window.size.x, g_window.size.y);
 
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene->fbo_color_buffer, 0);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, scene->rbo);
@@ -144,19 +90,10 @@ Scene* scene_create(Vector3 camera_position, int width, int height, const char* 
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// OpenGL settings
-	glEnable(GL_BLEND);			// Enable blend
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
-
-	glEnable(GL_CULL_FACE);
-
-	glViewport(0, 0, width, height); // Viewport size
-
 	render_initialize();		// Initialize scene
-	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, width, height); // Initalize player camera
+	camera_init(&scene->camera, camera_position, 1e+4f, 1e-4f, 120.f, g_window.size.x, g_window.size.y); // Initalize player camera
 
 	scene->flags = 0x0;
-	scene->glfw_last_character = 0;
 
 	DYNAMIC_ARRAY_CREATE(&scene->drawables, Drawable*);
 
@@ -204,7 +141,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	/* glPolygonMode(GL_FRONT_AND_BACK, GL_LINE); */
+	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
@@ -231,7 +168,7 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		}
 	}
 
-	/* glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); */
+	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -258,25 +195,24 @@ Drawable* scene_create_drawable(Scene* scene, uint* elements, uint elements_numb
 }
 
 // Handle every event happening in the scene. TODO: Cleanup
-void scene_handle_events(Scene* scene, GLFWwindow* window) {
-	if (scene->glfw_last_character == 'e') {
-		if (scene->flags & SCENE_GUI_MODE)
-			scene->flags &= ~SCENE_GUI_MODE;
-		else
+void scene_handle_events(Scene* scene) {
+	if (!(scene->flags & SCENE_GUI_MODE) &&	g_window.keys[GLFW_KEY_E])
 			scene->flags |= SCENE_GUI_MODE;
-	}
 
-	double xpos, ypos;
-	glfwGetCursorPos(window, &xpos, &ypos);
+	if (scene->flags & SCENE_GUI_MODE && g_window.keys[GLFW_KEY_ESCAPE])
+			scene->flags &= ~SCENE_GUI_MODE;
+
+	float xpos = g_window.cursor_position.x,
+		ypos = g_window.cursor_position.y;
 
 	if (!(scene->flags & SCENE_GUI_MODE)) {
 		Vector3 camera_direction;
 		camera_get_direction(&scene->camera, &camera_direction, CAMERA_SPEED);
 
-		if (glfwGetKey(window, GLFW_KEY_W)) {
+		if (g_window.keys[GLFW_KEY_W]) {
 			camera_translate(&scene->camera, camera_direction);
 		}
-		if (glfwGetKey(window, GLFW_KEY_S)) {
+		if (g_window.keys[GLFW_KEY_S]) {
 			vector3_neg(&camera_direction);
 			camera_translate(&scene->camera, camera_direction);
 		}
@@ -286,13 +222,11 @@ void scene_handle_events(Scene* scene, GLFWwindow* window) {
 			last_ypos = ypos;
 		}
 
-		camera_rotate(&scene->camera, ((float)ypos - last_ypos) * MOUSE_SENSIBILLITY, -((float)xpos - last_xpos) * MOUSE_SENSIBILLITY);
+		camera_rotate(&scene->camera, ((float)ypos - last_ypos) * -MOUSE_SENSIBILLITY, -((float)xpos - last_xpos) * MOUSE_SENSIBILLITY);
 	}
 
 	last_xpos = xpos;
 	last_ypos = ypos;
-
-	scene->glfw_last_character = 0;
 }
 
 void render_initialize(void) {

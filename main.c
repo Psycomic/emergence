@@ -7,20 +7,6 @@
 #include <assert.h>
 #include <time.h>
 
-#ifdef _WIN32
-#include <windows.h>
-
-void usleep(clock_t time) {
-	Sleep(time);
-}
-
-#endif // _WIN32
-#ifdef __linux__
-
-extern int usleep (unsigned int __useconds);
-
-#endif // __linux__
-
 #include "misc.h"
 #include "render.h"
 #include "physics.h"
@@ -28,6 +14,7 @@ extern int usleep (unsigned int __useconds);
 #include "noise.h"
 #include "psyche.h"
 #include "random.h"
+#include "window.h"
 
 #define WORLD_STEP 0.1f
 
@@ -51,27 +38,6 @@ float terrain_noise(float x, float y) {
 
 float terrain_ridged_noise(float x, float y) {
 	return clampf(ridged_noise(&octaves, x, y) + 0.5f, 0.f, 1.f);
-}
-
-void character_callback(GLFWwindow* window, unsigned int codepoint) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
-	scene_character_callback(scene, codepoint);
-	ps_character_callback(codepoint);
-}
-
-void resize_callback(GLFWwindow* window, int width, int height) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
-	scene_resize_callback(scene, width, height);
-	ps_resized_callback(width, height);
-}
-
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-	Scene* scene = glfwGetWindowUserPointer(window);
-
-	scene_scroll_callback(scene, xoffset, yoffset);
-	ps_scroll_callback(yoffset);
 }
 
 static Scene* scene;
@@ -100,11 +66,49 @@ void update_fractal(void) {
 
 		hopalong_color[i] = color;
 	}
+
+	drawable_update(hopalong_drawable);
 }
 
 static char* main_file_contents = NULL;
+static World* physic_world;
+static Drawable* triangle1_drawable;
+static Drawable* triangle2_drawable;
+static Vector3 background_color = { { 0, 0, 0.2f } };
+static PsButton* test_btn;
 
-int main(void) {
+void update(clock_t fps) {
+	scene_draw(scene, background_color);
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%lu FPS", fps);
+
+	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
+
+	if (ps_button_state(test_btn) & PS_BUTTON_CLICKED) {
+		printf("Hello!\n");
+		update_fractal();
+	}
+
+	if (scene->flags & SCENE_GUI_MODE)
+		ps_render();
+
+	scene_handle_events(scene);
+
+	if (g_window.keys[GLFW_KEY_Q]) {
+		world_update(physic_world, 0.01f);
+
+		drawable_update(triangle1_drawable);
+		drawable_update(triangle2_drawable);
+	}
+}
+
+void setup() {
+	scene = scene_create((Vector3) { { 0.f, 0.f, 0.f } });
+	ps_init();
+}
+
+int main() {
 	random_seed(time(NULL));
 
 	main_file_contents = read_file("lisp/core.ul");
@@ -117,8 +121,6 @@ int main(void) {
 		goto error;
 	if (image_load_bmp(&lain_image, "./images/lain.bmp") < 0)
 		goto error;
-
-	Vector3 camera_position = { { 0.f, 0.f, 0.f } };
 
 	Vector3 triangle1_vertices[] = {
 		{ { 2.f, 1.f, 0.f, } },
@@ -139,7 +141,7 @@ int main(void) {
 	};
 
 	Vector3 gravity = { { 0.f, -0.05f, 0.f } };
-	World* physic_world = world_create(gravity, 10);
+	physic_world = world_create(gravity, 10);
 
 	Shape triangle1_shape = { { { 0.f, 0.f, 0.f } }, triangle1_vertices, NULL, 3, 3, };
 	Shape triangle2_shape = { { { 0.f, 1.f, 0.5f } }, triangle2_vertices, NULL, 3, 3 };
@@ -173,15 +175,7 @@ int main(void) {
 	hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 	hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 
-	update_fractal();
-
-	// Creating a window and initialize an opengl context
-	if ((scene = scene_create(camera_position, 1200, 900, "Emergence")) == NULL)
-		return -1;
-
-	glfwSetCharCallback(scene->context, character_callback);
-	glfwSetWindowSizeCallback(scene->context, resize_callback);
-	glfwSetScrollCallback(scene->context, scroll_callback);
+	window_create(1200, 800, "Emergence", setup, update);
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
@@ -197,8 +191,6 @@ int main(void) {
 	image_destroy(&lain_image);
 	image_destroy(&copland_os_image);
 
-	Vector3 background_color = { { 0, 0, 0.2f } };
-
 	ArrayBufferDeclaration triangle1_buffers[] = {
 		{ triangle1_vertices, sizeof(triangle1_vertices), 3, 0, GL_STATIC_DRAW },
 		{ texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW }
@@ -209,8 +201,8 @@ int main(void) {
 		{ texture_coords, sizeof(texture_coords), 2, 1, GL_STATIC_DRAW }
 	};
 
-	Drawable* triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
-	Drawable* triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
+	triangle1_drawable = scene_create_drawable(scene, NULL, 3, triangle1_buffers, 2, texture_material1, GL_TRIANGLES, &triangle1_shape.position, &lain_texture, 1, DRAWABLE_SHOW_AXIS);
+	triangle2_drawable = scene_create_drawable(scene, NULL, 3, triangle2_buffers, 2, texture_material2, GL_TRIANGLES, &triangle2_shape.position, &copland_os_texture, 1, DRAWABLE_SHOW_AXIS);
 
 	Material* terrain_material = material_create(color_shader, NULL, 0);
 
@@ -231,78 +223,15 @@ int main(void) {
 	Vector3	hopalong_position = { { 10.f, 0.f, 5.f } };
 	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
-	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
+	update_fractal();
 
-	glfwPollEvents();
+	PsWindow* test_window = ps_window_create("Serial Experiments Lain: Layer 04, Girls");
+	PsLabel* test_label = ps_label_create(test_window, "Accela\nA drug created to kill most people", 15);
+	PsLabel* label = ps_label_create(test_window, "TESTTEEE", 15);
+	PsLabel* child_label = ps_label_create(test_window, "LETS ALL LOVE LAIN", 15);
+	test_btn = ps_button_create(test_window, "Click me!", 16);
 
-	GLFWwindow* window = scene_context(scene);
-
-	DynamicArray frames;
-	DYNAMIC_ARRAY_CREATE(&frames, clock_t);
-
-	uint64_t count = 0;
-
-	ps_init(window);
-
-	clock_t start = clock();
-	clock_t fps = 0;
-
-	for (uint i = 0; i < 5; i++) {
-		char buffer[256];
-		snprintf(buffer, sizeof(buffer), "Hello N%d", i);
-
-		ps_window_create(m_strdup(buffer));
-	}
-
-	while (!scene_should_close(scene)) {
-		scene_draw(scene, background_color);
-
-		char buf[256];
-		snprintf(buf, sizeof(buf), "%lu FPS", fps);
-
-		ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
-
-		if (scene->flags & SCENE_GUI_MODE)
-			ps_render();
-
-		scene_handle_events(scene, window);
-
-		glfwSwapBuffers(window);
-		glfwPollEvents();
-
-		if (glfwGetKey(window, GLFW_KEY_Q)) {
-			world_update(physic_world, 0.01f);
-
-			drawable_update(triangle1_drawable);
-			drawable_update(triangle2_drawable);
-		}
-
-		clock_t end = clock();
-		clock_t* delta = dynamic_array_push_back(&frames, 1);
-		*delta = end - start;
-
-		global_time += ((float)*delta) / CLOCKS_PER_SEC;
-
-		if (count++ % 10 == 0)
-			fps = CLOCKS_PER_SEC / *delta;
-
-		clock_t wait_time = max(spf - *delta, 0);
-		usleep(wait_time);
-
-		start = clock();
-	}
-
-	clock_t average_frame = 0;
-
-	for (uint i = 0; i < frames.size; i++)
-		average_frame += *((clock_t*)dynamic_array_at(&frames, i));
-
-	float average_frame_duration = average_frame / frames.size,
-		average_fps =  CLOCKS_PER_SEC / average_frame_duration;
-
-	printf("Average frame time: %f\nAverage FPS: %f\n", average_frame_duration, average_fps);
-
-	glfwTerminate();
+	window_mainloop();
 
 	return 0;
 

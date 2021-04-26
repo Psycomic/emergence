@@ -3,6 +3,7 @@
   _Age:_ 25 years old
   _Date of birth:_ 24/03/1995
   _Nationality:_ Japanese
+  _Region:_ Hokkaido
 
 * Likes
   + Computers
