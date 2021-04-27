@@ -45,12 +45,18 @@ static Vector3* hopalong_points;
 static Vector3* hopalong_color;
 static Drawable* hopalong_drawable;
 
+static float hopalong_a = 0.5f,
+	hopalong_b = -0.2f,
+	hopalong_c = 0.96f;
+
+static Vector3 hopalong_subsets[SUBSET_NUMBER];
+
 void update_fractal(void) {
 	static const float scale = 4.f;
 
-	float a = gaussian_random() * scale,
-		b = gaussian_random() * scale,
-		c = gaussian_random() * scale;
+	float a = hopalong_a * scale,
+		b = hopalong_b * scale,
+		c = hopalong_c * scale;
 
 	printf("A %.2f; B %.2f; C %.2f;\n", a, b, c);
 
@@ -61,10 +67,7 @@ void update_fractal(void) {
 	uint rate = (ITERATIONS_NUMBER / SUBSET_NUMBER);
 
 	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
-		if (i % rate == 0)
-			random_arrayf((float*)&color, 3);
-
-		hopalong_color[i] = color;
+		hopalong_color[i] = hopalong_subsets[i * SUBSET_NUMBER / ITERATIONS_NUMBER];
 	}
 
 	drawable_update(hopalong_drawable);
@@ -75,7 +78,7 @@ static World* physic_world;
 static Drawable* triangle1_drawable;
 static Drawable* triangle2_drawable;
 static Vector3 background_color = { { 0, 0, 0.2f } };
-static PsButton *randomize_btn, *quit_btn;
+static PsButton *randomize_btn;
 
 void update(clock_t fps) {
 	scene_draw(scene, background_color);
@@ -85,11 +88,14 @@ void update(clock_t fps) {
 
 	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
-	if (ps_button_state(randomize_btn) & PS_BUTTON_CLICKED)
-		update_fractal();
+	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {
+		random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
+		hopalong_a = clampf(gaussian_random(), -1.f, 1.f);
+		hopalong_b = clampf(gaussian_random(), -1.f, 1.f);
+		hopalong_c = clampf(gaussian_random(), -1.f, 1.f);
 
-	if (ps_button_state(quit_btn) & PS_BUTTON_CLICKED)
-		g_window.should_close = GL_TRUE;
+		update_fractal();
+	}
 
 	if (scene->flags & SCENE_GUI_MODE)
 		ps_render();
@@ -227,15 +233,25 @@ int main() {
 	Vector3	hopalong_position = { { 10.f, 0.f, 5.f } };
 	hopalong_drawable = scene_create_drawable(scene, NULL, ITERATIONS_NUMBER, hopalong_buffers, ARRAY_SIZE(hopalong_buffers), hopalong_material, GL_POINTS, &hopalong_position, NULL, 0, 0x0);
 
+	random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
 	update_fractal();
 
-	PsWindow* test_window = ps_window_create("Serial Experiments Lain: Layer 04, Girls");
-	PsLabel* test_label = ps_label_create(test_window, "Accela\nA drug created to kill most people", 15);
-	PsLabel* label = ps_label_create(test_window, "TESTTEEE", 15);
-	PsLabel* child_label = ps_label_create(test_window, "LETS ALL LOVE LAIN", 15);
+	PsWindow* hopalong_window = ps_window_create("Hopalong fractal");
 
-	randomize_btn = ps_button_create(test_window, "Randomize fractal", 16);
-	quit_btn = ps_button_create(test_window, "Quit game", 16);
+	PsLabel* a_label = ps_label_create(hopalong_window, "Variable A:", 15);
+	PsSlider* a_slider = ps_slider_create(hopalong_window, &hopalong_a, -1.f, 1.f, 16, 150.f, update_fractal);
+
+	PsLabel* b_label = ps_label_create(hopalong_window, "Variable B:", 15);
+	PsSlider* b_slider = ps_slider_create(hopalong_window, &hopalong_b, -1.f, 1.f, 16, 150.f, update_fractal);
+
+	PsLabel* c_label = ps_label_create(hopalong_window, "Variable C:", 15);
+	PsSlider* c_slider = ps_slider_create(hopalong_window, &hopalong_c, -1.f, 1.f, 16, 150.f, update_fractal);
+
+	randomize_btn = ps_button_create(hopalong_window, "Randomize fractal", 16);
+
+	PsWindow* terrain_window = ps_window_create("Terrain");
+
+	PsButton* regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
 
 	window_mainloop();
 

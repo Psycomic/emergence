@@ -9,15 +9,17 @@
 #define PS_FILLED_POLY		(1 << 2)
 #define PS_TEXTURED_POLY	(1 << 3)
 
-#define PS_BUTTON_HOVERED	(1 << 0)
-#define PS_BUTTON_CLICKING	(1 << 1)
-#define PS_BUTTON_CLICKED	(1 << 2)
+#define PS_WIDGET_SELECTED	(1 << 0)
+#define PS_WIDGET_HOVERED	(1 << 1)
+#define PS_WIDGET_CLICKING	(1 << 2)
+#define PS_WIDGET_CLICKED	(1 << 3)
 
 #ifndef _PSYCHE_INTERNAL
 typedef void PsWindow;
 typedef void PsWidget;
 typedef void PsLabel;
 typedef void PsButton;
+typedef void PsSlider;
 
 void ps_init();
 void ps_render();
@@ -36,8 +38,11 @@ PsWindow* ps_window_create(char* title);
 void ps_window_destroy(PsWindow* window);
 
 PsLabel* ps_label_create(PsWidget* parent, char* text, float size);
+
 PsButton* ps_button_create(PsWidget* parent, char* text, float size);
-uint32_t ps_button_state(PsButton* button);
+uint8_t ps_button_state(PsButton* button);
+
+PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float max_val, float text_size, float width, void (*callback)());
 
 void ps_draw_gui();
 #endif

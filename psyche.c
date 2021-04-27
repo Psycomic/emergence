@@ -88,6 +88,8 @@ typedef struct PsWidget {
 	void (*draw)(struct PsWidget*, float);
 	Vector2 (*anchor)(struct PsWidget*);
 	Vector2 (*size)(struct PsWidget*);
+
+	uint32_t flags;
 } PsWidget;
 
 typedef struct {
@@ -117,10 +119,19 @@ typedef struct {
 	char* text;
 	float text_size;
 
-	uint8_t state;
-
 	Vector2 size;
 } PsButton;
+
+typedef struct {
+	PsWidget header;
+
+	float* val;
+	float min_val, max_val;
+	float text_size;
+	float width;
+
+	void (*callback)();
+} PsSlider;
 
 #define PS_MAX_WINDOWS 255
 
@@ -575,6 +586,7 @@ void ps_widget_init(PsWidget* widget, PsWidget* parent, void (*draw_fn)(PsWidget
 	widget->draw = draw_fn;
 	widget->anchor = anchor_fn ? anchor_fn : ps_widget_anchor;
 	widget->size = size_fn;
+	widget->flags = 0;
 
 	DYNAMIC_ARRAY_CREATE(&widget->children, PsWidget*);
 
@@ -626,6 +638,11 @@ void ps_widget_draw(PsWidget* widget) {
 
 	for (uint64_t i = 0; i < widget->children.size; i++) {
 		PsWidget** w = dynamic_array_at(&widget->children, i);
+		if (widget->flags & PS_WIDGET_SELECTED)
+			(*w)->flags |= PS_WIDGET_SELECTED;
+		else
+			(*w)->flags &= ~PS_WIDGET_SELECTED;
+
 		(*w)->draw(*w, offset);
 
 		offset += (*w)->size(*w).y;
@@ -741,10 +758,15 @@ float ps_text_height(const char* text, float size) {
 }
 
 void ps_window_draw(PsWindow* window, float offset) {
-	float global_transparency = 0.5f;
+	float global_transparency = 1.0f;
 
-	if (window->flags & PS_WINDOW_SELECTED_BIT)
-		global_transparency = 1.f;
+	if (window->flags & PS_WINDOW_SELECTED_BIT) {
+		SUPER(window)->flags = PS_WIDGET_SELECTED;
+	}
+	else {
+		SUPER(window)->flags &= ~PS_WIDGET_SELECTED;
+		global_transparency = 0.5f;
+	}
 
 	Vector4 background_color = ps_window_background_color,
 		border_color = ps_window_border_color,
@@ -883,7 +905,7 @@ Vector2 ps_label_size(PsLabel* label) {
 PsLabel* ps_label_create(PsWidget* parent, char* text, float size) {
 	PsLabel* label = malloc(sizeof(PsLabel));
 
-	label->color = (Vector4) { { 1.f, 0.f, 0.f, 1.f } };
+	label->color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
 	label->text = text;
 	label->text_size = size;
 
@@ -912,37 +934,39 @@ void ps_button_draw(PsButton* button, float offset) {
 		w = button->size.x + button_padding * 2,
 		h = button->size.y + button_padding * 2;
 
-	button->state &= ~PS_BUTTON_CLICKED;
-
-	if (!g_window.mouse_button_left_state && button->state & PS_BUTTON_CLICKING)
-		button->state |= PS_BUTTON_CLICKED;
-
-	button->state &= ~PS_BUTTON_CLICKING;
-
-	if (is_in_box(g_window.cursor_position, x, y, w, h)) {
-		button->state |= PS_BUTTON_HOVERED;
-
-		if (g_window.mouse_button_left_state)
-			button->state |= PS_BUTTON_CLICKING;
-	}
-	else {
-		button->state &= ~(PS_BUTTON_HOVERED | PS_BUTTON_CLICKING);
-	}
+	SUPER(button)->flags &= ~PS_WIDGET_CLICKED;
 
 	Vector4 bc_color = button_background_color,
 		txt_color = button_text_color;
 
-	if (button->state & PS_BUTTON_HOVERED) {
-		for (uint i = 0; i < 4; i++) {
-			bc_color.D[i] *= 1.4;
-			txt_color.D[i] *= 0.8;
-		}
-	}
+	if (SUPER(button)->flags & PS_WIDGET_SELECTED) {
+		if (!g_window.mouse_button_left_state && SUPER(button)->flags & PS_WIDGET_CLICKING)
+			SUPER(button)->flags |= PS_WIDGET_CLICKED;
 
-	if (button->state & PS_BUTTON_CLICKING) {
-		for (uint i = 0; i < 4; i++) {
-			bc_color.D[i] *= 0.5;
-			txt_color.D[i] *= 1.5;
+		SUPER(button)->flags &= ~PS_WIDGET_CLICKING;
+
+		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
+			SUPER(button)->flags |= PS_WIDGET_HOVERED;
+
+			if (g_window.mouse_button_left_state)
+				SUPER(button)->flags |= PS_WIDGET_CLICKING;
+		}
+		else {
+			SUPER(button)->flags &= ~(PS_WIDGET_HOVERED | PS_WIDGET_CLICKING);
+		}
+
+		if (SUPER(button)->flags & PS_WIDGET_HOVERED) {
+			for (uint i = 0; i < 4; i++) {
+				bc_color.D[i] *= 1.4;
+				txt_color.D[i] *= 0.8;
+			}
+		}
+
+		if (SUPER(button)->flags & PS_WIDGET_CLICKING) {
+			for (uint i = 0; i < 4; i++) {
+				bc_color.D[i] *= 0.5;
+				txt_color.D[i] *= 1.5;
+			}
 		}
 	}
 
@@ -956,8 +980,8 @@ void ps_button_draw(PsButton* button, float offset) {
 	ps_text(button->text, anchor, button->text_size, txt_color);
 }
 
-uint32_t ps_button_state(PsButton* button) {
-	return button->state;
+uint8_t ps_button_state(PsButton* button) {
+	return SUPER(button)->flags;
 }
 
 Vector2 ps_button_size(PsButton* button) {
@@ -977,9 +1001,89 @@ PsButton* ps_button_create(PsWidget* parent, char* text, float size) {
 	button->size.x = ps_text_width(text, size);
 	button->size.y = ps_text_height(text, size);
 
-	button->state = 0;
-
 	ps_widget_init(SUPER(button), parent, ps_button_draw, NULL, ps_button_size);
 
 	return button;
+}
+
+static float slider_margin = 3.f;
+static Vector4 slider_background_color = { { 0.1f, 0.1f, 0.1f, 1.f } },
+	slider_foreground_color = { { 0.5f, 0.1f, 1.f, 1.f } },
+	slider_text_color = { { 1.f, 1.f, 1.f, 1.f } };
+
+void ps_slider_draw(PsSlider* slider, float offset) {
+	PsWidget* parent = SUPER(slider)->parent;
+
+	Vector2 anchor = parent->anchor(parent);
+	anchor.y -= offset;
+
+	float x = anchor.x,
+		h = slider->text_size + slider_margin * 2,
+		y = anchor.y - h,
+		w = slider->width;
+
+	Vector4 fg_color = slider_foreground_color,
+		bg_color = slider_background_color,
+		txt_color = slider_text_color;
+
+	if (SUPER(slider)->flags & PS_WIDGET_SELECTED) {
+		SUPER(slider)->flags &= ~(PS_WIDGET_HOVERED | PS_WIDGET_CLICKING);
+
+		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
+			SUPER(slider)->flags |= PS_WIDGET_HOVERED;
+
+			if (g_window.mouse_button_left_state)
+				SUPER(slider)->flags |= PS_WIDGET_CLICKING;
+		}
+
+		if (SUPER(slider)->flags & PS_WIDGET_CLICKING) {
+			for (uint i = 0; i < 4; i++) {
+				fg_color.D[i] *= 1.6;
+				bg_color.D[i] *= 1.6;
+				txt_color.D[i] *= 0.7;
+			}
+
+			*slider->val = slider->min_val + ((g_window.cursor_position.x - x) / slider->width) *
+				(slider->max_val - slider->min_val);
+
+			if (slider->callback)
+				slider->callback();
+		}
+		else if (SUPER(slider)->flags & PS_WIDGET_HOVERED) {
+			for (uint i = 0; i < 4; i++) {
+				fg_color.D[i] *= 1.4;
+				bg_color.D[i] *= 1.6;
+			}
+		}
+	}
+
+	ps_fill_rect(x, y, w, h, bg_color);
+	ps_fill_rect(x, y, w * ((*slider->val - slider->min_val) / (slider->max_val - slider->min_val)), h, fg_color);
+
+	char buffer[1024];
+	snprintf(buffer, sizeof(buffer), "%.2f\n", *slider->val);
+
+	ps_text(buffer, (Vector2) { {
+				x + slider->width / 2 - ps_text_width(buffer, slider->text_size) / 2,
+				anchor.y - slider_margin
+			} },
+		slider->text_size, slider_text_color);
+}
+
+Vector2 ps_slider_size(PsSlider* slider) {
+	return (Vector2) { { slider->width, slider->text_size + slider_margin * 2 } };
+}
+
+PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float max_val, float text_size, float width, void (*callback)()) {
+	PsSlider* slider = malloc(sizeof(PsSlider));
+
+	slider->val = val;
+	slider->min_val = min_val;
+	slider->max_val = max_val;
+	slider->text_size = text_size;
+	slider->width = width;
+	slider->callback = callback;
+
+	ps_widget_init(SUPER(slider), parent, ps_slider_draw, NULL, ps_slider_size);
+	return slider;
 }
