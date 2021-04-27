@@ -75,7 +75,7 @@ static World* physic_world;
 static Drawable* triangle1_drawable;
 static Drawable* triangle2_drawable;
 static Vector3 background_color = { { 0, 0, 0.2f } };
-static PsButton* test_btn;
+static PsButton *randomize_btn, *quit_btn;
 
 void update(clock_t fps) {
 	scene_draw(scene, background_color);
@@ -85,10 +85,11 @@ void update(clock_t fps) {
 
 	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
-	if (ps_button_state(test_btn) & PS_BUTTON_CLICKED) {
-		printf("Hello!\n");
+	if (ps_button_state(randomize_btn) & PS_BUTTON_CLICKED)
 		update_fractal();
-	}
+
+	if (ps_button_state(quit_btn) & PS_BUTTON_CLICKED)
+		g_window.should_close = GL_TRUE;
 
 	if (scene->flags & SCENE_GUI_MODE)
 		ps_render();
@@ -177,6 +178,9 @@ int main() {
 
 	window_create(1200, 800, "Emergence", setup, update);
 
+	window_add_resize_hook(scene_resize_callback, scene);
+	window_add_resize_hook(ps_resized_callback, NULL);
+
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
 
@@ -229,7 +233,9 @@ int main() {
 	PsLabel* test_label = ps_label_create(test_window, "Accela\nA drug created to kill most people", 15);
 	PsLabel* label = ps_label_create(test_window, "TESTTEEE", 15);
 	PsLabel* child_label = ps_label_create(test_window, "LETS ALL LOVE LAIN", 15);
-	test_btn = ps_button_create(test_window, "Click me!", 16);
+
+	randomize_btn = ps_button_create(test_window, "Randomize fractal", 16);
+	quit_btn = ps_button_create(test_window, "Quit game", 16);
 
 	window_mainloop();
 

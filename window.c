@@ -19,7 +19,16 @@ extern int usleep (unsigned int __useconds);
 Window g_window;
 
 void window_character_callback(GLFWwindow* window, uint codepoint) {
-	g_window.last_character = codepoint;
+	for (struct CHook* h = g_window.character_hook; h != NULL; h = h->next)
+		h->fn(h->user_data, codepoint);
+}
+
+void window_size_callback(GLFWwindow* window, int width, int height) {
+	g_window.size.x = (float)width;
+	g_window.size.y = (float)height;
+
+	for (struct RHook* h = g_window.resize_hook; h != NULL; h = h->next)
+		h->fn(h->user_data, width, height);
 }
 
 int window_create(int width, int height, const char* title, void(*setup)(), void(*update)(clock_t)) {
@@ -43,10 +52,12 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 	ct_assert(sizeof(g_window.keys) > 8);
 	m_bzero(g_window.keys, sizeof(g_window.keys));
 
-	g_window.last_character = -1;
 	g_window.update = update;
 
 	g_window.w = glfwCreateWindow(width, height, title, NULL, NULL);
+
+	g_window.resize_hook = NULL;
+	g_window.character_hook = NULL;
 
 	if (g_window.w == NULL) {
 		fprintf(stderr, "Failed to open a window\n");
@@ -60,8 +71,6 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 		return -1;
 	}
 
-	glfwSwapInterval(1);			// Disable double buffering
-
 	// OpenGL settings
 	glEnable(GL_BLEND);			// Enable blend
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
@@ -71,10 +80,31 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 	glViewport(0, 0, width, height); // Viewport size
 
 	glfwSetCharCallback(g_window.w, window_character_callback);
+	glfwSetWindowSizeCallback(g_window.w, window_size_callback);
 
 	setup();
 
 	return 0;
+}
+
+void window_add_resize_hook(void (*fn)(void*, int, int), void* data) {
+	struct RHook* hook = malloc(sizeof(struct RHook));
+
+	hook->fn = fn;
+	hook->next = g_window.resize_hook;
+	hook->user_data = data;
+
+	g_window.resize_hook = hook;
+}
+
+void window_add_character_hook(void (*fn)(void*, uint), void* data) {
+	struct CHook* hook = malloc(sizeof(struct CHook));
+
+	hook->fn = fn;
+	hook->next = g_window.character_hook;
+	hook->user_data = data;
+
+	g_window.character_hook = hook;
 }
 
 void window_update() {

@@ -194,9 +194,9 @@ void ps_atlas_init(Image* image) {
 	ps_atlas.texture_id = texture_create(image);
 }
 
-void ps_resized_callback(float width, float height) {
-	ps_ctx.display_size.x = width;
-	ps_ctx.display_size.y = height;
+void ps_resized_callback(void* data, int width, int height) {
+	ps_ctx.display_size.x = (float)width;
+	ps_ctx.display_size.y = (float)height;
 }
 
 void ps_character_callback(uint codepoint) {
@@ -895,9 +895,12 @@ PsLabel* ps_label_create(PsWidget* parent, char* text, float size) {
 	return label;
 }
 
-static float button_padding = 5.f;
-static Vector4 button_background_color = { { 0.5f, 0.5f, 1.f, 1.f } };
-static Vector4 button_text_color = { { 0.f, 0.f, 0.f, 1.f } };
+static float button_padding = 5.f,
+	button_border_size = 2.f;
+
+static Vector4 button_background_color = { { 0.5f, 0.5f, 1.f, 1.f } },
+	button_text_color = { { 0.f, 0.f, 0.f, 1.f } },
+	button_border_color = { { 0.1f, 0.1f, 0.1f, 0.5f } };
 
 void ps_button_draw(PsButton* button, float offset) {
 	PsWidget* parent = SUPER(button)->parent;
@@ -944,6 +947,8 @@ void ps_button_draw(PsButton* button, float offset) {
 	}
 
 	ps_fill_rect(x, y, w, h, bc_color);
+	ps_fill_rect(x, y, w, button_border_size, button_border_color);
+	ps_fill_rect(x, y, button_border_size, h, button_border_color);
 
 	anchor.x += button_padding;
 	anchor.y -= button_padding;

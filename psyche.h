@@ -21,7 +21,7 @@ typedef void PsButton;
 
 void ps_init();
 void ps_render();
-void ps_resized_callback(float width, float height);
+void ps_resized_callback(void* data, int width, int height);
 void ps_character_callback(uint codepoint);
 void ps_scroll_callback(float yoffset);
 
