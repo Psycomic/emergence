@@ -44,7 +44,7 @@ float dot_grid_gradient(float* gradient, uint size, int ix, int iy, float x, flo
 	float dx = x - (float)ix;
 	float dy = y - (float)iy;
 
-	if (ix < size && iy < size && ix >= 0.f && iy >= 0.f)
+	if (ix < (int)size && iy < (int)size && ix >= 0 && iy >= 0)
 		return (dx * gradient[index(ix, iy, 0, size)] + dy * gradient[index(ix, iy, 1, size)]);
 	else
 		return 0.f;
@@ -81,7 +81,7 @@ void octaves_init(Octaves* octaves, uint layers_count, uint size, float frequenc
 	octaves->size = size;
 
 	for (uint i = 0; i < layers_count; i++) {
-		uint octave_size = size * ((uint)powf(frequency, (float)i));
+		uint octave_size = size * ((uint)powf(frequency, (float)i) + 1);
 		octaves->layers[i] = malloc(sizeof(float) * octave_size * octave_size * 2);
 		perlin_initialize_gradient(octaves->layers[i], octave_size * octave_size * 2);
 	}

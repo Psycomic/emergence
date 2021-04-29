@@ -78,12 +78,14 @@ static Vector3* terrain_color;
 static uint* terrain_indexes;
 static Vector3* terrain_vertices;
 static Drawable* terrain_drawable = NULL;
+static float terrain_frequency = 2.f,
+	terrain_amplitude = 0.5f;
 
 int update_terrain(WorkerData* data) {
 	if (octaves_initialized)
 		octaves_destroy(&octaves);
 
-	octaves_init(&octaves, 8, 5, 2.f, 0.5f);
+	octaves_init(&octaves, 8, 5, terrain_frequency, terrain_amplitude);
 
 	Image noise_image;
 	noise_image_create(&noise_image, 500, terrain_noise);
@@ -103,7 +105,7 @@ int update_terrain(WorkerData* data) {
 
 	octaves_initialized = GL_TRUE;
 
-	return 69;
+	return 0;
 }
 
 static char* main_file_contents = NULL;
@@ -286,6 +288,9 @@ int main() {
 	randomize_btn = ps_button_create(hopalong_window, "Randomize fractal", 16);
 
 	PsWindow* terrain_window = ps_window_create("Terrain");
+
+	PsSlider* frequency_slider = ps_slider_create(terrain_window, &terrain_frequency, 1.f, 2.f, 14, 150.f, NULL);
+	PsSlider* amplitude_slider = ps_slider_create(terrain_window, &terrain_amplitude, 0.f, 1.f, 14, 150.f, NULL);
 
 	regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
 
