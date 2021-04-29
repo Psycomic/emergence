@@ -293,6 +293,7 @@ void ps_render() {
 
 	GLint last_vertex_array; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
 	GLint last_polygon_mode[2]; glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
+	GLboolean last_cull_face; glGetBooleanv(GL_CULL_FACE_MODE, &last_cull_face);
 
     glBindVertexArray(ps_vao);
 
@@ -349,6 +350,9 @@ void ps_render() {
 
 	glPolygonMode(GL_FRONT_AND_BACK, last_polygon_mode[0]);
 	glBindVertexArray(last_vertex_array);
+
+	if (last_cull_face)
+		glEnable(GL_CULL_FACE);
 
 	get_opengl_errors();
 }

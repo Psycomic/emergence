@@ -27,6 +27,7 @@ void perlin_initialize_gradient(float* gradient, uint size);
 float perlin_noise(float* gradient, uint size, float x, float y);
 
 void octaves_init(Octaves* octaves, uint layers_count, uint size, float frequency, float amplitude);
+void octaves_destroy(Octaves* octaves);
 float octavien_noise(Octaves* octaves, float x, float y);
 float ridged_noise(Octaves* octaves, float x, float y);
 float distortion_noise(Octaves* octaves, float x, float y, float distortion, float scale);

@@ -3,12 +3,37 @@
 #include "render.h"
 #include "ulisp.h"
 #include "random.h"
+#include "workers.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
+void coroutine_test() {
+	for (uint i = 0; i < 10; i++) {
+		printf("Printing %u\n", i);
+	}
+}
+
+void sig(void* data) {
+	printf("Recieved %d!\n", (int)data);
+}
+
+int signal_test(WorkerData* data) {
+	for (uint i = 0; i < 100; i++) {
+		printf("I: %d\n", i);
+		worker_emit(data, sig, (void*)i);
+	}
+
+	return 0;
+}
+
 void execute_tests(void) {
+	Worker* worker = worker_create(signal_test, NULL);
+
+	while (!worker_finished(worker))
+		worker_update(worker);
+
 	// Hash table test
 	HashTable* table = hash_table_create(3);
 

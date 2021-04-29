@@ -87,6 +87,13 @@ void octaves_init(Octaves* octaves, uint layers_count, uint size, float frequenc
 	}
 }
 
+void octaves_destroy(Octaves* octaves) {
+	for (uint i = 0; i < octaves->layers_count; i++)
+		free(octaves->layers[i]);
+
+	free(octaves->layers);
+}
+
 float octavien_noise(Octaves* octaves, float x, float y) {
 	float final_height = 0.f;
 

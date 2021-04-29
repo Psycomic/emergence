@@ -15,6 +15,7 @@
 #include "psyche.h"
 #include "random.h"
 #include "window.h"
+#include "workers.h"
 
 #define WORLD_STEP 0.1f
 
@@ -26,8 +27,10 @@
 #define SUBSET_NUMBER 10
 #define RINGS_NUMBER 3
 
-float points[POINTS_COUNT * 2];
-Octaves octaves;
+static float points[POINTS_COUNT * 2];
+static Octaves octaves;
+static BOOL octaves_initialized = GL_FALSE;
+
 float global_time = 0.f;
 
 void execute_tests(void);
@@ -51,14 +54,12 @@ static float hopalong_a = 0.5f,
 
 static Vector3 hopalong_subsets[SUBSET_NUMBER];
 
-void update_fractal(void) {
+void update_fractal() {
 	static const float scale = 4.f;
 
 	float a = hopalong_a * scale,
 		b = hopalong_b * scale,
 		c = hopalong_c * scale;
-
-	printf("A %.2f; B %.2f; C %.2f;\n", a, b, c);
 
 	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, a, b, c, 0.1f);
 
@@ -73,12 +74,46 @@ void update_fractal(void) {
 	drawable_update(hopalong_drawable);
 }
 
+static Vector3* terrain_color;
+static uint* terrain_indexes;
+static Vector3* terrain_vertices;
+static Drawable* terrain_drawable = NULL;
+
+int update_terrain(WorkerData* data) {
+	if (octaves_initialized)
+		octaves_destroy(&octaves);
+
+	octaves_init(&octaves, 8, 5, 2.f, 0.5f);
+
+	Image noise_image;
+	noise_image_create(&noise_image, 500, terrain_noise);
+	image_write_to_file(&noise_image, "./images/noise.ppm");
+
+	float terrain_width = 80.f, terrain_height = 7.f;
+	terrain_create(terrain_vertices, TERRAIN_SIZE, terrain_height, terrain_width, &terrain_noise);
+	terrain_elements(terrain_indexes, TERRAIN_SIZE);
+
+	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
+		float height = terrain_vertices[terrain_indexes[i]].y / terrain_height;
+
+		terrain_color[terrain_indexes[i]].x = height;
+		terrain_color[terrain_indexes[i]].y = 0.f;
+		terrain_color[terrain_indexes[i]].z = 1 - height;
+	}
+
+	octaves_initialized = GL_TRUE;
+
+	return 69;
+}
+
 static char* main_file_contents = NULL;
 static World* physic_world;
 static Drawable* triangle1_drawable;
 static Drawable* triangle2_drawable;
 static Vector3 background_color = { { 0, 0, 0.2f } };
-static PsButton *randomize_btn;
+static PsButton* randomize_btn;
+static PsButton* regenerate_button;
+static Worker* terrain_worker = NULL;
 
 void update(clock_t fps) {
 	scene_draw(scene, background_color);
@@ -95,6 +130,22 @@ void update(clock_t fps) {
 		hopalong_c = clampf(gaussian_random(), -1.f, 1.f);
 
 		update_fractal();
+	}
+
+	if (terrain_worker != NULL && worker_finished(terrain_worker)) {
+		printf("Finished with code %d!\n", worker_return_code(terrain_worker));
+		drawable_update(terrain_drawable);
+		terrain_worker = NULL;
+	}
+
+	if (ps_button_state(regenerate_button) & PS_WIDGET_CLICKED) {
+		if (terrain_worker == NULL) {
+			terrain_worker = worker_create(update_terrain, NULL);
+			printf("Started worker!\n");
+		}
+		else {
+			printf("Already started!\n");
+		}
 	}
 
 	if (scene->flags & SCENE_GUI_MODE)
@@ -156,28 +207,13 @@ int main() {
 	world_body_add(physic_world, &triangle1_shape, 0.f);
 	world_body_add(physic_world, &triangle2_shape, 1.f);
 
-	Vector3* terrain_vertices = malloc(sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE);
-	uint* terrain_indexes = malloc(sizeof(uint) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
-	Vector3* terrain_color = malloc(sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
+	terrain_vertices = malloc(sizeof(Vector3) * TERRAIN_SIZE * TERRAIN_SIZE);
+	terrain_indexes = malloc(sizeof(uint) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
+	terrain_color = malloc(sizeof(Vector3) * (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6);
 
 	random_arrayf(points, 2 * POINTS_COUNT);
-	octaves_init(&octaves, 8, 5, 2.f, 0.5f);
 
-	Image noise_image;
-	noise_image_create(&noise_image, 500, terrain_noise);
-	image_write_to_file(&noise_image, "./images/noise.ppm");
-
-	float terrain_width = 80.f, terrain_height = 7.f;
-	terrain_create(terrain_vertices, TERRAIN_SIZE, terrain_height, terrain_width, &terrain_noise);
-	terrain_elements(terrain_indexes, TERRAIN_SIZE);
-
-	for (uint i = 0; i < (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6; i++) {
-		float height = terrain_vertices[terrain_indexes[i]].y / terrain_height;
-
-		terrain_color[terrain_indexes[i]].x = height;
-		terrain_color[terrain_indexes[i]].y = 0.f;
-		terrain_color[terrain_indexes[i]].z = 1 - height;
-	}
+	update_terrain(NULL);
 
 	hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 	hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
@@ -222,7 +258,7 @@ int main() {
 	};
 
 	Vector3 terrain_position = { { 0.f, -5.f, 0.f } };
-	scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
+	terrain_drawable = scene_create_drawable(scene, terrain_indexes, (TERRAIN_SIZE - 1) * (TERRAIN_SIZE - 1) * 6, terrain_buffers, ARRAY_SIZE(terrain_buffers), terrain_material, GL_TRIANGLES, &terrain_position, NULL, 0, 0x0);
 
 	Material* hopalong_material = material_create(color_shader, NULL, 0);
 	ArrayBufferDeclaration hopalong_buffers[] = {
@@ -251,7 +287,7 @@ int main() {
 
 	PsWindow* terrain_window = ps_window_create("Terrain");
 
-	PsButton* regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
+	regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
 
 	window_mainloop();
 

@@ -13,7 +13,6 @@ bld/
 [Ll]og/
 
 stack
-images/*.ppm
 
 docs/emergence-paper.aux
 docs/emergence-paper.log

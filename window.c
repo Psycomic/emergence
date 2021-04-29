@@ -2,20 +2,6 @@
 
 #include <stdio.h>
 
-#ifdef _WIN32
-#include <windows.h>
-
-void usleep(clock_t time) {
-	Sleep(time);
-}
-
-#endif // _WIN32
-#ifdef __linux__
-
-extern int usleep (unsigned int __useconds);
-
-#endif // __linux__
-
 Window g_window;
 
 void window_character_callback(GLFWwindow* window, uint codepoint) {
