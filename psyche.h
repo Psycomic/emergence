@@ -20,6 +20,7 @@ typedef void PsWidget;
 typedef void PsLabel;
 typedef void PsButton;
 typedef void PsSlider;
+typedef void PsInput;
 
 void ps_init();
 void ps_render();
@@ -38,11 +39,16 @@ PsWindow* ps_window_create(char* title);
 void ps_window_destroy(PsWindow* window);
 
 PsLabel* ps_label_create(PsWidget* parent, char* text, float size);
+char* ps_label_text(PsLabel* label);
+void ps_label_set_text(PsLabel* label, char* text);
 
 PsButton* ps_button_create(PsWidget* parent, char* text, float size);
 uint8_t ps_button_state(PsButton* button);
 
 PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float max_val, float text_size, float width, void (*callback)());
+
+PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float width);
+char* ps_input_value(PsInput* input);
 
 void ps_draw_gui();
 #endif

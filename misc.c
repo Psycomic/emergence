@@ -305,6 +305,27 @@ void stack_pop(Stack* stack, uint64_t count) {
 	stack->top -= count;
 }
 
+void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n) {
+	m_bzero(dest, n);
+
+	if (index >= n) {
+		*dest = '\0';
+		return;
+	}
+
+	size_t substr_length = strlen(substr);
+
+	memcpy(dest, src, index);
+	strncpy(dest + index, substr, n - index);
+
+	if (substr_length > n - index) {
+		dest[index + (substr_length - (n - index)) + 1] = '\0';
+		return;
+	}
+
+	strncpy(dest + index + substr_length, src + index, n - index - substr_length);
+}
+
 #undef malloc
 #undef free
 

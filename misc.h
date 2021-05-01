@@ -96,6 +96,7 @@ void dynamic_array_destroy(DynamicArray* arr);
 
 char* m_strdup(const char* str);
 char* m_strndup(const char* str, size_t count);
+void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n);
 
 // Returns 0 if integer, 1 if float, and -1 if error
 int parse_number(char* str, long* integer, double* floating);

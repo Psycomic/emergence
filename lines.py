@@ -3,7 +3,7 @@
 import glob
 import os
 
-dirs = [r'.', r'./shaders', r'../lisp']
+dirs = [r'.', r'./lisp']
 
 total_lines = 0
 
@@ -11,7 +11,7 @@ files_lines = []
 
 for d in dirs:
     os.chdir(d)
-    myFiles = glob.glob('*.c') + glob.glob('*.h') + glob.glob("*.glsl") + glob.glob("*.ul")
+    myFiles = glob.glob('*.c') + glob.glob('*.h') + glob.glob("*.ul")
 
     for path in myFiles:
         with open(path, 'r') as f:

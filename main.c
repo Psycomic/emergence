@@ -16,6 +16,7 @@
 #include "random.h"
 #include "window.h"
 #include "workers.h"
+#include "ulisp.h"
 
 #define WORLD_STEP 0.1f
 
@@ -115,6 +116,9 @@ static Drawable* triangle2_drawable;
 static Vector3 background_color = { { 0, 0, 0.2f } };
 static PsButton* randomize_btn;
 static PsButton* regenerate_button;
+static PsButton* eval_button;
+static PsInput* lisp_input;
+static PsLabel* result_label;
 static Worker* terrain_worker = NULL;
 
 void update(clock_t fps) {
@@ -124,6 +128,13 @@ void update(clock_t fps) {
 	snprintf(buf, sizeof(buf), "%lu FPS", fps);
 
 	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
+
+	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
+		LispObject* res = ulisp_eval(ulisp_read_list(ps_input_value(lisp_input)), nil);
+		char* result = ulisp_debug_print(res);
+
+		ps_label_set_text(result_label, result);
+	}
 
 	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {
 		random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
@@ -223,7 +234,6 @@ int main() {
 	window_create(1200, 800, "Emergence", setup, update);
 
 	window_add_resize_hook(scene_resize_callback, scene);
-	window_add_resize_hook(ps_resized_callback, NULL);
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
@@ -294,11 +304,15 @@ int main() {
 
 	regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
 
+	lisp_input = ps_input_create(terrain_window, "", 16, 200);
+	eval_button = ps_button_create(terrain_window, "Eval", 15);
+	result_label = ps_label_create(terrain_window, "< ", 16);
+
 	window_mainloop();
 
 	return 0;
 
 error:
-	printf("Something failed...\n");
+	fprintf(stderr, "Something failed...\n");
 	return -1;
 }

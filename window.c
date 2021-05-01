@@ -2,6 +2,9 @@
 
 #include <stdio.h>
 
+#define UINT_NO_LAST_BIT(x) ((x) & 0x0fffffff)
+#define UINT_LAST_BIT(x)    ((x) & 0x10000000)
+
 Window g_window;
 
 void window_character_callback(GLFWwindow* window, uint codepoint) {
@@ -37,6 +40,7 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 
 	ct_assert(sizeof(g_window.keys) > 8);
 	m_bzero(g_window.keys, sizeof(g_window.keys));
+	m_bzero(g_window.keys_delay, sizeof(g_window.keys_delay));
 
 	g_window.update = update;
 
@@ -151,4 +155,26 @@ void window_mainloop() {
 	printf("Average frame time: %f\nAverage FPS: %f\n", average_frame_duration, average_fps);
 
 	glfwTerminate();
+}
+
+BOOL window_key_as_text_evt(uint key) {
+	if (g_window.keys[key]) {
+		if (UINT_NO_LAST_BIT(g_window.keys_delay[key]) <= 0) {
+			if (UINT_LAST_BIT(g_window.keys_delay[key]))
+				g_window.keys_delay[key] = 2 | 0x10000000;
+			else
+				g_window.keys_delay[key] = 20 | 0x10000000;
+
+			return GL_TRUE;
+		}
+		else {
+			g_window.keys_delay[key] = (UINT_NO_LAST_BIT(g_window.keys_delay[key]) - 1) |
+				UINT_LAST_BIT(g_window.keys_delay[key]);
+
+			return GL_FALSE;
+		}
+	}
+
+	g_window.keys_delay[key] = 0;
+	return GL_FALSE;
 }

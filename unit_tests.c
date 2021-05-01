@@ -34,6 +34,13 @@ void execute_tests(void) {
 	while (!worker_finished(worker))
 		worker_update(worker);
 
+	// string test
+
+	char dest[8];
+
+	strinsert(dest, "Hello, world!", "Fuck", 5, sizeof(dest));
+	printf("Dest: %s\n", dest);
+
 	// Hash table test
 	HashTable* table = hash_table_create(3);
 

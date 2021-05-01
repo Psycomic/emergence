@@ -790,7 +790,6 @@ LispObject* ulisp_read_list(const char* string) {
 	return expression;
 }
 
-#ifdef _DEBUG
 char* ulisp_debug_print(LispObject* obj) {
 	char* buffer = NULL;
 	size_t bufferSize = 0;
@@ -801,7 +800,6 @@ char* ulisp_debug_print(LispObject* obj) {
 
 	return buffer;
 }
-#endif
 
 void ulisp_print(LispObject* obj, FILE* stream) {
 	if (obj->type & LISP_SYMBOL) {

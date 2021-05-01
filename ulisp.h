@@ -44,5 +44,6 @@ LispObject* ulisp_read_list(const char* string);
 LispObject* ulisp_eval(LispObject* expression, LispObject* env);
 void ulisp_init(void);
 void ulisp_print(LispObject* obj, FILE* stream);
+char* ulisp_debug_print(LispObject* obj);
 
 #endif // __ULISP_H_

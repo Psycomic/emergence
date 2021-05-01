@@ -133,6 +133,20 @@ typedef struct {
 	void (*callback)();
 } PsSlider;
 
+#define INPUT_MAX_ENTERED_TEXT 256
+
+typedef struct {
+	PsWidget header;
+
+	char value[INPUT_MAX_ENTERED_TEXT];
+
+	float text_size;
+	float width;
+
+	uint cursor_position;
+	BOOL selected;
+} PsInput;
+
 #define PS_MAX_WINDOWS 255
 
 static PsWindow* ps_windows[PS_MAX_WINDOWS] = {};
@@ -156,6 +170,7 @@ static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
 
 static uint last_character;
+static BOOL last_character_read = GL_TRUE;
 
 static Vector2 ps_white_pixel = {
 	.x = 0.f,
@@ -210,12 +225,9 @@ void ps_resized_callback(void* data, int width, int height) {
 	ps_ctx.display_size.y = (float)height;
 }
 
-void ps_character_callback(uint codepoint) {
+void ps_character_callback(void* data, uint codepoint) {
 	last_character = codepoint;
-}
-
-void ps_scroll_callback(float yoffset) {
-	/* TODO */
+	last_character_read = GL_FALSE;
 }
 
 void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t glyph_height, uint32_t width, uint32_t height) {
@@ -273,6 +285,9 @@ void ps_init() {
 	ps_current_font = ps_monospaced_font;
 
 	ps_atlas_init(&ps_current_font.text_atlas);
+
+	window_add_character_hook(ps_character_callback, NULL);
+	window_add_resize_hook(ps_resized_callback, NULL);
 }
 
 void ps_draw_list_clear(PsDrawList* cmd_list) {
@@ -906,6 +921,14 @@ Vector2 ps_label_size(PsLabel* label) {
 	return label->size;
 }
 
+char* ps_label_text(PsLabel* label) {
+	return label->text;
+}
+
+void ps_label_set_text(PsLabel* label, char* text) {
+	label->text = text;
+}
+
 PsLabel* ps_label_create(PsWidget* parent, char* text, float size) {
 	PsLabel* label = malloc(sizeof(PsLabel));
 
@@ -1090,4 +1113,112 @@ PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float ma
 
 	ps_widget_init(SUPER(slider), parent, ps_slider_draw, NULL, ps_slider_size);
 	return slider;
+}
+
+static float input_border_size = 2.f,
+	input_cursor_size = 2.f;
+
+static Vector4 input_background_color = { { 0.f, 0.f, 0.f, 1.f } },
+	input_border_color = { { 1.f, 1.f, 1.f, 1.f } },
+	input_cursor_color = { { 1.f, 1.f, 1.f, 1.f } },
+	input_text_color = { { 1.f, 1.f, 1.f, 1.f } };
+
+Vector2 ps_input_size(PsInput* input) {
+	return (Vector2) { {
+			input->width + input_border_size * 2,
+			input->text_size + input_border_size * 2
+		}
+	};
+}
+
+void ps_input_draw(PsInput* input, float offset) {
+	PsWidget* parent = SUPER(input)->parent;
+
+	Vector2 anchor = parent->anchor(parent);
+	anchor.y -= offset;
+
+	float x = anchor.x + input_border_size,
+		h = input->text_size,
+		y = (anchor.y - input_border_size) - h,
+		w = input->width;
+
+	Vector4 bc_color = input_background_color;
+
+	SUPER(input)->flags &= ~(PS_WIDGET_CLICKING | PS_WIDGET_HOVERED);
+
+	if (SUPER(input)->flags & PS_WIDGET_SELECTED) {
+		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
+			if (g_window.mouse_button_left_state) {
+				SUPER(input)->flags |= PS_WIDGET_CLICKING;
+				input->cursor_position = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
+				size_t length = strlen(input->value);
+				input->cursor_position = min(input->cursor_position, length);
+
+				last_character_read = GL_TRUE;
+				input->selected = GL_TRUE;
+			}
+			else {
+				SUPER(input)->flags |= PS_WIDGET_HOVERED;
+			}
+		}
+		else if (g_window.mouse_button_left_state) {
+			input->selected = GL_FALSE;
+		}
+
+		if (SUPER(input)->flags & PS_WIDGET_HOVERED || SUPER(input)->flags & PS_WIDGET_CLICKING) {
+			for (uint i = 0; i < 4; i++) {
+				bc_color.D[i] += 0.1;
+			}
+		}
+	}
+	else {
+		input->selected = GL_FALSE;
+	}
+
+	if (input->selected) {
+		if  (!last_character_read) {
+			char temp[INPUT_MAX_ENTERED_TEXT];
+			char new_string[2] = {(char) last_character, 0};
+
+			strinsert(temp, input->value, new_string, input->cursor_position++, sizeof(temp));
+			strncpy(input->value, temp, sizeof(temp));
+
+			last_character_read = GL_TRUE;
+		}
+		else if (window_key_as_text_evt(GLFW_KEY_BACKSPACE) && input->cursor_position > 0) {
+			uint index = --input->cursor_position;
+			memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
+		}
+	}
+
+	ps_fill_rect(x - input_border_size, y, input_border_size, h, input_border_color);
+	ps_fill_rect(x + w, y, input_border_size, h, input_border_color);
+
+	ps_fill_rect(x - input_border_size, y - input_border_size, w + input_border_size * 2, input_border_size, input_border_color);
+	ps_fill_rect(x - input_border_size, y + h, w + input_border_size * 2, input_border_size, input_border_color);
+
+	ps_fill_rect(x, y, w, h, bc_color);
+
+	ps_text(input->value, (Vector2) { { x, y + h } }, input->text_size, input_text_color);
+
+	if (input->selected)
+		ps_fill_rect(x + ps_font_width(input->text_size) * input->cursor_position, y, input_cursor_size, h, input_cursor_color);
+}
+
+char* ps_input_value(PsInput* input) {
+	return input->value;
+}
+
+PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float width) {
+	PsInput* input = malloc(sizeof(PsInput));
+
+	input->text_size = text_size;
+	input->width = width;
+	input->cursor_position = 0;
+	input->selected = GL_FALSE;
+
+	strncpy(input->value, value, INPUT_MAX_ENTERED_TEXT);
+
+	ps_widget_init(SUPER(input), parent, ps_input_draw, NULL, ps_input_size);
+	return input;
 }
