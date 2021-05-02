@@ -25,6 +25,9 @@ typedef void (*Signal)(void*);
 
 #define THREAD_FINISHED (1 << 0)
 
+#define mutex_lock(m) /* printf("Lock at %s:%d\n", __FILE__, __LINE__); */ pthread_mutex_lock(m)
+#define mutex_unlock(m) /* printf("Unlock at %s:%d\n", __FILE__, __LINE__); */ pthread_mutex_unlock(m)
+
 typedef struct Worker {
 	WorkerData data;
 	uint8_t flags;
@@ -63,8 +66,6 @@ DWORD WINAPI thread_fn_wrapper(void* data) {
 	Worker* self = w_data->self;
 
 	self->return_code = self->worker_fun(w_data);
-
-	while (self->signal_queue_size != 0);
 
 	self->flags |= THREAD_FINISHED;
 
@@ -119,40 +120,42 @@ int worker_return_code(Worker* worker) {
 }
 
 void worker_update(Worker* worker) {
+	if (worker->signal_queue_size > 0) {
 #ifdef __linux__
-	pthread_mutex_lock(&worker->queue_mutex);
+		mutex_lock(&worker->queue_mutex);
 #endif
 #ifdef _WIN32
-	DWORD dwWaitResult = WaitForSingleObject(worker->queue_mutex, INFINITE);
+		DWORD dwWaitResult = WaitForSingleObject(worker->queue_mutex, INFINITE);
 
-	if (dwWaitResult == WAIT_ABANDONED) {
-		fprintf(stderr, "Mutex error!\n");
-		exit(-1);
-	}
+		if (dwWaitResult == WAIT_ABANDONED) {
+			fprintf(stderr, "Mutex error!\n");
+			exit(-1);
+		}
 #endif
 
-	for (uint i = 0; i < worker->signal_queue_size; i++) {
-		worker->signal_queue[i].signal(worker->signal_queue[i].data);
-	}
+		for (uint i = 0; i < worker->signal_queue_size; i++) {
+			worker->signal_queue[i].signal(worker->signal_queue[i].data);
+		}
 
-	worker->signal_queue_size = 0;
+		worker->signal_queue_size = 0;
 
 #ifdef __linux__
-	pthread_mutex_unlock(&worker->queue_mutex);
+		mutex_unlock(&worker->queue_mutex);
 #endif
 #ifdef _WIN32
-	if (!ReleaseMutex(worker->queue_mutex)) {
-		fprintf(stderr, "Mutex error!\n");
-		exit(-1);
-	}
+		if (!ReleaseMutex(worker->queue_mutex)) {
+			fprintf(stderr, "Mutex error!\n");
+			exit(-1);
+		}
 #endif
+	}
 }
 
 void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 	Worker* self = data->self;
 
 #ifdef __linux__
-	pthread_mutex_lock(&self->queue_mutex);
+	mutex_lock(&self->queue_mutex);
 #endif
 #ifdef _WIN32
 	DWORD dwWaitResult = WaitForSingleObject(self->queue_mutex, INFINITE);
@@ -174,7 +177,7 @@ void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 	}
 
 #ifdef __linux__
-	pthread_mutex_unlock(&self->queue_mutex);
+	mutex_unlock(&self->queue_mutex);
 #endif
 #ifdef _WIN32
 	if (!ReleaseMutex(self->queue_mutex)) {
@@ -185,5 +188,11 @@ void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 }
 
 bool worker_finished(Worker* worker) {
-	return worker->flags & THREAD_FINISHED;
+	if (worker->flags & THREAD_FINISHED) {
+		worker_update(worker);
+		return true;
+	}
+	else {
+		return false;
+	}
 }
