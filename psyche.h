@@ -1,3 +1,6 @@
+#ifndef _PSYCHE_HEADER
+#define _PSYCHE_HEADER
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
@@ -21,6 +24,8 @@ typedef void PsLabel;
 typedef void PsButton;
 typedef void PsSlider;
 typedef void PsInput;
+
+extern PsInput* ps_current_input;
 
 void ps_init();
 void ps_render();
@@ -48,7 +53,9 @@ uint8_t ps_button_state(PsButton* button);
 PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float max_val, float text_size, float width, void (*callback)());
 
 PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float width);
+void ps_input_insert_at_point(PsInput* input, char* string);
 char* ps_input_value(PsInput* input);
 
 void ps_draw_gui();
+#endif
 #endif

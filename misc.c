@@ -326,6 +326,16 @@ void strinsert(char* dest, const char* src, const char* substr, size_t index, si
 	strncpy(dest + index + substr_length, src + index, n - index - substr_length);
 }
 
+size_t strcount(const char* str, char c) {
+	size_t count = 0;
+	while (*str++ != '\0') {
+		if (*str == c)
+			count++;
+	}
+
+	return count;
+}
+
 #undef malloc
 #undef free
 

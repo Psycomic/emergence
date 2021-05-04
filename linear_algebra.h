@@ -3,7 +3,9 @@
 
 #include <inttypes.h>
 
+#ifndef _WIN32
 typedef unsigned char BOOL;
+#endif
 typedef unsigned int uint;
 
 /// A collection of 3 floats for linear algebra

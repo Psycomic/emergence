@@ -144,10 +144,14 @@ typedef struct {
 	float width;
 
 	uint cursor_position;
+	uint lines_count;
+
 	BOOL selected;
 } PsInput;
 
 #define PS_MAX_WINDOWS 255
+
+PsInput* ps_current_input = NULL;
 
 static PsWindow* ps_windows[PS_MAX_WINDOWS] = {};
 static uint64_t ps_windows_count = 0;
@@ -1126,9 +1130,18 @@ static Vector4 input_background_color = { { 0.f, 0.f, 0.f, 1.f } },
 Vector2 ps_input_size(PsInput* input) {
 	return (Vector2) { {
 			input->width + input_border_size * 2,
-			input->text_size + input_border_size * 2
+			input->text_size * input->lines_count + input_border_size * 2
 		}
 	};
+}
+
+void ps_input_insert_at_point(PsInput* input, char* string) {
+	char temp[INPUT_MAX_ENTERED_TEXT];
+
+	strinsert(temp, input->value, string, input->cursor_position, sizeof(temp));
+	strncpy(input->value, temp, sizeof(temp));
+
+	input->cursor_position += strlen(string);
 }
 
 void ps_input_draw(PsInput* input, float offset) {
@@ -1137,8 +1150,10 @@ void ps_input_draw(PsInput* input, float offset) {
 	Vector2 anchor = parent->anchor(parent);
 	anchor.y -= offset;
 
+	input->lines_count = strcount(input->value, '\n') + 1;
+
 	float x = anchor.x + input_border_size,
-		h = input->text_size,
+		h = input->text_size * input->lines_count,
 		y = (anchor.y - input_border_size) - h,
 		w = input->width;
 
@@ -1150,11 +1165,15 @@ void ps_input_draw(PsInput* input, float offset) {
 		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
 			if (g_window.mouse_button_left_state) {
 				SUPER(input)->flags |= PS_WIDGET_CLICKING;
-				input->cursor_position = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
+
 				size_t length = strlen(input->value);
+
+				input->cursor_position = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
 				input->cursor_position = min(input->cursor_position, length);
 
 				last_character_read = GL_TRUE;
+				ps_current_input = input;
+
 				input->selected = GL_TRUE;
 			}
 			else {
@@ -1177,13 +1196,24 @@ void ps_input_draw(PsInput* input, float offset) {
 
 	if (input->selected) {
 		if  (!last_character_read) {
-			char temp[INPUT_MAX_ENTERED_TEXT];
 			char new_string[2] = {(char) last_character, 0};
-
-			strinsert(temp, input->value, new_string, input->cursor_position++, sizeof(temp));
-			strncpy(input->value, temp, sizeof(temp));
+			ps_input_insert_at_point(input, new_string);
 
 			last_character_read = GL_TRUE;
+		}
+		else if (window_key_as_text_evt(GLFW_KEY_ENTER)) {
+			ps_input_insert_at_point(input, "\n");
+		}
+		else if (window_key_as_text_evt(GLFW_KEY_TAB)) {
+			ps_input_insert_at_point(input, "    ");
+		}
+		else if (window_key_as_text_evt(GLFW_KEY_LEFT)) {
+			if (input->cursor_position > 0)
+				input->cursor_position--;
+		}
+		else if (window_key_as_text_evt(GLFW_KEY_RIGHT)) {
+			if (input->cursor_position < strlen(input->value))
+				input->cursor_position++;
 		}
 		else if (window_key_as_text_evt(GLFW_KEY_BACKSPACE) && input->cursor_position > 0) {
 			uint index = --input->cursor_position;
@@ -1201,8 +1231,21 @@ void ps_input_draw(PsInput* input, float offset) {
 
 	ps_text(input->value, (Vector2) { { x, y + h } }, input->text_size, input_text_color);
 
+	uint pos_x = 0, pos_y = 0, update = 0;
+	int i = input->cursor_position;
+
+	while (i-- > 0) {
+		if (input->value[i] == '\n') {
+			update = GL_TRUE;
+			pos_y++;
+		}
+		else if (!update) {
+			pos_x++;
+		}
+	}
+
 	if (input->selected)
-		ps_fill_rect(x + ps_font_width(input->text_size) * input->cursor_position, y, input_cursor_size, h, input_cursor_color);
+		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, input_cursor_color);
 }
 
 char* ps_input_value(PsInput* input) {
@@ -1215,6 +1258,7 @@ PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float w
 	input->text_size = text_size;
 	input->width = width;
 	input->cursor_position = 0;
+	input->lines_count = 0;
 	input->selected = GL_FALSE;
 
 	strncpy(input->value, value, INPUT_MAX_ENTERED_TEXT);

@@ -1,4 +1,6 @@
 #include "ulisp.h"
+#include "psyche.h"
+#include "random.h"
 
 #include <assert.h>
 #include <string.h>
@@ -500,6 +502,24 @@ LispObject* ulisp_prim_num_mod(LispObject* args) {
 							  *(long*)ulisp_car(ulisp_cdr(args))->data);
 }
 
+LispObject* ulisp_prim_insert_at_point(LispObject* args) {
+	if (ps_current_input)
+		ps_input_insert_at_point(ps_current_input, ulisp_debug_print(ulisp_car(args)));
+
+	return nil;
+}
+
+LispObject* ulisp_prim_random(LispObject* args) {
+	assert(ulisp_length(args) == 1);
+	LispObject* number = ulisp_car(args);
+	assert(number->type & LISP_NUMBER);
+
+	if (number->type & LISP_FLOAT)
+		return ulisp_make_float(random_float() * *(double*)number->data);
+	else
+		return ulisp_make_integer(random_randint() % *(long*)number->data);
+}
+
 void env_push_fun(const char* name, void* function) {
 	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol(name),
 										  ulisp_builtin_proc(function)),
@@ -540,6 +560,8 @@ void ulisp_init(void) {
 	env_push_fun(">", ulisp_prim_num_sup);
 	env_push_fun("<", ulisp_prim_num_inf);
 	env_push_fun("mod", ulisp_prim_num_mod);
+	env_push_fun("insert-at-point", ulisp_prim_insert_at_point);
+	env_push_fun("random", ulisp_prim_random);
 
 	ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil);
 }

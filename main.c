@@ -304,9 +304,9 @@ int main() {
 
 	regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
 
-	lisp_input = ps_input_create(terrain_window, "", 16, 200);
+	lisp_input = ps_input_create(terrain_window, "", 16, 500);
 	eval_button = ps_button_create(terrain_window, "Eval", 15);
-	result_label = ps_label_create(terrain_window, "< ", 16);
+	result_label = ps_label_create(terrain_window, "Results will be here", 16);
 
 	window_mainloop();
 
