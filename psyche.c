@@ -173,7 +173,7 @@ static PsPath ps_current_path;
 static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
 
-static uint last_character;
+uint last_character;
 static BOOL last_character_read = GL_TRUE;
 
 static Vector2 ps_white_pixel = {

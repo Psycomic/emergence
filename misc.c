@@ -336,6 +336,29 @@ size_t strcount(const char* str, char c) {
 	return count;
 }
 
+int powi(int base, int exp) {
+    int result = 1;
+    while (exp) {
+        if (exp % 2)
+           result *= base;
+        exp /= 2;
+        base *= base;
+    }
+    return result;
+}
+
+uint powu(uint base, uint exp) {
+    uint result = 1;
+    while (exp) {
+        if (exp % 2)
+           result *= base;
+        exp /= 2;
+        base *= base;
+    }
+
+    return result;
+}
+
 #undef malloc
 #undef free
 

@@ -4,6 +4,7 @@
 #include "ulisp.h"
 #include "random.h"
 #include "workers.h"
+#include "crypto.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -78,17 +79,39 @@ void execute_tests(void) {
 
 	printf("\n");
 
-	char buffer[2048];
 	ulisp_init();
 
-/*	while (1) {
-		printf("\n> ");
-		fgets(buffer, sizeof(buffer), stdin);
-		if (strcmp(buffer, ":q\n") == 0)
-			break;
+	{
+		uint8_t aes_key[32];
+		memset(aes_key, '2', sizeof(*aes_key) * 32);
 
-		LispObject* obj = ulisp_eval(ulisp_read_list(buffer), nil);
-		ulisp_print(obj, stdout);
+		uint8_t aes_message[120];
+		memset(aes_message, 'A', sizeof(*aes_message) * 120);
+
+		uint8_t out[128];
+		aes_encrypt(aes_message, 120, aes_key, out);
+
+		for (uint i = 0; i < 128 / sizeof(uint64_t); i++) {
+			printf("message: 0x%016lx\n", *(uint64_t*)&out[i]);
 		}
-*/
+	}
+
+	{
+		const char message[] = "dsjiodsji osjiofdsjoi dfpsnfsoijesoiejz iez jneprinzep zieojrzo inijfsdiopijozejfoie fjzn ifzjonpefozijoazijoa zjoienaiz jenioazrj";
+
+		printf("Message is %s\n", message);
+
+		uint8_t hash[32];
+		keccak_hash_256((uint8_t*)message, strlen(message), hash, sizeof(hash));
+
+		uint64_t first_count = bits_count((uint8_t*)hash, (sizeof(uint64_t) * 32) / 2);
+		uint64_t second_count = bits_count((uint8_t*)hash + 32 / 2, (sizeof(uint64_t) * 32) / 2);
+
+		printf("Ratio: %lu / %lu = %.4f\n", first_count, second_count, (float) first_count / second_count);
+
+		for (uint i = 0; i < ARRAY_SIZE(hash); i += sizeof(uint64_t))
+			printf("hash: 0x%016lx\n", *(uint64_t*)&hash[i]);
+	}
+
+	exit(0);
 }

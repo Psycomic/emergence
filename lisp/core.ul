@@ -101,7 +101,7 @@
 
 (defun abs (x)
   (if (< x 0.0)
-	  (- x) x))
+	  (- y) x))
 
 (defun square (x)
   (* x x))

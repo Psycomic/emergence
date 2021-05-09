@@ -5,6 +5,8 @@
 
 #ifdef __linux__
 #include <pthread.h>
+extern void exit(int status);
+
 #endif
 
 #ifdef _WIN32

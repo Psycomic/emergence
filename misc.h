@@ -117,4 +117,7 @@ void stack_init(Stack* stack);
 void stack_push(Stack* stack, void* value);
 void stack_pop(Stack* stack, uint64_t count);
 
+int powi(int base, int exp);
+uint powu(uint base, uint exp);
+
 #endif

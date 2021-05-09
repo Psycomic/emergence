@@ -134,6 +134,11 @@ void update(clock_t fps) {
 		char* result = ulisp_debug_print(res);
 
 		ps_label_set_text(result_label, result);
+
+		entropy_t e = random_get_entropy();
+
+		printf("Entropy: 0x%lx 0x%lx 0x%lx 0x%lx 0x%x\n",
+			   e.random_seed, e.cursor_position, e.window_size, e.last_state, e.last_character);
 	}
 
 	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {
