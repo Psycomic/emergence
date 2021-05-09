@@ -12,8 +12,10 @@
 
 #define SUPER(INSTANCE) (&(INSTANCE)->header)
 
+#ifndef _WIN32
 #define max(a, b) (a) > (b) ? (a) : (b)
 #define min(a, b) (a) < (b) ? (a) : (b)
+#endif
 
 #define ASSERT_CONCAT_(a, b) a##b
 #define ASSERT_CONCAT(a, b) ASSERT_CONCAT_(a, b)
@@ -24,6 +26,8 @@
 #define malloc(size) debug_malloc(size, __FILE__, __LINE__)
 #define free(ptr) debug_free(ptr, __FILE__, __LINE__)
 
+extern void exit(int status);
+
 #else
 
 #include <stdlib.h>
@@ -32,6 +36,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+
+typedef DWORD clock_t;
 
 void usleep(clock_t time) {
 	Sleep(time);
@@ -119,5 +125,6 @@ void stack_pop(Stack* stack, uint64_t count);
 
 int powi(int base, int exp);
 uint powu(uint base, uint exp);
+int modi(int a, int b);
 
 #endif

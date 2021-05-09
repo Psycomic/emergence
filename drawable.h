@@ -6,8 +6,6 @@
 
 #include <GL/glew.h>
 
-extern void exit(int status);
-
 typedef struct {
 	void* data;
 	uint data_size;

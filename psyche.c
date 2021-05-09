@@ -846,8 +846,8 @@ void ps_handle_events() {
 	int state = g_window.mouse_button_left_state;
 	PsWindow* selected_window = ps_windows[ps_windows_count - 1];
 
-	static Vector2 window_drag_anchor = {};
-	static Vector2 window_original_size = {};
+	static Vector2 window_drag_anchor = { { 0, 0 } };
+	static Vector2 window_original_size = { { 0, 0 } };
 
 	static uint8_t border = 6;
 

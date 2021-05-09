@@ -2,6 +2,7 @@
 #define IMAGES_HEADER
 
 #include <GL/glew.h>
+#include <inttypes.h>
 
 typedef unsigned char uchar;
 typedef unsigned int uint;

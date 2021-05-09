@@ -367,11 +367,6 @@ static const uint64_t keccakf_rndc[24] = {
     0x0000000080000001UL, 0x8000000080008008UL
 };
 
-int modi(int a, int b) {
-    int r = a % b;
-    return r < 0 ? r + b : r;
-}
-
 void keccak_f(uint64_t S[25]) {
 	uint32_t nr;
 

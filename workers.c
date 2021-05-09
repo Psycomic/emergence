@@ -76,7 +76,7 @@ DWORD WINAPI thread_fn_wrapper(void* data) {
 #endif
 #ifdef _WIN32
 	CloseHandle(self->handle);
-    CloseHandle(seld->queue_mutex);
+    CloseHandle(self->queue_mutex);
 #endif
 }
 

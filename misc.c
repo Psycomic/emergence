@@ -359,6 +359,11 @@ uint powu(uint base, uint exp) {
     return result;
 }
 
+int modi(int a, int b) {
+    int r = a % b;
+    return r < 0 ? r + b : r;
+}
+
 #undef malloc
 #undef free
 

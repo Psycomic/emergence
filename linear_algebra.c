@@ -115,7 +115,7 @@ void mat4_create_scale(Mat4 destination, Vector3 scale) {
 	}
 }
 
-void mat4_create_perspective(Mat4 destination, float far, float near, float fov, float aspect_ratio) {
+void mat4_create_perspective(Mat4 destination, float f, float n, float fov, float aspect_ratio) {
 #ifdef _DEBUG
 	assert(fov > 0.f && fov < 180.f);
 #endif
@@ -129,15 +129,15 @@ void mat4_create_perspective(Mat4 destination, float far, float near, float fov,
 	destination[0] = s / aspect_ratio;
 	destination[5] = s;
 
-	destination[10] = -(far) / (far - near);
+	destination[10] = -(f) / (f - n);
 	destination[11] = -1;
-	destination[14] = -(2 * far * near) / (far - near);
+	destination[14] = -(2 * f * n) / (f - n);
 }
 
-void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, float top, float near, float far) {
+void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, float top, float n, float f) {
 	float lr = 1.f / (left - right);
 	float bt = 1.f / (bottom - top);
-	float nf = 1.f / (near - far);
+	float nf = 1.f / (n - f);
 
 	out[0] = -2 * lr;
 	out[1] = 0;
@@ -153,7 +153,7 @@ void mat4_create_orthogonal(Mat4 out, float left, float right, float bottom, flo
 	out[11] = 0;
 	out[12] = (left + right) * lr;
 	out[13] = (top + bottom) * bt;
-	out[14] = (far + near) * nf;
+	out[14] = (f + n) * nf;
 	out[15] = 1;
 }
 

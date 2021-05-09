@@ -97,7 +97,7 @@ void execute_tests(void) {
 	}
 
 	{
-		const char message[] = "dsjiodsji osjiofdsjoi dfpsnfsoijesoiejz iez jneprinzep zieojrzo inijfsdiopijozejfoie fjzn ifzjonpefozijoazijoa zjoienaiz jenioazrj";
+		const char message[] = "My friends, today is a very special day.";
 
 		printf("Message is %s\n", message);
 
@@ -113,5 +113,13 @@ void execute_tests(void) {
 			printf("hash: 0x%016lx\n", *(uint64_t*)&hash[i]);
 	}
 
-	exit(0);
+	{
+		uint64_t random_sequence[32];
+		random_csprng_bytes(random_sequence, sizeof(random_sequence));
+
+		for (uint i = 0; i < ARRAY_SIZE(random_sequence); i++)
+			printf("random: 0x%016lx\n", random_sequence[i]);
+
+		randomness_test(random_csprng_randint, 2048);
+	}
 }
