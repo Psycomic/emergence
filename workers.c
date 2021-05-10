@@ -131,7 +131,6 @@ void worker_update(Worker* worker) {
 
 		if (dwWaitResult == WAIT_ABANDONED) {
 			fprintf(stderr, "Mutex error!\n");
-			exit(-1);
 		}
 #endif
 
@@ -147,7 +146,6 @@ void worker_update(Worker* worker) {
 #ifdef _WIN32
 		if (!ReleaseMutex(worker->queue_mutex)) {
 			fprintf(stderr, "Mutex error!\n");
-			exit(-1);
 		}
 #endif
 	}
@@ -164,7 +162,6 @@ void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 
 	if (dwWaitResult == WAIT_ABANDONED) {
 		fprintf(stderr, "Mutex error!\n");
-		exit(-1);
 	}
 #endif
 
@@ -184,7 +181,6 @@ void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 #ifdef _WIN32
 	if (!ReleaseMutex(self->queue_mutex)) {
 		fprintf(stderr, "Mutex error!\n");
-		exit(-1);
 	}
 #endif
 }

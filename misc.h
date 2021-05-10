@@ -39,9 +39,7 @@ extern void exit(int status);
 
 typedef DWORD clock_t;
 
-void usleep(clock_t time) {
-	Sleep(time);
-}
+void usleep(clock_t time);
 
 #endif // _WIN32
 #ifdef __linux__

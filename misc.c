@@ -5,6 +5,12 @@
 
 #include "misc.h"
 
+#ifdef _WIN32
+void usleep(clock_t time) {
+	Sleep(time);
+}
+#endif
+
 char* read_file(const char* filename) {
 	FILE* file = fopen(filename, "r");
 

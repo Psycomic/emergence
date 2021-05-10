@@ -79,8 +79,6 @@ void execute_tests(void) {
 
 	printf("\n");
 
-	ulisp_init();
-
 	{
 		uint8_t aes_key[32];
 		memset(aes_key, '2', sizeof(*aes_key) * 32);
@@ -91,8 +89,8 @@ void execute_tests(void) {
 		uint8_t out[128];
 		aes_encrypt(aes_message, 120, aes_key, out);
 
-		for (uint i = 0; i < 128 / sizeof(uint64_t); i++) {
-			printf("message: 0x%016lx\n", *(uint64_t*)&out[i]);
+		for (uint i = 0; i < 128; i += sizeof(uint64_t)) {
+			printf("message: 0x%016llx\n", *(uint64_t*)&out[i]);
 		}
 	}
 
@@ -107,7 +105,7 @@ void execute_tests(void) {
 		uint64_t first_count = bits_count((uint8_t*)hash, (sizeof(uint64_t) * 32) / 2);
 		uint64_t second_count = bits_count((uint8_t*)hash + 32 / 2, (sizeof(uint64_t) * 32) / 2);
 
-		printf("Ratio: %lu / %lu = %.4f\n", first_count, second_count, (float) first_count / second_count);
+		printf("Ratio: %llu / %llu = %.4f\n", first_count, second_count, (float) first_count / second_count);
 
 		for (uint i = 0; i < ARRAY_SIZE(hash); i += sizeof(uint64_t))
 			printf("hash: 0x%016lx\n", *(uint64_t*)&hash[i]);
@@ -118,7 +116,7 @@ void execute_tests(void) {
 		random_csprng_bytes(random_sequence, sizeof(random_sequence));
 
 		for (uint i = 0; i < ARRAY_SIZE(random_sequence); i++)
-			printf("random: 0x%016lx\n", random_sequence[i]);
+			printf("random: %016llx\n", random_sequence[i]);
 
 		randomness_test(random_csprng_randint, 2048);
 	}

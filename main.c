@@ -181,6 +181,8 @@ void setup() {
 
 int main() {
 	main_file_contents = read_file("lisp/core.ul");
+	ulisp_init();
+
 	execute_tests();			// Unit tests
 
 	Image lain_image;
