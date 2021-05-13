@@ -174,7 +174,7 @@ static PsPath ps_current_path;
 static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
 
-uint last_character;
+Key psyche_last_key;
 static BOOL last_character_read = GL_TRUE;
 
 static Vector2 ps_white_pixel = {
@@ -231,7 +231,7 @@ void ps_resized_callback(void* data, int width, int height) {
 }
 
 void ps_character_callback(void* data, Key key) {
-	last_character = key.code;
+	psyche_last_key = key;
 	last_character_read = GL_FALSE;
 }
 
@@ -1213,44 +1213,33 @@ void ps_input_draw(PsInput* input, float offset, float max_width, float max_heig
 	}
 
 	if (input->selected) {
-/*		if (window_key_as_text_evt(GLFW_KEY_ENTER)) {
-			ps_input_insert_at_point(input, "\n");
-		}
-		else if (window_key_as_text_evt(GLFW_KEY_TAB)) {
-			ps_input_insert_at_point(input, "    ");
-		}
-		else if (window_key_as_text_evt(GLFW_KEY_LEFT)) {
-			if (input->cursor_position > 0)
-				input->cursor_position--;
-		}
-		else if (window_key_as_text_evt(GLFW_KEY_RIGHT)) {
-			if (input->cursor_position < strlen(input->value))
-				input->cursor_position++;
-		}
-		else if (window_key_as_text_evt(GLFW_KEY_Q) && g_window.keys[GLFW_KEY_LEFT_CONTROL]) {
-			printf("To start of line!\n");
-
-			char* c = input->value + input->cursor_position;
-			while (*--c != '\n')
-				input->cursor_position--;
-		}
-		else if (window_key_as_text_evt(GLFW_KEY_BACKSPACE) && input->cursor_position > 0) {
-			uint index = --input->cursor_position;
-			memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
-		}
-		else */
-
 		if  (!last_character_read) {
-			if (last_character == KEY_DEL) {
+			if (key_equal(psyche_last_key, (Key) { KEY_DEL, 0 })) {
 				if (input->cursor_position > 0) {
 					uint index = --input->cursor_position;
 					memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
 				}
 			}
-			else {
-				char new_string[2] = {(char) last_character, 0};
+			else if (key_equal(psyche_last_key, (Key) { KEY_TAB, 0 })) {
+				ps_input_insert_at_point(input, "    ");
+			}
+			else if (key_equal(psyche_last_key, (Key) { KEY_LEFT, 0 })) {
+				if (input->cursor_position > 0)
+					input->cursor_position--;
+			}
+			else if (key_equal(psyche_last_key, (Key) { KEY_RIGHT, 0 })) {
+				if (input->cursor_position < strlen(input->value))
+					input->cursor_position++;
+			}
+			else if (psyche_last_key.modifiers == 0) {
+				char new_string[2] = {(char) psyche_last_key.code, 0};
 				ps_input_insert_at_point(input, new_string);
+			}
+			else {
+				char buffer[16];
+				key_repr(buffer, psyche_last_key, sizeof(buffer) - 1);
 
+				printf("No binding to %s\n", buffer);
 			}
 
 			last_character_read = GL_TRUE;

@@ -1,6 +1,7 @@
 #include "window.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define UINT_NO_LAST_BIT(x) ((x) & 0x0fffffff)
 #define UINT_LAST_BIT(x)    ((x) & 0x10000000)
@@ -98,6 +99,62 @@ void window_add_character_hook(void (*fn)(void*, Key), void* data) {
 	g_window.character_hook = hook;
 }
 
+Key key_create(uint code, uint32_t modifiers) {
+	return (Key) {
+		.code = code,
+		.modifiers = modifiers
+	};
+}
+
+BOOL key_equal(Key a, Key b) {
+	return a.code == b.code && a.modifiers == b.modifiers;
+}
+
+BOOL key_code_printable(uint code) {
+	return ('a' <= code && code <= 'z') ||
+		('A' <= code && code <= 'Z');
+}
+
+void key_repr(char* buffer, Key k, uint32_t n) {
+	uint32_t i =0;
+
+	if (k.modifiers & KEY_MOD_CTRL) {
+		strncpy(buffer, "C-", n);
+		i += 2;
+	}
+	if (k.modifiers & KEY_MOD_ALT) {
+		strncpy(buffer + i, "M-", n - i);
+		i += 2;
+	}
+	if (k.modifiers & KEY_MOD_SUPER) {
+		strncpy(buffer + i, "s-", n - i);
+		i += 2;
+	}
+
+	if (key_code_printable(k.code) && i < n) {
+		buffer[i] = k.code;
+	}
+	else {
+		switch (k.code) {
+		case '\n':
+			strncpy(buffer + i, "RET", n - i);
+			break;
+		case KEY_LEFT:
+			strncpy(buffer + i, "LEFT", n - i);
+			break;
+		case KEY_RIGHT:
+			strncpy(buffer + i, "RIGHT", n - i);
+			break;
+		case KEY_TAB:
+			strncpy(buffer + i, "TAB", n - i);
+			break;
+		default:
+			if (i < n) buffer[i] = '?';
+			break;
+		}
+	}
+}
+
 void window_new_key(uint code, BOOL is_raw) {
 	uint keycode = '?';
 	BOOL is_handled = GL_TRUE;
@@ -116,16 +173,27 @@ void window_new_key(uint code, BOOL is_raw) {
 		case GLFW_KEY_BACKSPACE:
 			keycode = KEY_DEL;
 			break;
+		case GLFW_KEY_LEFT:
+			keycode = KEY_LEFT;
+			break;
+		case GLFW_KEY_RIGHT:
+			keycode = KEY_RIGHT;
+			break;
 		default:
 			is_handled = GL_FALSE;
 			break;
 		}
 	}
 
-	Key key = {
-		.code = keycode,
-		.modifiers = 0
-	};
+	uint32_t modifiers = 0;
+	if (g_window.keys[GLFW_KEY_LEFT_CONTROL] || g_window.keys[GLFW_KEY_RIGHT_CONTROL])
+		modifiers |= KEY_MOD_CTRL;
+	if (g_window.keys[GLFW_KEY_LEFT_ALT])
+		modifiers |= KEY_MOD_ALT;
+	if (g_window.keys[GLFW_KEY_LEFT_SUPER] || g_window.keys[GLFW_KEY_RIGHT_SUPER])
+		modifiers |= KEY_MOD_SUPER;
+
+	Key key = key_create(keycode, modifiers);
 
 	if (is_handled) {
 		for (struct CHook* h = g_window.character_hook; h != NULL; h = h->next)

@@ -10,8 +10,10 @@
 #define KEY_MOD_CTRL  (1 << 1)
 #define KEY_MOD_SUPER (1 << 2)
 
-#define KEY_TAB ((1 << 16) + 1)
-#define KEY_DEL ((1 << 16) + 2)
+#define KEY_TAB   ((1 << 16) + 1)
+#define KEY_DEL   ((1 << 16) + 2)
+#define KEY_LEFT  ((1 << 16) + 3)
+#define KEY_RIGHT ((1 << 16) + 4)
 
 typedef struct {
 	uint code;
@@ -57,6 +59,10 @@ void window_add_resize_hook(void (*fn)(void*, int, int), void* data);
 void window_add_character_hook(void (*fn)(void*, Key), void* data);
 
 BOOL window_key_as_text_evt(uint key);
+Key key_create(uint code, uint32_t modifiers);
+BOOL key_equal(Key a, Key b);
+BOOL key_code_printable(uint code);
+void key_repr(char* buffer, Key k, uint32_t n);
 
 void window_mainloop();
 
