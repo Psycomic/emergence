@@ -166,7 +166,7 @@ void update(clock_t fps) {
 
 	scene_handle_events(scene);
 
-	if (g_window.keys[GLFW_KEY_Q]) {
+	if (g_window.keys[GLFW_KEY_Q] && !(scene->flags & SCENE_GUI_MODE)) {
 		world_update(physic_world, 0.01f);
 
 		drawable_update(triangle1_drawable);
@@ -231,7 +231,8 @@ int main() {
 	hopalong_points = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 	hopalong_color = malloc(sizeof(Vector3) * ITERATIONS_NUMBER);
 
-	window_create(1200, 800, "Emergence", setup, update);
+	if (window_create(1200, 800, "Emergence", setup, update) < 0)
+		goto error;
 
 	random_init();
 

@@ -7,10 +7,7 @@
 
 Window g_window;
 
-void window_character_callback(GLFWwindow* window, uint codepoint) {
-	for (struct CHook* h = g_window.character_hook; h != NULL; h = h->next)
-		h->fn(h->user_data, codepoint);
-}
+void window_new_key(uint code, BOOL is_raw);
 
 void window_size_callback(GLFWwindow* window, int width, int height) {
 	g_window.size.x = (float)width;
@@ -18,6 +15,10 @@ void window_size_callback(GLFWwindow* window, int width, int height) {
 
 	for (struct RHook* h = g_window.resize_hook; h != NULL; h = h->next)
 		h->fn(h->user_data, width, height);
+}
+
+void window_character_callback(GLFWwindow* w, uint codepoint) {
+	window_new_key(codepoint, GL_TRUE);
 }
 
 int window_create(int width, int height, const char* title, void(*setup)(), void(*update)(clock_t)) {
@@ -69,8 +70,8 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 
 	glViewport(0, 0, width, height); // Viewport size
 
-	glfwSetCharCallback(g_window.w, window_character_callback);
 	glfwSetWindowSizeCallback(g_window.w, window_size_callback);
+	glfwSetCharCallback(g_window.w, window_character_callback);
 
 	setup();
 
@@ -87,7 +88,7 @@ void window_add_resize_hook(void (*fn)(void*, int, int), void* data) {
 	g_window.resize_hook = hook;
 }
 
-void window_add_character_hook(void (*fn)(void*, uint), void* data) {
+void window_add_character_hook(void (*fn)(void*, Key), void* data) {
 	struct CHook* hook = malloc(sizeof(struct CHook));
 
 	hook->fn = fn;
@@ -97,6 +98,41 @@ void window_add_character_hook(void (*fn)(void*, uint), void* data) {
 	g_window.character_hook = hook;
 }
 
+void window_new_key(uint code, BOOL is_raw) {
+	uint keycode = '?';
+	BOOL is_handled = GL_TRUE;
+
+	if (is_raw) {
+		keycode = code;
+	}
+	else {
+		switch (code) {
+		case GLFW_KEY_ENTER:
+			keycode = '\n';
+			break;
+		case GLFW_KEY_TAB:
+			keycode = KEY_TAB;
+			break;
+		case GLFW_KEY_BACKSPACE:
+			keycode = KEY_DEL;
+			break;
+		default:
+			is_handled = GL_FALSE;
+			break;
+		}
+	}
+
+	Key key = {
+		.code = keycode,
+		.modifiers = 0
+	};
+
+	if (is_handled) {
+		for (struct CHook* h = g_window.character_hook; h != NULL; h = h->next)
+			h->fn(h->user_data, key);
+	}
+}
+
 void window_update() {
 	double xpos, ypos;
 	glfwGetCursorPos(g_window.w, &xpos, &ypos);
@@ -104,8 +140,27 @@ void window_update() {
 	g_window.cursor_position.x = (float)xpos - g_window.size.x / 2;
 	g_window.cursor_position.y = g_window.size.y / 2 - (float)ypos;
 
-	for (uint i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST; i++)
+	for (uint i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST; i++) {
 		g_window.keys[i] = glfwGetKey(g_window.w, i);
+
+		if (g_window.keys[i]) {
+			if (UINT_NO_LAST_BIT(g_window.keys_delay[i]) <= 0) {
+				if (UINT_LAST_BIT(g_window.keys_delay[i]))
+					g_window.keys_delay[i] = 2 | 0x10000000;
+				else
+					g_window.keys_delay[i] = 20 | 0x10000000;
+
+				window_new_key(i, GL_FALSE);
+			}
+			else {
+				g_window.keys_delay[i] = (UINT_NO_LAST_BIT(g_window.keys_delay[i]) - 1) |
+					UINT_LAST_BIT(g_window.keys_delay[i]);
+			}
+		}
+		else {
+			g_window.keys_delay[i] = 0;
+		}
+	}
 
 	g_window.should_close = glfwWindowShouldClose(g_window.w);
 	g_window.mouse_button_left_state = glfwGetMouseButton(g_window.w, GLFW_MOUSE_BUTTON_LEFT);

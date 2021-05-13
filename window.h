@@ -6,6 +6,18 @@
 #include <GLFW/glfw3.h>
 #include <time.h>
 
+#define KEY_MOD_ALT   (1 << 0)
+#define KEY_MOD_CTRL  (1 << 1)
+#define KEY_MOD_SUPER (1 << 2)
+
+#define KEY_TAB ((1 << 16) + 1)
+#define KEY_DEL ((1 << 16) + 2)
+
+typedef struct {
+	uint code;
+	uint32_t modifiers;
+} Key;
+
 typedef struct {
 	GLFWwindow* w;
 
@@ -15,6 +27,8 @@ typedef struct {
 	BOOL keys[GLFW_KEY_LAST + 1];
 	uint keys_delay[GLFW_KEY_LAST + 1];
 	BOOL should_close;
+
+	uint last_key_pressed;
 
 	int mouse_button_left_state;
 	int mouse_button_right_state;
@@ -28,7 +42,7 @@ typedef struct {
 	} *resize_hook;
 
 	struct CHook {
-		void (*fn)(void*, uint);
+		void (*fn)(void*, Key);
 		void* user_data;
 		struct CHook* next;
 	} *character_hook;
@@ -40,7 +54,7 @@ extern float global_time;
 int window_create(int width, int height, const char* title, void(*setup)(), void(*update)(clock_t));
 
 void window_add_resize_hook(void (*fn)(void*, int, int), void* data);
-void window_add_character_hook(void (*fn)(void*, uint), void* data);
+void window_add_character_hook(void (*fn)(void*, Key), void* data);
 
 BOOL window_key_as_text_evt(uint key);
 

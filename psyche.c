@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <float.h>
 
 #define _PSYCHE_INTERNAL
 #include "psyche.h"
@@ -85,7 +86,7 @@ typedef struct PsWidget {
 	struct PsWidget* parent;
 	DynamicArray children;
 
-	void (*draw)(struct PsWidget*, float);
+	void (*draw)(struct PsWidget*, float, float, float);
 	Vector2 (*anchor)(struct PsWidget*);
 	Vector2 (*size)(struct PsWidget*);
 
@@ -153,7 +154,7 @@ typedef struct {
 
 PsInput* ps_current_input = NULL;
 
-static PsWindow* ps_windows[PS_MAX_WINDOWS] = {};
+static PsWindow* ps_windows[PS_MAX_WINDOWS];
 static uint64_t ps_windows_count = 0;
 
 static GLuint ps_vbo;
@@ -186,7 +187,7 @@ extern float global_time;
 void ps_draw_gui();
 void ps_handle_events();
 
-void ps_window_draw(PsWindow* window, float offset);
+void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height);
 Vector2 ps_window_anchor(PsWindow* window);
 
 BOOL is_in_box(Vector2 point, float x, float y, float w, float h) {
@@ -229,8 +230,8 @@ void ps_resized_callback(void* data, int width, int height) {
 	ps_ctx.display_size.y = (float)height;
 }
 
-void ps_character_callback(void* data, uint codepoint) {
-	last_character = codepoint;
+void ps_character_callback(void* data, Key key) {
+	last_character = key.code;
 	last_character_read = GL_FALSE;
 }
 
@@ -659,6 +660,8 @@ void ps_window_destroy(PsWindow* window) {
 void ps_widget_draw(PsWidget* widget) {
 	float offset = 0.f;
 
+	Vector2 widget_size = widget->size(widget);
+
 	for (uint64_t i = 0; i < widget->children.size; i++) {
 		PsWidget** w = dynamic_array_at(&widget->children, i);
 		if (widget->flags & PS_WIDGET_SELECTED)
@@ -666,7 +669,7 @@ void ps_widget_draw(PsWidget* widget) {
 		else
 			(*w)->flags &= ~PS_WIDGET_SELECTED;
 
-		(*w)->draw(*w, offset);
+		(*w)->draw(*w, offset, widget_size.x, widget_size.y);
 
 		offset += (*w)->size(*w).y;
 	}
@@ -780,7 +783,7 @@ float ps_text_height(const char* text, float size) {
 	return c * size;
 }
 
-void ps_window_draw(PsWindow* window, float offset) {
+void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height) {
 	float global_transparency = 1.0f;
 
 	if (window->flags & PS_WINDOW_SELECTED_BIT) {
@@ -825,7 +828,7 @@ void ps_draw_gui() {
 	ps_windows[ps_windows_count - 1]->flags |= PS_WINDOW_SELECTED_BIT;
 
 	for (uint64_t i = 0; i < ps_windows_count; i++) {
-		ps_window_draw(ps_windows[i], 0.f);
+		ps_window_draw(ps_windows[i], 0.f, FLT_MAX, FLT_MAX);
 		ps_windows[i]->flags &= ~PS_WINDOW_SELECTED_BIT;
 	}
 }
@@ -912,7 +915,7 @@ void ps_handle_events() {
 	}
 }
 
-void ps_label_draw(PsLabel* label, float offset) {
+void ps_label_draw(PsLabel* label, float offset, float max_width, float max_height) {
 	PsWidget* parent = SUPER(label)->parent;
 	Vector2 anchor = parent->anchor(parent);
 	anchor.y -= offset;
@@ -955,7 +958,7 @@ static Vector4 button_background_color = { { 0.5f, 0.5f, 1.f, 1.f } },
 	button_text_color = { { 0.f, 0.f, 0.f, 1.f } },
 	button_border_color = { { 0.1f, 0.1f, 0.1f, 0.5f } };
 
-void ps_button_draw(PsButton* button, float offset) {
+void ps_button_draw(PsButton* button, float offset, float max_width, float max_height) {
 	PsWidget* parent = SUPER(button)->parent;
 	Vector2 anchor = parent->anchor(parent);
 	anchor.y -= offset;
@@ -1042,7 +1045,7 @@ static Vector4 slider_background_color = { { 0.1f, 0.1f, 0.1f, 1.f } },
 	slider_foreground_color = { { 0.5f, 0.1f, 1.f, 1.f } },
 	slider_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
-void ps_slider_draw(PsSlider* slider, float offset) {
+void ps_slider_draw(PsSlider* slider, float offset, float max_width, float max_height) {
 	PsWidget* parent = SUPER(slider)->parent;
 
 	Vector2 anchor = parent->anchor(parent);
@@ -1144,18 +1147,19 @@ void ps_input_insert_at_point(PsInput* input, char* string) {
 	input->cursor_position += strlen(string);
 }
 
-void ps_input_draw(PsInput* input, float offset) {
+void ps_input_draw(PsInput* input, float offset, float max_width, float max_heigth) {
 	PsWidget* parent = SUPER(input)->parent;
 
 	Vector2 anchor = parent->anchor(parent);
 	anchor.y -= offset;
 
 	input->lines_count = strcount(input->value, '\n') + 1;
+	float input_width = min(max_width - 10.f, input->width);
 
 	float x = anchor.x + input_border_size,
 		h = input->text_size * input->lines_count,
 		y = (anchor.y - input_border_size) - h,
-		w = input->width;
+		w = input_width;
 
 	Vector4 bc_color = input_background_color;
 
@@ -1166,10 +1170,24 @@ void ps_input_draw(PsInput* input, float offset) {
 			if (g_window.mouse_button_left_state) {
 				SUPER(input)->flags |= PS_WIDGET_CLICKING;
 
-				size_t length = strlen(input->value);
+				uint y_cursor_pos = input->lines_count - (g_window.cursor_position.y - y) / input->text_size;
 
-				input->cursor_position = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
-				input->cursor_position = min(input->cursor_position, length);
+				uint i = 0, j = 0;
+				char* c = input->value;
+				while (*c != '\0' && j < y_cursor_pos) {
+					if (*c++ == '\n')
+						j++;
+					i++;
+				}
+
+				uint line_size = 0;
+				while (*c != '\0' && *c++ != '\n')
+					line_size++;
+
+				uint x_cursor_pos = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
+				x_cursor_pos = min(x_cursor_pos, line_size);
+
+				input->cursor_position = x_cursor_pos + i;
 
 				last_character_read = GL_TRUE;
 				ps_current_input = input;
@@ -1195,13 +1213,7 @@ void ps_input_draw(PsInput* input, float offset) {
 	}
 
 	if (input->selected) {
-		if  (!last_character_read) {
-			char new_string[2] = {(char) last_character, 0};
-			ps_input_insert_at_point(input, new_string);
-
-			last_character_read = GL_TRUE;
-		}
-		else if (window_key_as_text_evt(GLFW_KEY_ENTER)) {
+/*		if (window_key_as_text_evt(GLFW_KEY_ENTER)) {
 			ps_input_insert_at_point(input, "\n");
 		}
 		else if (window_key_as_text_evt(GLFW_KEY_TAB)) {
@@ -1215,9 +1227,33 @@ void ps_input_draw(PsInput* input, float offset) {
 			if (input->cursor_position < strlen(input->value))
 				input->cursor_position++;
 		}
+		else if (window_key_as_text_evt(GLFW_KEY_Q) && g_window.keys[GLFW_KEY_LEFT_CONTROL]) {
+			printf("To start of line!\n");
+
+			char* c = input->value + input->cursor_position;
+			while (*--c != '\n')
+				input->cursor_position--;
+		}
 		else if (window_key_as_text_evt(GLFW_KEY_BACKSPACE) && input->cursor_position > 0) {
 			uint index = --input->cursor_position;
 			memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
+		}
+		else */
+
+		if  (!last_character_read) {
+			if (last_character == KEY_DEL) {
+				if (input->cursor_position > 0) {
+					uint index = --input->cursor_position;
+					memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
+				}
+			}
+			else {
+				char new_string[2] = {(char) last_character, 0};
+				ps_input_insert_at_point(input, new_string);
+
+			}
+
+			last_character_read = GL_TRUE;
 		}
 	}
 

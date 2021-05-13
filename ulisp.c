@@ -520,6 +520,12 @@ LispObject* ulisp_prim_random(LispObject* args) {
 		return ulisp_make_integer(random_randint() % *(long*)number->data);
 }
 
+LispObject* ulisp_prim_cons_p(LispObject* args) {
+	assert(ulisp_length(args) == 1);
+
+	return ulisp_car(args)->type & LISP_CONS ? tee : nil;
+}
+
 void env_push_fun(const char* name, void* function) {
 	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol(name),
 										  ulisp_builtin_proc(function)),
@@ -552,6 +558,7 @@ void ulisp_init(void) {
 	env_push_fun("cdr", ulisp_prim_cdr);
 	env_push_fun("cons", ulisp_prim_cons);
 	env_push_fun("eq?", ulisp_prim_eq);
+	env_push_fun("cons?", ulisp_prim_cons_p);
 	env_push_fun("+", ulisp_prim_plus);
 	env_push_fun("-", ulisp_prim_minus);
 	env_push_fun("*", ulisp_prim_mul);

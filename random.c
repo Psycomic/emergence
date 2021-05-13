@@ -7,7 +7,7 @@
 #include "crypto.h"
 #include "window.h"
 
-static unsigned long x = 123456789, y = 362436069, z = 521288629;
+static uint64_t x = 123456789, y = 362436069, z = 521288629;
 extern uint32_t last_character;
 
 void random_seed(uint64_t seed) {

@@ -108,3 +108,25 @@
 
 (defun sqrt (x)
   (sqrt-iter 1.0 x))
+
+(defun nth-helper (lst n i)
+  (if (= n i)
+	  (car lst)
+	  (nth-helper (cdr lst) n (1+ i))))
+
+(defun nth (lst n)
+  (nth-helper lst n 0))
+
+(defun make-board (dims)
+  (cond ((null? dims) nil)
+		((cons? dims)
+			(cons (make-board (car dims))
+				  (make-board (cdr dims))))
+		((= dims 0) nil)
+		(t (cons (random 2)
+				 (make-board (1- dims))))))
+
+(define *board* (make-board (' (10 10))))
+
+(defun board-get (x y)
+  (nth (nth *board* y) x))
