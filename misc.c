@@ -335,7 +335,7 @@ void strinsert(char* dest, const char* src, const char* substr, size_t index, si
 size_t strcount(const char* str, char c) {
 	size_t count = 0;
 	while (*str++ != '\0') {
-		if (*str == c)
+		if (*(str - 1) == c)
 			count++;
 	}
 

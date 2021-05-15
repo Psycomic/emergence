@@ -179,6 +179,12 @@ void window_new_key(uint code, BOOL is_raw) {
 		case GLFW_KEY_RIGHT:
 			keycode = KEY_RIGHT;
 			break;
+		case GLFW_KEY_UP:
+			keycode = KEY_UP;
+			break;
+		case GLFW_KEY_DOWN:
+			keycode = KEY_DOWN;
+			break;
 		default:
 			is_handled = GL_FALSE;
 			break;

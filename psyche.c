@@ -1147,6 +1147,38 @@ void ps_input_insert_at_point(PsInput* input, char* string) {
 	input->cursor_position += strlen(string);
 }
 
+uint ps_input_beginning_of_line(PsInput* input) {
+	if (input->cursor_position == 0)
+		return 0;
+
+	uint i = 0;
+	do {
+		i++;
+		input->cursor_position--;
+	} while (input->value[input->cursor_position] != '\n' &&
+			 input->cursor_position > 0);
+
+	if (input->cursor_position > 0) {
+		input->cursor_position++;
+		return i - 1;
+	}
+
+	return i;
+}
+
+uint ps_input_end_of_line(PsInput* input) {
+	uint i = 0;
+
+	while (input->value[input->cursor_position] != '\0' &&
+		   input->value[input->cursor_position] != '\n')
+	{
+		i++;
+		input->cursor_position++;
+	}
+
+	return i;
+}
+
 void ps_input_draw(PsInput* input, float offset, float max_width, float max_heigth) {
 	PsWidget* parent = SUPER(input)->parent;
 
@@ -1230,6 +1262,29 @@ void ps_input_draw(PsInput* input, float offset, float max_width, float max_heig
 			else if (key_equal(psyche_last_key, (Key) { KEY_RIGHT, 0 })) {
 				if (input->cursor_position < strlen(input->value))
 					input->cursor_position++;
+			}
+			else if (key_equal(psyche_last_key, (Key) { KEY_UP, 0 })) {
+				uint line_size = ps_input_beginning_of_line(input);
+
+				if (input->cursor_position > 0) {
+					input->cursor_position--;
+					uint second_line_size = ps_input_beginning_of_line(input);
+					input->cursor_position += min(line_size, second_line_size);
+				}
+			}
+			else if (key_equal(psyche_last_key, (Key) { KEY_DOWN, 0 })) {
+				uint line_size = ps_input_beginning_of_line(input);
+				input->cursor_position += line_size;
+
+				ps_input_end_of_line(input);
+
+				if (input->value[input->cursor_position] != '\0') {
+					input->cursor_position++;
+					uint saved_pos = input->cursor_position;
+					uint second_line_size = ps_input_end_of_line(input);
+
+					input->cursor_position = saved_pos + min(line_size, second_line_size);
+				}
 			}
 			else if (psyche_last_key.modifiers == 0) {
 				char new_string[2] = {(char) psyche_last_key.code, 0};

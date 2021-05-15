@@ -14,6 +14,8 @@
 #define KEY_DEL   ((1 << 16) + 2)
 #define KEY_LEFT  ((1 << 16) + 3)
 #define KEY_RIGHT ((1 << 16) + 4)
+#define KEY_UP    ((1 << 16) + 5)
+#define KEY_DOWN  ((1 << 16) + 6)
 
 typedef struct {
 	uint code;

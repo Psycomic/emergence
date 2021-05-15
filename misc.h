@@ -13,8 +13,8 @@
 #define SUPER(INSTANCE) (&(INSTANCE)->header)
 
 #ifndef _WIN32
-#define max(a, b) (a) > (b) ? (a) : (b)
-#define min(a, b) (a) < (b) ? (a) : (b)
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 #define ASSERT_CONCAT_(a, b) a##b
