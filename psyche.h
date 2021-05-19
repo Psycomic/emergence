@@ -37,6 +37,7 @@ void ps_begin_path();
 void ps_line_to(float x, float y);
 void ps_close_path();
 void ps_fill(Vector4 color, uint32_t flags);
+void ps_stroke(Vector4 color, float thickness);
 void ps_fill_rect(float x, float y, float w, float h, Vector4 color);
 void ps_text(const char* str, Vector2 position, float size, Vector4 color);
 

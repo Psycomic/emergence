@@ -47,6 +47,9 @@ void vector2_sub(Vector2* dest, Vector2 a, Vector2 b);
 void vector2_neg(Vector2* dest, Vector2 a);
 void vector2_scalar_mul(Vector2* dest, Vector2 a, float s);
 void vector2_rotate(Vector2* dest, Vector2 a, float angle);
+float vector2_magnitude(Vector2 v);
+void vector2_normalize(Vector2* dest);
+Vector2 vector2_line_intersection(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2);
 
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b);
 void vector3_sub(Vector3* dest, Vector3 a, Vector3 b);

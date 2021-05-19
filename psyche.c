@@ -398,6 +398,103 @@ void ps_close_path() {
 	ps_current_path.flags |= PS_PATH_CLOSED;
 }
 
+void ps_stroke(Vector4 color, float thickness) {
+	assert(ps_current_path.flags & PS_PATH_BEING_USED);
+	assert(ps_current_path.points.size >= 3);
+
+	PsDrawList* list = ps_ctx.draw_lists[0];
+	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
+
+	for (uint i = 2; i < ps_current_path.points.size; i++) {
+		Vector2* vec0 = dynamic_array_at(&ps_current_path.points, i - 2);
+		Vector2* vec1 = dynamic_array_at(&ps_current_path.points, i - 1);
+		Vector2* vec2 = dynamic_array_at(&ps_current_path.points, i);
+
+		Vector2 A;
+		A.x = vec1->y - vec0->y;
+		A.y = vec0->x - vec1->x;
+
+		float mag0 = vector2_magnitude(A);
+
+		float z0 = vec0->x + thickness * (A.x / mag0);
+		float w0 = vec0->y + thickness * (A.y / mag0);
+
+		float k0 = vec0->x - thickness * (A.x / mag0);
+		float i0 = vec0->y - thickness * (A.y / mag0);
+
+		float z_prime_0 = z0 + (vec1->x - vec0->x);
+		float w_prime_0 = w0 + (vec1->y - vec0->y);
+
+		float k_prime_0 = k0 + (vec1->x - vec0->x);
+		float i_prime_0 = i0 + (vec1->y - vec0->y);
+
+		A.x = vec2->y - vec1->y;
+		A.y = vec1->x - vec2->x;
+
+		float mag1 = vector2_magnitude(A);
+
+		float z1 = vec2->x + thickness * (A.x / mag1);
+		float w1 = vec2->y + thickness * (A.y / mag1);
+
+		float k1 = vec2->x - thickness * (A.x / mag1);
+		float i1 = vec2->y - thickness * (A.y / mag1);
+
+		float z_prime_1 = z1 + (vec2->x - vec1->x);
+		float w_prime_1 = w1 + (vec2->y - vec1->y);
+
+		float k_prime_1 = k1 + (vec2->x - vec1->x);
+		float i_prime_1 = i1 + (vec2->y - vec1->y);
+
+		// Intersection between (z0, w0) -> (z'0, w'0) and (z1, w1) -> (z'1, w'1)
+		Vector2 inter1 = vector2_line_intersection((Vector2) { { z0, w0 } }, (Vector2) { { z_prime_0, w_prime_0 } },
+												   (Vector2) { { z1, w1 } }, (Vector2) { { z_prime_1, w_prime_1 } });
+
+		// Intersection between (z0, w0) -> (z'0, w'0) and (z1, w1) -> (z'1, w'1)
+		Vector2 inter2 = vector2_line_intersection((Vector2) { { k0, i0 } }, (Vector2) { { k_prime_0, i_prime_0 } },
+												   (Vector2) { { k1, i1 } }, (Vector2) { { k_prime_1, i_prime_1 } });
+
+		PsVert* new_verts = dynamic_array_push_back(&list->vbo, 6);
+		PsIndex* new_indicies = dynamic_array_push_back(&list->ibo, 12);
+
+		for (uint i = 0; i < 6; i++) {
+			new_verts[i].uv_coords = ps_white_pixel;
+			new_verts[i].color = color;
+		}
+
+		new_verts[0].position.x = k0;
+		new_verts[0].position.y = i0;
+		new_verts[1].position.x = z0;
+		new_verts[1].position.y = w0;
+		new_verts[2].position.x = inter1.x;
+		new_verts[2].position.y = inter1.y;
+		new_verts[3].position.x = inter2.x;
+		new_verts[3].position.y = inter2.y;
+		new_verts[4].position.x = z1;
+		new_verts[4].position.y = w1;
+		new_verts[5].position.x = k1;
+		new_verts[5].position.y = i1;
+
+		new_indicies[0] = list->ibo_last_index + 0;
+		new_indicies[1] = list->ibo_last_index + 1;
+		new_indicies[2] = list->ibo_last_index + 2;
+		new_indicies[3] = list->ibo_last_index + 0;
+		new_indicies[4] = list->ibo_last_index + 3;
+		new_indicies[5] = list->ibo_last_index + 2;
+
+		new_indicies[6] = list->ibo_last_index + 3;
+		new_indicies[7] = list->ibo_last_index + 2;
+		new_indicies[8] = list->ibo_last_index + 4;
+		new_indicies[9] = list->ibo_last_index + 3;
+		new_indicies[10] = list->ibo_last_index + 4;
+		new_indicies[11] = list->ibo_last_index + 5;
+
+		cmd->elements_count += 12;
+		list->ibo_last_index += 6;
+	}
+
+	ps_current_path.flags &= ~PS_PATH_BEING_USED;
+}
+
 void ps_fill(Vector4 color, uint32_t flags) {
 	assert(ps_current_path.flags & PS_PATH_BEING_USED);
 
@@ -671,7 +768,7 @@ void ps_widget_draw(PsWidget* widget) {
 
 		(*w)->draw(*w, offset, widget_size.x, widget_size.y);
 
-		offset += (*w)->size(*w).y;
+		offset += (*w)->size(*w).y + 5.f;
 	}
 }
 
@@ -684,9 +781,9 @@ Vector2 ps_window_anchor(PsWindow* window) {
 	};
 }
 
-static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 1.f, 0.8f } };
-static Vector4 ps_window_border_color = { { 1.f, 1.f, 1.f, 1.f } };
-static Vector4 ps_window_title_color = { { 0.f, 0.f, 0.f, 1.f } };
+static Vector4 ps_window_background_color = { { 0.f, 0.f, 0.f, 1.f } };
+static Vector4 ps_window_border_color = { { 0.f, 0.f, 1.f, 1.f } };
+static Vector4 ps_window_title_color = { { 1.f, 1.f, 1.f, 1.f } };
 static float ps_window_border_size = 2.f;
 
 Vector2 ps_window_position_offset(PsWindow* window) {
@@ -824,6 +921,8 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 	ps_widget_draw(SUPER(window));
 }
 
+static float line_pos = 0.f;
+
 void ps_draw_gui() {
 	ps_windows[ps_windows_count - 1]->flags |= PS_WINDOW_SELECTED_BIT;
 
@@ -831,6 +930,14 @@ void ps_draw_gui() {
 		ps_window_draw(ps_windows[i], 0.f, FLT_MAX, FLT_MAX);
 		ps_windows[i]->flags &= ~PS_WINDOW_SELECTED_BIT;
 	}
+
+	ps_begin_path();
+	ps_line_to(0.f, 0.f);
+	ps_line_to(100.f, 0.f);
+	ps_line_to(line_pos, 100.f);
+	ps_stroke((Vector4) { { 1.f, 0.f, 0.f, 1.f } }, 10.f);
+
+	line_pos += 1.f;
 }
 
 void ps_window_switch_to(uint64_t id) {
@@ -1127,7 +1234,7 @@ static float input_border_size = 2.f,
 
 static Vector4 input_background_color = { { 0.f, 0.f, 0.f, 1.f } },
 	input_border_color = { { 1.f, 1.f, 1.f, 1.f } },
-	input_cursor_color = { { 1.f, 1.f, 1.f, 1.f } },
+	input_cursor_color = { { 1.f, 0.f, 0.f, 1.f } },
 	input_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
 Vector2 ps_input_size(PsInput* input) {
@@ -1186,7 +1293,7 @@ void ps_input_draw(PsInput* input, float offset, float max_width, float max_heig
 	anchor.y -= offset;
 
 	input->lines_count = strcount(input->value, '\n') + 1;
-	float input_width = min(max_width - 10.f, input->width);
+	float input_width = min(max_width - 10.f, input->width - 5.f);
 
 	float x = anchor.x + input_border_size,
 		h = input->text_size * input->lines_count,

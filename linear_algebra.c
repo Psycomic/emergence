@@ -33,7 +33,7 @@ void vector2_neg(Vector2* dest, Vector2 a) {
 void vector2_scalar_mul(Vector2* dest, Vector2 a, float s) {
 	dest->x = a.x * s;
 	dest->y = a.y * s;
-};
+}
 
 void vector2_rotate(Vector2* dest, Vector2 a, float angle) {
 	float angle_cos = cosf(angle),
@@ -41,6 +41,27 @@ void vector2_rotate(Vector2* dest, Vector2 a, float angle) {
 
 	dest->x = a.x * angle_cos - a.y * angle_sin;
 	dest->y = a.x * angle_sin + a.y * angle_cos;
+}
+
+float vector2_magnitude(Vector2 v) {
+	return sqrtf(v.x * v.x + v.y * v.y);
+}
+
+void vector2_normalize(Vector2* dest) {
+	float m = 1.f / vector2_magnitude(*dest);
+
+	dest->x *= m;
+	dest->y *= m;
+}
+
+Vector2 vector2_line_intersection(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2) {
+	Vector2 res;
+	float D = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
+
+	res.x = ((a1.x * a2.y - a1.y * a2.x) * (b1.x - b2.x) - (a1.x - a2.x) * (b1.x * b2.y - b1.y * b2.x)) / D;
+	res.y = ((a1.x * a2.y - a1.y * a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x * b2.y - b1.y * b2.x)) / D;
+
+	return res;
 }
 
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b) {

@@ -120,4 +120,12 @@ void execute_tests(void) {
 
 		randomness_test(random_csprng_randint, 2048);
 	}
+
+	{
+		Vector2 A1 = { { 0, -10 } }, A2 = { { 100, -10 } };
+		Vector2 B1 = { { 110, 0 } }, B2 = { { 110, 100 } };
+		Vector2 test = vector2_line_intersection(A1, A2, B1, B2);
+
+		printf("Point is (%.2f, %.2f)!\n", test.x, test.y);
+	}
 }
