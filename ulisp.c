@@ -9,6 +9,7 @@
 #define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, stdout); puts("");
 #define CAR(o) ((ConsCell*)(o)->data)->car
 #define CDR(o) ((ConsCell*)(o)->data)->cdr
+#define panic(str) do { printf(str"\n"); exit(-1); } while (0)
 
 LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
 	*lambda, *mlambda, *define, *rest, *not_found;
@@ -22,9 +23,21 @@ static LispObject* free_list;
 static uchar* workspace;
 static Stack gc_stack;
 
+static LispObject* eval_stack;
+static LispObject* envt_register;
+LispObject* value_register;
+static LispObject* current_continuation;
+static LispTemplate* template_register;
+static uchar* ulisp_rip;
+
 LispObject* ulisp_car(LispObject* pair);
 LispObject* ulisp_cdr(LispObject* object);
 void ulisp_gc(LispObject* cons_cell);
+
+typedef struct LispLabel {
+	long id;
+	size_t offset;
+} LispLabel;
 
 void free_list_init() {
 	workspace = malloc(cons_cell_size * free_space);
@@ -71,11 +84,19 @@ mark:
 		goto mark;
 	}
 	else if (object->type & LISP_PROC) {
-		LispProc* proc = object->data;
+		LispClosure* proc = object->data;
 
-		mark_object(proc->arguments);
-		mark_object(proc->expression);
-		mark_object(proc->environnement);
+		mark_object(proc->envt);
+
+		for (uint i = 0; i < proc->template->literals_count; i++)
+			mark_object(proc->template->literals[i]);
+	}
+	else if (object->type & LISP_CONTINUATION) {
+		LispContinuation* cont = object->data;
+
+		mark_object(cont->envt_register);
+		mark_object(cont->eval_stack);
+		mark_object(cont->previous_cont);
 	}
 }
 
@@ -111,14 +132,16 @@ void ulisp_gc(LispObject* cons_cell) {
 
 	mark_object(cons_cell);
 	mark_object(environnement);
+	mark_object(envt_register);
+	mark_object(eval_stack);
+	mark_object(current_continuation);
+
+	for (uint i = 0; i < template_register->literals_count; i++)
+		mark_object(template_register->literals[i]);
+
 	free_list_sweep();
 
 	printf("Now having %lu free space!\n", free_space);
-
-/* 	if (free_space < 20) { */
-/* 		uchar* new_space = malloc(cons_cell_size * workspace_size); */
-/* 		workspace  */
-/* 	} */
 }
 
 LispObject* ulisp_cons(LispObject* first, LispObject* second) {
@@ -186,18 +209,31 @@ LispObject* ulisp_make_float(double val) {
 	return new_object;
 }
 
-LispObject* ulisp_make_lambda(LispObject* args, LispObject* body, LispObject* env, GLboolean is_macro) {
-	LispObject* new_lambda = malloc(sizeof(LispObject) + sizeof(LispProc));
-	new_lambda->type = LISP_PROC;
+LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_stack, LispObject* current_cont, LispTemplate* current_template, uchar* rip) {
+	LispObject* new_cont_obj = malloc(sizeof(LispObject) + sizeof(LispContinuation));
+	new_cont_obj->type = LISP_CONTINUATION;
 
-	LispProc* proc = (LispProc*)new_lambda->data;
+	LispContinuation* cont = (LispContinuation*)new_cont_obj->data;
 
-	proc->arguments = args;
-	proc->expression = body;
-	proc->environnement = env;
-	proc->is_macro = is_macro;
+	cont->envt_register = envt_register;
+	cont->eval_stack = eval_stack;
+	cont->previous_cont = current_cont;
+	cont->current_template = current_template;
+	cont->rip = rip;
 
-	return new_lambda;
+	return new_cont_obj;
+}
+
+LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt) {
+	LispObject* obj = malloc(sizeof(LispObject) + sizeof(LispClosure));
+	obj->type = LISP_PROC;
+
+	LispClosure* closure = obj->data;
+
+	closure->template = template;
+	closure->envt = envt;
+
+	return obj;
 }
 
 BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
@@ -217,17 +253,27 @@ BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
 		return GL_FALSE;
 }
 
-LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol) {
+LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol, GLboolean* out_found) {
 	assert(plist->type & LISP_LIST);
+	assert(symbol->type & LISP_SYMBOL);
 
 	for (; plist != nil; plist = ulisp_cdr(plist)) {
 		LispObject* temp = ulisp_car(plist);
 
-		if (ulisp_eq(ulisp_car(temp), symbol))
+		if (ulisp_eq(ulisp_car(temp), symbol)) {
+			*out_found = GL_TRUE;
 			return ulisp_cdr(temp);
+		}
 	}
 
-	return not_found;
+	*out_found = GL_FALSE;
+	return nil;
+}
+
+void ulisp_add_to_environnement(char* name, LispObject* closure) {
+	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol(name),
+										  closure),
+							   environnement);
 }
 
 LispObject* ulisp_nreverse(LispObject* obj) {
@@ -532,11 +578,33 @@ void env_push_fun(const char* name, void* function) {
 							   environnement);
 }
 
+static LispObject *bytecode_push, *bytecode_push_cont, *bytecode_lookup_var,
+	*bytecode_apply, *bytecode_restore_cont, *bytecode_fetch_literal, *bytecode_label,
+	*bytecode_bind, *bytecode_branch_if, *bytecode_branch_else, *bytecode_branch;
+
 void ulisp_init(void) {
 	stack_init(&gc_stack);
 
 	nil = ulisp_make_symbol("nil");
 	nil->type |= LISP_LIST;
+
+	value_register = nil;
+	eval_stack = nil;
+	template_register = NULL;
+	envt_register = nil;
+	ulisp_rip = NULL;
+
+	bytecode_push = ulisp_make_symbol("push");
+	bytecode_push_cont = ulisp_make_symbol("push-cont");
+	bytecode_lookup_var = ulisp_make_symbol("lookup-var");
+	bytecode_apply = ulisp_make_symbol("apply");
+	bytecode_restore_cont = ulisp_make_symbol("restore-cont");
+	bytecode_fetch_literal =  ulisp_make_symbol("fetch-literal");
+	bytecode_label = ulisp_make_symbol("label");
+	bytecode_bind = ulisp_make_symbol("bind");
+	bytecode_branch_if = ulisp_make_symbol("branch-if");
+	bytecode_branch_else = ulisp_make_symbol("branch-else");
+	bytecode_branch = ulisp_make_symbol("branch");
 
 	tee = ulisp_make_symbol("t");
 	quote = ulisp_make_symbol("quote");
@@ -570,177 +638,286 @@ void ulisp_init(void) {
 	env_push_fun("insert-at-point", ulisp_prim_insert_at_point);
 	env_push_fun("random", ulisp_prim_random);
 
-	ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil);
+	/* ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil); */
 }
 
-LispObject* ulisp_apply(LispObject* proc, LispObject* arguments) {
-	assert(proc->type & LISP_PROC || proc->type & LISP_PROC_BUILTIN);
-	assert(arguments->type & LISP_LIST);
+void ulisp_eval_stack_push() {
+	eval_stack = ulisp_cons(value_register, eval_stack);
+}
 
-	if (proc->type & LISP_PROC_BUILTIN) {
-		LispObject* (**function)(LispObject*) = (LispObject *(**)(LispObject *))&proc->data;
-		return (*function)(arguments);
+void ulisp_save_current_continuation(uchar* rip) {
+	LispObject* cont = ulisp_make_continuation(envt_register, eval_stack, current_continuation, template_register, rip);
+	current_continuation = cont;
+
+	eval_stack = nil;
+}
+
+void ulisp_restore_continuation() {
+	LispContinuation* cont = current_continuation->data;
+	envt_register = cont->envt_register;
+	eval_stack = cont->eval_stack;
+	template_register = cont->current_template;
+	ulisp_rip = cont->rip;
+
+	current_continuation = cont->previous_cont;
+}
+
+void ulisp_apply() {
+	if (value_register->type & LISP_PROC_BUILTIN) {
+		LispObject* (**fn)(LispObject*) = value_register->data;
+		value_register = (*fn)(eval_stack);
+		ulisp_restore_continuation();
 	}
-	else if (proc->type & LISP_PROC) {
-		LispProc* lisp_proc = (LispProc*)proc->data;
-		LispObject* new_env = lisp_proc->environnement;
+	else if (value_register->type & LISP_PROC) {
+		LispClosure* closure = value_register->data;
 
-		LispObject *applied_arg = arguments,
-			*arg_name = lisp_proc->arguments;
+		envt_register = closure->envt;
+		template_register = closure->template;
+		ulisp_rip = closure->template->code;
+	}
+	else {
+		ulisp_print(value_register, stdout);
+		panic(" is not a function!");
+	}
+}
 
-		uint32_t push_count = 0;
-		while (applied_arg != nil && arg_name != nil) {
-			LispObject* arg = ulisp_car(arg_name);
+LispObject* ulisp_pop() {
+	LispObject* obj = ulisp_car(eval_stack);
+	eval_stack = ulisp_cdr(eval_stack);
 
-			if (ulisp_eq(arg, rest)) {
-				new_env = ulisp_cons(
-					ulisp_cons(ulisp_car(ulisp_cdr(arg_name)),
-							   applied_arg),
-					new_env);
+	return obj;
+}
 
-				stack_push(&gc_stack, new_env);
-				push_count++;
-				break;
-			}
+void ulisp_bind(LispObject* symbol) {
+	envt_register = ulisp_cons(ulisp_cons(symbol, ulisp_pop()),
+							   envt_register);
+}
 
-			new_env = ulisp_cons(
-				ulisp_cons(ulisp_car(arg_name),
-						   ulisp_car(applied_arg)), new_env);
+void ulisp_run(LispTemplate* template) {
+	ulisp_rip = template->code;
+	template_register = template;
 
-			stack_push(&gc_stack, new_env);
-			push_count++;
+start:
+	switch (ulisp_rip[0]) {
+	case ULISP_BYTECODE_APPLY:
+		ulisp_apply();
+		break;
+	case ULISP_BYTECODE_LOOKUP:
+	{
+		GLboolean found;
+		value_register = ulisp_assoc(envt_register, *(void**)(ulisp_rip + 1), &found);
 
-			applied_arg = ulisp_cdr(applied_arg);
-			arg_name = ulisp_cdr(arg_name);
+		if (!found) {
+			GLboolean global_found;
+			value_register = ulisp_assoc(environnement, *(void**)(ulisp_rip + 1), &global_found);
+			assert(global_found);
 		}
 
-		LispObject* result = ulisp_eval(ulisp_cons(begin, lisp_proc->expression), new_env);
-		stack_pop(&gc_stack, push_count);
-		return result;
+		ulisp_rip += sizeof(void*) + 1;
 	}
-
-	return NULL;
-}
-
-LispObject* ulisp_macroexpand(LispObject* expression, LispObject* env) {
-	if (expression->type & LISP_CONS && ulisp_car(expression)->type & LISP_SYMBOL) {
-		LispObject* proc = ulisp_assoc(env, ulisp_car(expression));
-		if (ulisp_eq(proc, not_found))
-			proc = ulisp_assoc(environnement, ulisp_car(expression));
-
-		if (proc != nil && proc->type & LISP_PROC && ((LispProc*)proc->data)->is_macro)
-			return ulisp_macroexpand(ulisp_apply(proc, ulisp_cdr(expression)), env);
+		break;
+	case ULISP_BYTECODE_PUSH_CONT:
+	{
+		ulisp_save_current_continuation(template_register->code + *(size_t*)(ulisp_rip + 1));
+		ulisp_rip += sizeof(void*) + 1;
+	}
+		break;
+	case ULISP_BYTECODE_RESUME_CONT:
+		ulisp_restore_continuation();
+		break;
+	case ULISP_BYTECODE_BRANCH_IF:
+		if (ulisp_eq(value_register, nil))
+			ulisp_rip += sizeof(size_t) + 1;
 		else
-			return expression;
+			ulisp_rip = template_register->code + *(size_t*)(ulisp_rip + 1);
+		break;
+	case ULISP_BYTECODE_BRANCH_ELSE:
+		if (ulisp_eq(value_register, nil))
+			ulisp_rip = template_register->code + *(size_t*)(ulisp_rip + 1);
+		else
+			ulisp_rip += sizeof(size_t) + 1;
+		break;
+	case ULISP_BYTECODE_BRANCH:
+		ulisp_rip = template_register->code + *(size_t*)(ulisp_rip + 1);
+		break;
+	case ULISP_BYTECODE_PUSH_EVAL:
+		ulisp_eval_stack_push();
+		ulisp_rip++;
+		break;
+	case ULISP_BYTECODE_FETCH_LITERAL:
+		value_register = template_register->literals[*(uint*)(ulisp_rip + 1)];
+		ulisp_rip += sizeof(uint) + 1;
+		break;
+	case ULISP_BYTECODE_BIND:
+		ulisp_bind(*(void**)(ulisp_rip + 1));
+		ulisp_rip += sizeof(void*) + 1;
+		break;
+	case ULISP_BYTECODE_END:
+		goto end;
+	default:
+		panic("Invalid instruction");
 	}
-	else {
-		return expression;
+
+	goto start;
+end:
+	return;
+}
+
+void ulisp_scan_labels(LispObject* code, DynamicArray* target) {
+	size_t offset = 0;
+
+	for (LispObject* exp = code; exp != nil; exp = ulisp_cdr(exp)) {
+		LispObject* funcall = ulisp_car(exp);
+		LispObject* instruction = ulisp_car(funcall);
+
+		if (ulisp_eq(instruction, bytecode_lookup_var) ||
+			ulisp_eq(instruction, bytecode_bind) ||
+			ulisp_eq(instruction, bytecode_push_cont))
+		{
+			offset += 1 + sizeof(void*);
+		}
+		else if (ulisp_eq(instruction, bytecode_apply) ||
+				 ulisp_eq(instruction, bytecode_restore_cont) ||
+				 ulisp_eq(instruction, bytecode_push))
+		{
+			offset += 1;
+		}
+		else if (ulisp_eq(instruction, bytecode_fetch_literal)) {
+			offset += 1 + sizeof(uint);
+		}
+		else if (ulisp_eq(instruction, bytecode_branch_if) ||
+				 ulisp_eq(instruction, bytecode_branch_else) ||
+				 ulisp_eq(instruction, bytecode_branch))
+		{
+			offset += 1 + sizeof(size_t);
+		}
+		else if (ulisp_eq(instruction, bytecode_label)) {
+			LispLabel* label = dynamic_array_push_back(target, 1);
+			LispObject* number_id = ulisp_car(ulisp_cdr(funcall));
+			assert(number_id->type & LISP_INTEGER);
+
+			label->id = *(long*)number_id->data;
+			label->offset = offset;
+		}
+		else {
+			ulisp_print(instruction, stdout);
+			panic(": Invalid instruction!");
+		}
 	}
 }
 
-LispObject* ulisp_eval(LispObject* expression, LispObject* env) {
-	stack_push(&gc_stack, expression);
-	stack_push(&gc_stack, env);
-	LispObject* result;
+size_t ulisp_label_find_rip(DynamicArray* labels, long target_label_num) {
+	size_t cont_rip = 0;
 
-	if (expression->type & LISP_SYMBOL) {
-		LispObject* exp = ulisp_assoc(env, expression);
+	for (uint i = 0; i < labels->size; i++) {
+		LispLabel* label = dynamic_array_at(labels, i);
 
-		if (ulisp_eq(exp, not_found))
-			exp = ulisp_assoc(environnement, expression);
-
-		if (ulisp_eq(exp, not_found)) {
-			printf("Not found: %s\n", ulisp_symbol_string(expression));
-			ulisp_print(env, stdout);
-			puts("");
+		if (label->id == target_label_num) {
+			cont_rip += label->offset;
+			break;
 		}
-
-		result = exp;
-		goto end;
-	}
-	else if (expression->type & LISP_NUMBER) {
-		result = expression;
-		goto end;
-	}
-	else {
-		expression = ulisp_macroexpand(expression, env);
-
-		LispObject* applied_symbol = ulisp_car(expression);
-
-		if (applied_symbol->type & LISP_SYMBOL) {
-			if (ulisp_eq(applied_symbol, quote)) {
-				result = ulisp_car(ulisp_cdr(expression));
-				goto end;
-			}
-			else if (ulisp_eq(applied_symbol, iffe)) {
-				LispObject* arguments = ulisp_cdr(expression);
-
-				if (!ulisp_eq(ulisp_eval(ulisp_car(arguments), env), nil)) {
-					result = ulisp_eval(ulisp_car(ulisp_cdr(arguments)), env);
-					goto end;
-				}
-				else if (!ulisp_eq(ulisp_cdr(ulisp_cdr(arguments)), nil)) {
-					result = ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(arguments))), env);
-					goto end;
-				}
-				else {
-					result = nil;
-					goto end;
-				}
-			}
-			else if (ulisp_eq(applied_symbol, begin))  {
-				LispObject* last_obj = nil;
-
-				for(LispObject* form = ulisp_cdr(expression); form != nil; form = ulisp_cdr(form))
-					last_obj = ulisp_eval(ulisp_car(form), env);
-
-				result = last_obj;
-				goto end;
-			}
-			else if (ulisp_eq(applied_symbol, lambda)) {
-				result = ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
-										   ulisp_cdr(ulisp_cdr(expression)),
-										   env,
-										   GL_FALSE);
-				goto end;
-			}
-			else if (ulisp_eq(applied_symbol, mlambda)) {
-				result = ulisp_make_lambda(ulisp_car(ulisp_cdr(expression)),
-										   ulisp_cdr(ulisp_cdr(expression)),
-										   nil,
-										   GL_TRUE);
-				goto end;
-			}
-			else if (ulisp_eq(applied_symbol, define)) {
-				LispObject* name = ulisp_car(ulisp_cdr(expression));
-				LispObject* value = ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(expression))), env);
-
-				LispObject* pair = ulisp_cons(name, value);
-				environnement = ulisp_cons(pair, environnement);
-
-				result = name;
-				goto end;
-			}
+		else if (i == labels->size - 1) {
+			panic("Label not found!");
 		}
-
-		LispObject* proc = ulisp_eval(applied_symbol, env);
-		LispObject* evaluated_args = nil;
-		uint32_t args_count = 0;
-
-		for(LispObject* argument = ulisp_cdr(expression); argument != nil; argument = ulisp_cdr(argument)) {
-			stack_push(&gc_stack, evaluated_args);
-			evaluated_args = ulisp_cons(ulisp_eval(ulisp_car(argument), env), evaluated_args);
-			args_count++;
-		}
-
-		result = ulisp_apply(proc, ulisp_nreverse(evaluated_args));
-		stack_pop(&gc_stack, args_count);
-		goto end;
 	}
 
-end:
-	stack_pop(&gc_stack, 2);
-	return result;
+	return cont_rip;
+}
+
+LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
+	DynamicArray bytecode, literals, labels;
+	DYNAMIC_ARRAY_CREATE(&bytecode, uchar);
+	DYNAMIC_ARRAY_CREATE(&literals, LispObject*);
+	DYNAMIC_ARRAY_CREATE(&labels, LispLabel);
+
+	ulisp_scan_labels(expressions, &labels);
+
+	for (LispObject* exp = expressions; exp != nil; exp = ulisp_cdr(exp)) {
+		LispObject* current_exp = CAR(exp);
+		LispObject* applied_symbol = ulisp_car(current_exp);
+
+		if (ulisp_eq(applied_symbol, bytecode_push)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1);
+			*instructions = ULISP_BYTECODE_PUSH_EVAL;
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_push_cont)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(void*));
+			instructions[0] = ULISP_BYTECODE_PUSH_CONT;
+
+			long target_label_num = *(long*)ulisp_car(ulisp_cdr(current_exp))->data;
+			*(size_t*)(instructions + 1) = ulisp_label_find_rip(&labels, target_label_num);
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_branch_if)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(size_t));
+			instructions[0] = ULISP_BYTECODE_BRANCH_IF;
+
+			long target_label_num = *(long*)ulisp_car(ulisp_cdr(current_exp))->data;
+			*(size_t*)(instructions + 1) = ulisp_label_find_rip(&labels, target_label_num);
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_branch_else)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(size_t));
+			instructions[0] = ULISP_BYTECODE_BRANCH_ELSE;
+
+			long target_label_num = *(long*)ulisp_car(ulisp_cdr(current_exp))->data;
+			*(size_t*)(instructions + 1) = ulisp_label_find_rip(&labels, target_label_num);
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_branch)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(size_t));
+			instructions[0] = ULISP_BYTECODE_BRANCH;
+
+			long target_label_num = *(long*)ulisp_car(ulisp_cdr(current_exp))->data;
+			*(size_t*)(instructions + 1) = ulisp_label_find_rip(&labels, target_label_num);
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_lookup_var)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(void*));
+			instructions[0] = ULISP_BYTECODE_LOOKUP;
+
+			*(LispObject**)(instructions + 1) = ulisp_car(ulisp_cdr(current_exp));
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_apply)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1);
+			*instructions = ULISP_BYTECODE_APPLY;
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_restore_cont)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1);
+			*instructions = ULISP_BYTECODE_RESUME_CONT;
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_fetch_literal)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(uint));
+			instructions[0] = ULISP_BYTECODE_FETCH_LITERAL;
+			*(uint*)(instructions + 1) = literals.size;
+
+			LispObject** obj = dynamic_array_push_back(&literals, 1);
+			*obj = ulisp_car(ulisp_cdr(current_exp));
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_bind)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(void*));
+			instructions[0] = ULISP_BYTECODE_BIND;
+			*(void**)(instructions + 1) = ulisp_car(ulisp_cdr(current_exp));
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_label)) {
+			continue;
+		}
+		else {
+			printf("operand not understood: ");
+			ulisp_print(applied_symbol, stdout);
+			panic("\nCompiler error.");
+		}
+	}
+
+	uchar* end = dynamic_array_push_back(&bytecode, 1);
+	*end = ULISP_BYTECODE_END;
+
+	LispTemplate* compiled_code = malloc(sizeof(LispTemplate) + sizeof(LispObject*) * literals.size);
+	compiled_code->code = bytecode.data;
+	compiled_code->literals_count = 0;
+
+	for (uint i = 0; i < literals.size; i++)
+		compiled_code->literals[i] = *(LispObject**)dynamic_array_at(&literals, i);
+
+	dynamic_array_destroy(&labels);
+	dynamic_array_destroy(&literals);
+	return compiled_code;
 }
 
 LispObject* ulisp_read_list_helper(const char* string) {
@@ -819,6 +996,10 @@ LispObject* ulisp_read_list(const char* string) {
 	return expression;
 }
 
+LispObject* ulisp_read(const char* string) {
+	return ulisp_car(ulisp_read_list_helper(string));
+}
+
 char* ulisp_debug_print(LispObject* obj) {
 	char* buffer = NULL;
 	size_t bufferSize = 0;
@@ -854,13 +1035,8 @@ void ulisp_print(LispObject* obj, FILE* stream) {
 		fprintf(stream, "<BUILTIN-PROC at %p>", *(void**)obj->data);
 	}
 	else if (obj->type & LISP_PROC) {
-		LispProc* proc = (LispProc*)obj->data;
-
-		fprintf(stream, "<PROC args: ");
-		ulisp_print(proc->arguments, stream);
-		fprintf(stream, ", body: ");
-		ulisp_print(proc->expression, stream);
-		fprintf(stream, ">");
+		LispClosure* proc = (LispClosure*)obj->data;
+		fprintf(stream, "<PROC at %p>", proc);
 	}
 	else if (obj->type & LISP_INTEGER) {
 		fprintf(stream, "%ld", *(long*)obj->data);

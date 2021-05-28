@@ -130,10 +130,10 @@ void update(clock_t fps) {
 	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
-		LispObject* res = ulisp_eval(ulisp_read_list(ps_input_value(lisp_input)), nil);
-		char* result = ulisp_debug_print(res);
+		/* LispObject* res = ulisp_eval(ulisp_read_list(ps_input_value(lisp_input)), nil); */
+		/* char* result = ulisp_debug_print(res); */
 
-		ps_label_set_text(result_label, result);
+		ps_label_set_text(result_label, "fuck you");
 	}
 
 	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {

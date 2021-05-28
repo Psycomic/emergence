@@ -128,4 +128,99 @@ void execute_tests(void) {
 
 		printf("Point is (%.2f, %.2f)!\n", test.x, test.y);
 	}
+
+	{
+		// (defun lerp (a b v)
+		// 	    (+ a (* (- b a) v)))
+		const char* lerp_proc =
+			"("
+			"(bind a)"
+			"(bind b)"
+			"(bind v)"
+			"(push-cont 4)"
+			"(push-cont 3)"
+			"(lookup-var v)"
+			"(push)"
+			"(push-cont 2)"
+			"(lookup-var a)"
+			"(push)"
+			"(lookup-var b)"
+			"(push)"
+			"(lookup-var -)"
+			"(apply)"
+			"(label 2)"
+			"(push)"
+			"(lookup-var *)"
+			"(apply)"
+			"(label 3)"
+			"(push)"
+			"(lookup-var a)"
+			"(push)"
+			"(lookup-var +)"
+			"(apply)"
+			"(label 4)"
+			"(restore-cont)"
+			")";
+
+		LispObject* lerp_expression = ulisp_read(lerp_proc);
+		LispTemplate* lerp_template = ulisp_assembly_compile(lerp_expression);
+		LispObject* lerp_closure = ulisp_make_closure(lerp_template, nil);
+
+		ulisp_add_to_environnement("lerp", lerp_closure);
+
+		// (defun abs (x)
+		//    (if (> x 0)
+		//        x
+		//        (- x)))
+
+		const char* abs_string =
+			"("
+			"(bind x)"
+			"(push-cont 5)"
+			"(fetch-literal 0)"
+			"(push)"
+			"(lookup-var x)"
+			"(push)"
+			"(lookup-var >)"
+			"(apply)"
+			"(label 5)"
+			"(branch-else 6)"
+			"(lookup-var x)"	/* if true */
+			"(branch 7)"
+			"(label 6)"			/* if false */
+			"(push-cont 7)"
+			"(lookup-var x)"
+			"(push)"
+			"(lookup-var -)"
+			"(apply)"
+			"(label 7)"
+			"(restore-cont)"
+			")";
+
+		LispObject* abs_expression = ulisp_read(abs_string);
+		LispTemplate* abs_template = ulisp_assembly_compile(abs_expression);
+		LispObject* abs_closure = ulisp_make_closure(abs_template, nil);
+
+		ulisp_add_to_environnement("abs", abs_closure);
+
+		const char* expression_string =
+			"("
+			"(push-cont 0)"
+			"(fetch-literal -8)"
+			"(push)"
+			"(lookup-var abs)"
+			"(apply)"
+			"(label 0)"
+			"(push)"
+			")";
+
+		LispObject* main_expression = ulisp_read(expression_string);
+		LispTemplate* main_template = ulisp_assembly_compile(main_expression);
+		ulisp_run(main_template);
+
+		printf("========= ULISP BYTECODE TEST =============\n");
+		printf("Expression: %s\nResult: ", expression_string);
+		ulisp_print(value_register, stdout);
+		printf(" !\n");
+	}
 }
