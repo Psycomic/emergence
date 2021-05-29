@@ -120,6 +120,8 @@ static PsButton* eval_button;
 static PsInput* lisp_input;
 static PsLabel* result_label;
 static Worker* terrain_worker = NULL;
+static float last_position_x = 200.f;
+static float last_position_y = 200.f;
 
 void update(clock_t fps) {
 	scene_draw(scene, background_color);
@@ -172,6 +174,14 @@ void update(clock_t fps) {
 		drawable_update(triangle1_drawable);
 		drawable_update(triangle2_drawable);
 	}
+
+	ps_begin_path();
+	ps_line_to(0.f, 0.f);
+	ps_line_to(100.f, 0.f);
+	ps_line_to(100.f, 100.f);
+	ps_line_to(0.f, 100.f);
+	ps_line_to(g_window.cursor_position.x, g_window.cursor_position.y);
+	ps_stroke((Vector4) { { 1.f, 0.f, 0.f, 1.f } }, 10.f);
 }
 
 void setup() {

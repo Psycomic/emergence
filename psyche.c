@@ -189,6 +189,7 @@ void ps_handle_events();
 
 void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height);
 Vector2 ps_window_anchor(PsWindow* window);
+void ps_fill_rect(float x, float y, float w, float h, Vector4 color);
 
 BOOL is_in_box(Vector2 point, float x, float y, float w, float h) {
 	return point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h;
@@ -405,45 +406,76 @@ void ps_stroke(Vector4 color, float thickness) {
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
+	Vector2* first_point = dynamic_array_at(&ps_current_path.points, 0);
+	Vector2* second_point = dynamic_array_at(&ps_current_path.points, 1);
+
+	Vector2 A;
+	A.x = second_point->y - first_point->y;
+	A.y = first_point->x - second_point->x;
+
+	float mag0 = vector2_magnitude(A);
+
+	float z0 = first_point->x + thickness * (A.x / mag0);
+	float w0 = first_point->y + thickness * (A.y / mag0);
+
+	float k0 = first_point->x - thickness * (A.x / mag0);
+	float i0 = first_point->y - thickness * (A.y / mag0);
+
+	PsVert* first_verts = dynamic_array_push_back(&list->vbo, 2);
+
+	for (uint i = 0; i < 2; i++) {
+		first_verts[i].uv_coords = ps_white_pixel;
+		first_verts[i].color = color;
+	}
+
+	first_verts[0].position.x = k0;
+	first_verts[0].position.y = i0;
+	first_verts[1].position.x = z0;
+	first_verts[1].position.y = w0;
+
+	float z1, w1, k1, i1,
+		z_prime_1, w_prime_1, k_prime_1, i_prime_1;
+
 	for (uint i = 2; i < ps_current_path.points.size; i++) {
-		Vector2* vec0 = dynamic_array_at(&ps_current_path.points, i - 2);
-		Vector2* vec1 = dynamic_array_at(&ps_current_path.points, i - 1);
-		Vector2* vec2 = dynamic_array_at(&ps_current_path.points, i);
+		first_point = dynamic_array_at(&ps_current_path.points, i - 2);
+		second_point = dynamic_array_at(&ps_current_path.points, i - 1);
+		Vector2* third_point = dynamic_array_at(&ps_current_path.points, i);
 
-		Vector2 A;
-		A.x = vec1->y - vec0->y;
-		A.y = vec0->x - vec1->x;
+		if (i != 2) {
+			A.x = second_point->y - first_point->y;
+			A.y = first_point->x - second_point->x;
 
-		float mag0 = vector2_magnitude(A);
+			mag0 = vector2_magnitude(A);
 
-		float z0 = vec0->x + thickness * (A.x / mag0);
-		float w0 = vec0->y + thickness * (A.y / mag0);
+			z0 = first_point->x + thickness * (A.x / mag0);
+			w0 = first_point->y + thickness * (A.y / mag0);
 
-		float k0 = vec0->x - thickness * (A.x / mag0);
-		float i0 = vec0->y - thickness * (A.y / mag0);
+			k0 = first_point->x - thickness * (A.x / mag0);
+			i0 = first_point->y - thickness * (A.y / mag0);
+		}
 
-		float z_prime_0 = z0 + (vec1->x - vec0->x);
-		float w_prime_0 = w0 + (vec1->y - vec0->y);
+		float z_prime_0 = z0 + (second_point->x - first_point->x);
+		float w_prime_0 = w0 + (second_point->y - first_point->y);
 
-		float k_prime_0 = k0 + (vec1->x - vec0->x);
-		float i_prime_0 = i0 + (vec1->y - vec0->y);
+		float k_prime_0 = k0 + (second_point->x - first_point->x);
+		float i_prime_0 = i0 + (second_point->y - first_point->y);
 
-		A.x = vec2->y - vec1->y;
-		A.y = vec1->x - vec2->x;
+		A.x = third_point->y - second_point->y;
+		A.y = second_point->x - third_point->x;
 
 		float mag1 = vector2_magnitude(A);
 
-		float z1 = vec2->x + thickness * (A.x / mag1);
-		float w1 = vec2->y + thickness * (A.y / mag1);
+		z1 = third_point->x + thickness * (A.x / mag1);
+		w1 = third_point->y + thickness * (A.y / mag1);
 
-		float k1 = vec2->x - thickness * (A.x / mag1);
-		float i1 = vec2->y - thickness * (A.y / mag1);
+		k1 = third_point->x - thickness * (A.x / mag1);
+		i1 = third_point->y - thickness * (A.y / mag1);
 
-		float z_prime_1 = z1 + (vec2->x - vec1->x);
-		float w_prime_1 = w1 + (vec2->y - vec1->y);
+		z_prime_1 = z1 + (third_point->x - second_point->x);
+		w_prime_1 = w1 + (third_point->y - second_point->y);
 
-		float k_prime_1 = k1 + (vec2->x - vec1->x);
-		float i_prime_1 = i1 + (vec2->y - vec1->y);
+		k_prime_1 = k1 + (third_point->x - second_point->x);
+		i_prime_1 = i1 + (third_point->y - second_point->y);
 
 		// Intersection between (z0, w0) -> (z'0, w'0) and (z1, w1) -> (z'1, w'1)
 		Vector2 inter1 = vector2_line_intersection((Vector2) { { z0, w0 } }, (Vector2) { { z_prime_0, w_prime_0 } },
@@ -453,45 +485,49 @@ void ps_stroke(Vector4 color, float thickness) {
 		Vector2 inter2 = vector2_line_intersection((Vector2) { { k0, i0 } }, (Vector2) { { k_prime_0, i_prime_0 } },
 												   (Vector2) { { k1, i1 } }, (Vector2) { { k_prime_1, i_prime_1 } });
 
-		PsVert* new_verts = dynamic_array_push_back(&list->vbo, 6);
-		PsIndex* new_indicies = dynamic_array_push_back(&list->ibo, 12);
+		PsVert* new_verts = dynamic_array_push_back(&list->vbo, 2);
 
-		for (uint i = 0; i < 6; i++) {
+		for (uint i = 0; i < 2; i++) {
 			new_verts[i].uv_coords = ps_white_pixel;
 			new_verts[i].color = color;
 		}
 
-		new_verts[0].position.x = k0;
-		new_verts[0].position.y = i0;
-		new_verts[1].position.x = z0;
-		new_verts[1].position.y = w0;
-		new_verts[2].position.x = inter1.x;
-		new_verts[2].position.y = inter1.y;
-		new_verts[3].position.x = inter2.x;
-		new_verts[3].position.y = inter2.y;
-		new_verts[4].position.x = z1;
-		new_verts[4].position.y = w1;
-		new_verts[5].position.x = k1;
-		new_verts[5].position.y = i1;
-
-		new_indicies[0] = list->ibo_last_index + 0;
-		new_indicies[1] = list->ibo_last_index + 1;
-		new_indicies[2] = list->ibo_last_index + 2;
-		new_indicies[3] = list->ibo_last_index + 0;
-		new_indicies[4] = list->ibo_last_index + 3;
-		new_indicies[5] = list->ibo_last_index + 2;
-
-		new_indicies[6] = list->ibo_last_index + 3;
-		new_indicies[7] = list->ibo_last_index + 2;
-		new_indicies[8] = list->ibo_last_index + 4;
-		new_indicies[9] = list->ibo_last_index + 3;
-		new_indicies[10] = list->ibo_last_index + 4;
-		new_indicies[11] = list->ibo_last_index + 5;
-
-		cmd->elements_count += 12;
-		list->ibo_last_index += 6;
+		new_verts[1].position.x = inter1.x;
+		new_verts[1].position.y = inter1.y;
+		new_verts[0].position.x = inter2.x;
+		new_verts[0].position.y = inter2.y;
 	}
 
+	PsVert* last_verts = dynamic_array_push_back(&list->vbo, 2);
+
+	for (uint i = 0; i < 2; i++) {
+		last_verts[i].uv_coords = ps_white_pixel;
+		last_verts[i].color = color;
+	}
+
+	last_verts[1].position.x = z1;
+	last_verts[1].position.y = w1;
+	last_verts[0].position.x = k1;
+	last_verts[0].position.y = i1;
+
+	size_t new_elements_count = (ps_current_path.points.size - 1) * 6;
+	PsIndex* indicies = dynamic_array_push_back(&list->ibo, new_elements_count);
+
+	uint index = 0;
+
+	for (uint i = 0; i < new_elements_count; i += 6) {
+		indicies[i + 0] = list->ibo_last_index + 0 + index;
+		indicies[i + 1] = list->ibo_last_index + 1 + index;
+		indicies[i + 2] = list->ibo_last_index + 2 + index;
+		indicies[i + 3] = list->ibo_last_index + 3 + index;
+		indicies[i + 4] = list->ibo_last_index + 2 + index;
+		indicies[i + 5] = list->ibo_last_index + 1 + index;
+
+		index += 2;
+	}
+
+	cmd->elements_count += new_elements_count;
+	list->ibo_last_index += ps_current_path.points.size * 2;
 	ps_current_path.flags &= ~PS_PATH_BEING_USED;
 }
 
@@ -921,8 +957,6 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 	ps_widget_draw(SUPER(window));
 }
 
-static float line_pos = 0.f;
-
 void ps_draw_gui() {
 	ps_windows[ps_windows_count - 1]->flags |= PS_WINDOW_SELECTED_BIT;
 
@@ -930,14 +964,6 @@ void ps_draw_gui() {
 		ps_window_draw(ps_windows[i], 0.f, FLT_MAX, FLT_MAX);
 		ps_windows[i]->flags &= ~PS_WINDOW_SELECTED_BIT;
 	}
-
-	ps_begin_path();
-	ps_line_to(0.f, 0.f);
-	ps_line_to(100.f, 0.f);
-	ps_line_to(line_pos, 100.f);
-	ps_stroke((Vector4) { { 1.f, 0.f, 0.f, 1.f } }, 10.f);
-
-	line_pos += 1.f;
 }
 
 void ps_window_switch_to(uint64_t id) {

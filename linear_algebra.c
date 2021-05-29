@@ -58,6 +58,10 @@ Vector2 vector2_line_intersection(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2
 	Vector2 res;
 	float D = (a1.x - a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x - b2.x);
 
+	if (fabs(D) < 2.f) {
+		return a1;
+	}
+
 	res.x = ((a1.x * a2.y - a1.y * a2.x) * (b1.x - b2.x) - (a1.x - a2.x) * (b1.x * b2.y - b1.y * b2.x)) / D;
 	res.y = ((a1.x * a2.y - a1.y * a2.x) * (b1.y - b2.y) - (a1.y - a2.y) * (b1.x * b2.y - b1.y * b2.x)) / D;
 
