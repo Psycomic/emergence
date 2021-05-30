@@ -68,6 +68,52 @@ Vector2 vector2_line_intersection(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2
 	return res;
 }
 
+BOOL vector2_inside_rectangle(Vector2 point, float x1, float y1, float w, float h) {
+	return point.x >= x1 && point.x <= x1 + w && point.y >= y1 && point.y <= y1 + h;
+}
+
+void vector2_straight_rotation(Vector2* dest) {
+	float temp_x = dest->x;
+
+	dest->x = dest->y;
+	dest->y = -temp_x;
+}
+
+float vector2_dot(Vector2 a, Vector2 b) {
+	return a.x * b.x + a.y * b.y;
+}
+
+BOOL vector2_inside_triangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c) {
+	Vector2 ab_norm;
+	vector2_sub(&ab_norm, b, a);
+	vector2_straight_rotation(&ab_norm);
+	vector2_normalize(&ab_norm);
+
+	Vector2 bc_norm;
+	vector2_sub(&bc_norm, c, b);
+	vector2_straight_rotation(&bc_norm);
+	vector2_normalize(&bc_norm);
+
+	Vector2 ca_norm;
+	vector2_sub(&ca_norm, a, c);
+	vector2_straight_rotation(&ca_norm);
+	vector2_normalize(&ca_norm);
+
+	Vector2 ab_distance;
+	vector2_sub(&ab_distance, point, a);
+	float ab_dot = vector2_dot(ab_distance, ab_norm);
+
+	Vector2 bc_distance;
+	vector2_sub(&bc_distance, point, b);
+	float bc_dot = vector2_dot(bc_distance, bc_norm);
+
+	Vector2 ca_distance;
+	vector2_sub(&ca_distance, point, c);
+	float ca_dot = vector2_dot(ca_distance, ca_norm);
+
+	return ab_dot > 0 && bc_dot > 0 && ca_dot > 0;
+}
+
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b) {
 	dest->x = a.x + b.x;
 	dest->y = a.y + b.y;

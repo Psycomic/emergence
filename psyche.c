@@ -185,8 +185,8 @@ static Vector2 ps_white_pixel = {
 extern float global_time;
 
 void ps_draw_gui();
-void ps_handle_events();
 
+void ps_window_handle_events(PsWindow* selected_window);
 void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height);
 Vector2 ps_window_anchor(PsWindow* window);
 void ps_fill_rect(float x, float y, float w, float h, Vector4 color);
@@ -308,8 +308,6 @@ void ps_draw_cmd_clear(PsDrawCmd* cmd) {
 }
 
 void ps_render() {
-	ps_handle_events();
-
 	ps_draw_gui();
 
 	GLint last_vertex_array; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
@@ -401,7 +399,13 @@ void ps_close_path() {
 
 void ps_stroke(Vector4 color, float thickness) {
 	assert(ps_current_path.flags & PS_PATH_BEING_USED);
-	assert(ps_current_path.points.size >= 3);
+
+	if (ps_current_path.flags & PS_PATH_CLOSED) {
+		Vector2* last_point = dynamic_array_push_back(&ps_current_path.points, 1);
+		Vector2* first_point = dynamic_array_at(&ps_current_path.points, 0);
+		last_point->x = first_point->x;
+		last_point->y = first_point->y;
+	}
 
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
@@ -436,6 +440,14 @@ void ps_stroke(Vector4 color, float thickness) {
 	float z1, w1, k1, i1,
 		z_prime_1, w_prime_1, k_prime_1, i_prime_1;
 
+	if (ps_current_path.points.size <= 2) {
+		z1 = second_point->x + thickness * (A.x / mag0);
+		w1 = second_point->y + thickness * (A.y / mag0);
+
+		k1 = second_point->x - thickness * (A.x / mag0);
+		i1 = second_point->y - thickness * (A.y / mag0);
+	}
+
 	for (uint i = 2; i < ps_current_path.points.size; i++) {
 		first_point = dynamic_array_at(&ps_current_path.points, i - 2);
 		second_point = dynamic_array_at(&ps_current_path.points, i - 1);
@@ -458,7 +470,7 @@ void ps_stroke(Vector4 color, float thickness) {
 		float w_prime_0 = w0 + (second_point->y - first_point->y);
 
 		float k_prime_0 = k0 + (second_point->x - first_point->x);
-		float i_prime_0 = i0 + (second_point->y - first_point->y);
+		float i_prime_0 = i0 + (second_point->y - first_point->x);
 
 		A.x = third_point->y - second_point->y;
 		A.y = second_point->x - third_point->x;
@@ -528,7 +540,8 @@ void ps_stroke(Vector4 color, float thickness) {
 
 	cmd->elements_count += new_elements_count;
 	list->ibo_last_index += ps_current_path.points.size * 2;
-	ps_current_path.flags &= ~PS_PATH_BEING_USED;
+
+	ps_current_path.flags &= ~(PS_PATH_BEING_USED | PS_PATH_CLOSED);
 }
 
 void ps_fill(Vector4 color, uint32_t flags) {
@@ -840,50 +853,21 @@ Vector2 ps_window_title_position(PsWindow* window) {
 }
 
 BOOL ps_window_inside(PsWindow* window, Vector2 point) {
-	float x1 = window->position.x,
-		y1 = window->position.y,
-		x2 = x1 + window->size.x + ps_window_border_size,
-		y2 = y1 + window->size.y + ps_window_border_size + 20.f;
-
-	return point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2;
+	return vector2_inside_rectangle(point, window->position.x, window->position.y,
+									window->size.x + ps_window_border_size, window->size.y + ps_window_border_size + 20.f);
 }
 
 BOOL ps_window_title_inside(PsWindow* window, Vector2 point) {
-	float x1 = window->position.x,
-		y1 = window->position.y + window->size.y,
-		x2 = x1 + window->size.x + ps_window_border_size,
-		y2 = y1 + ps_window_border_size + 20.f;
-
-	return point.x >= x1 && point.x <= x2 && point.y >= y1 && point.y <= y2;
+	return vector2_inside_rectangle(point, window->position.x, window->position.y + window->size.y,
+									window->size.x + ps_window_border_size, ps_window_border_size + 20.f);
 }
 
-BOOL ps_window_border_inside(PsWindow* window, Vector2 point, uint8_t* out_border) {
-	BOOL collide_left = point.x >= window->position.x && point.x <= window->position.x + ps_window_border_size &&
-		point.y >= window->position.y && point.y <= window->position.y + window->size.y;
+BOOL ps_window_resize_triangle_inside(PsWindow* window, Vector2 point) {
+	Vector2 a = { { window->position.x + window->size.x, window->position.y } };
+	Vector2 b = { { window->position.x + window->size.x - 30.f, window->position.y } };
+	Vector2 c = { { window->position.x + window->size.x, window->position.y + 30.f } };
 
-	BOOL collide_right = point.x >= window->position.x + window->size.x &&
-		point.x <= window->position.x + window->size.x + ps_window_border_size &&
-		point.y >= window->position.y && point.y <= window->position.y + window->size.y;
-
-	BOOL collide_down = point.x >= window->position.x && point.x <= window->position.x + window->size.x &&
-		point.y >= window->position.y - ps_window_border_size && point.y <= window->position.y;
-
-	if (collide_left) {
-		*out_border = 0;
-		return GL_TRUE;
-	}
-	else if (collide_right) {
-		*out_border = 1;
-		return GL_TRUE;
-	}
-	else if (collide_down) {
-		*out_border = 2;
-		return GL_TRUE;
-	}
-	else {
-		*out_border = 69;
-		return GL_FALSE;
-	}
+	return vector2_inside_triangle(point, a, b, c);
 }
 
 float ps_window_min_width(PsWindow* window) {
@@ -916,10 +900,13 @@ float ps_text_height(const char* text, float size) {
 	return c * size;
 }
 
+static Vector4 resize_triangle_color = { { 0.2f, 0.3f, 0.2f, 0.7f } };
+
 void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height) {
 	float global_transparency = 1.0f;
 
 	if (window->flags & PS_WINDOW_SELECTED_BIT) {
+		ps_window_handle_events(window);
 		SUPER(window)->flags = PS_WIDGET_SELECTED;
 	}
 	else {
@@ -954,6 +941,16 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 
 	ps_text(title_format, title_position, 18.f, title_color);
 
+	Vector4 tc = resize_triangle_color;
+	tc.z *= global_transparency;
+
+	ps_begin_path();
+	ps_line_to(window->position.x + window->size.x, window->position.y);
+	ps_line_to(window->position.x + window->size.x - 30.f, window->position.y);
+	ps_line_to(window->position.x + window->size.x, window->position.y + 30.f);
+	ps_close_path();
+	ps_fill(resize_triangle_color, PS_FILLED_POLY);
+
 	ps_widget_draw(SUPER(window));
 }
 
@@ -976,16 +973,13 @@ void ps_window_switch_to(uint64_t id) {
 	ps_windows[ps_windows_count - 1] = temp;
 }
 
-void ps_handle_events() {
+void ps_window_handle_events(PsWindow* selected_window) {
 	Vector2 pointer_position = g_window.cursor_position;
 
 	int state = g_window.mouse_button_left_state;
-	PsWindow* selected_window = ps_windows[ps_windows_count - 1];
 
 	static Vector2 window_drag_anchor = { { 0, 0 } };
 	static Vector2 window_original_size = { { 0, 0 } };
-
-	static uint8_t border = 6;
 
 	if (state == GLFW_PRESS) {
 		if (selected_window->flags & PS_WINDOW_DRAGGING_BIT ||
@@ -999,7 +993,7 @@ void ps_handle_events() {
 		}
 		else if (selected_window->flags & PS_WINDOW_RESIZABLE_BIT &&
 				 (selected_window->flags & PS_WINDOW_RESIZE_BIT ||
-				  ps_window_border_inside(selected_window, pointer_position, &border)))
+				  ps_window_resize_triangle_inside(selected_window, pointer_position)))
 		{
 			if (!(selected_window->flags & PS_WINDOW_DRAGGING_BIT)) {
 				window_original_size = selected_window->size;
@@ -1008,22 +1002,13 @@ void ps_handle_events() {
 
 			selected_window->flags |= PS_WINDOW_RESIZE_BIT;
 
-			if (border == 0) {
-				float old_size = selected_window->size.x;
-				selected_window->size.x = max(ps_window_min_width(selected_window),
-											  (window_drag_anchor.x + window_original_size.x) - pointer_position.x);
-				selected_window->position.x += old_size - selected_window->size.x;
-			}
-			else if (border == 1) {
-				selected_window->size.x = max(ps_window_min_width(selected_window),
-											  pointer_position.x - selected_window->position.x);
-			}
-			else if (border == 2) {
-				float old_size = selected_window->size.y;
-				selected_window->size.y = max(ps_window_min_height(selected_window),
-											  (window_drag_anchor.y + window_original_size.y) - pointer_position.y);
-				selected_window->position.y += old_size - selected_window->size.y;
-			}
+			selected_window->size.x = max(ps_window_min_width(selected_window),
+										  pointer_position.x - selected_window->position.x);
+
+			float old_size = selected_window->size.y;
+			selected_window->size.y = max(ps_window_min_height(selected_window),
+										  (window_drag_anchor.y + window_original_size.y) - pointer_position.y);
+			selected_window->position.y += old_size - selected_window->size.y;
 		}
 		else if (selected_window->flags & PS_WINDOW_SELECTION_BIT ||
 				 ps_window_inside(selected_window, pointer_position))

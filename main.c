@@ -175,13 +175,14 @@ void update(clock_t fps) {
 		drawable_update(triangle2_drawable);
 	}
 
-	ps_begin_path();
+/*	ps_begin_path();
 	ps_line_to(0.f, 0.f);
 	ps_line_to(100.f, 0.f);
 	ps_line_to(100.f, 100.f);
 	ps_line_to(0.f, 100.f);
 	ps_line_to(g_window.cursor_position.x, g_window.cursor_position.y);
-	ps_stroke((Vector4) { { 1.f, 0.f, 0.f, 1.f } }, 10.f);
+	ps_close_path();
+	ps_stroke((Vector4) { { 1.f, 0.f, 0.f, 1.f } }, 10.f);*/
 }
 
 void setup() {

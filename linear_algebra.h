@@ -47,9 +47,13 @@ void vector2_sub(Vector2* dest, Vector2 a, Vector2 b);
 void vector2_neg(Vector2* dest, Vector2 a);
 void vector2_scalar_mul(Vector2* dest, Vector2 a, float s);
 void vector2_rotate(Vector2* dest, Vector2 a, float angle);
+void vector2_straight_rotation(Vector2* dest);
 float vector2_magnitude(Vector2 v);
+float vector2_dot(Vector2 a, Vector2 b);
 void vector2_normalize(Vector2* dest);
 Vector2 vector2_line_intersection(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2);
+BOOL vector2_inside_rectangle(Vector2 point, float x, float y, float w, float h);
+BOOL vector2_inside_triangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c);
 
 void vector3_add(Vector3* dest, Vector3 a, Vector3 b);
 void vector3_sub(Vector3* dest, Vector3 a, Vector3 b);
