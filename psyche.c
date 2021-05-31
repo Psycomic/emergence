@@ -900,7 +900,7 @@ float ps_text_height(const char* text, float size) {
 	return c * size;
 }
 
-static Vector4 resize_triangle_color = { { 0.2f, 0.3f, 0.2f, 0.7f } };
+static Vector4 resize_triangle_color = { { 0.3f, 0.3f, 0.35f, 0.7f } };
 
 void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height) {
 	float global_transparency = 1.0f;

@@ -222,5 +222,14 @@ void execute_tests(void) {
 		printf("Expression: %s\nResult: ", expression_string);
 		ulisp_print(value_register, stdout);
 		printf(" !\n");
+
+		LispObject* thing = ulisp_read("(if (> x 0) x (- x))");
+
+		printf("Compiled: ");
+		LispObject* bytecode = ulisp_compile(thing);
+		ulisp_print(bytecode, stdout);
+		printf("\n");
 	}
+
+	exit(0);
 }

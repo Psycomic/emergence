@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <stdarg.h>
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 #define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, stdout); puts("");
@@ -12,7 +13,7 @@
 #define panic(str) do { printf(str"\n"); exit(-1); } while (0)
 
 LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
-	*lambda, *mlambda, *define, *rest, *not_found;
+	*lambda, *mlambda, *define, *rest;
 
 #define DEFAULT_WORKSPACESIZE (2 << 16)
 
@@ -268,6 +269,23 @@ LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol, GLboolean* out_fo
 
 	*out_found = GL_FALSE;
 	return nil;
+}
+
+LispObject* ulisp_nconc(LispObject* a, LispObject* b) {
+	assert(a->type & LISP_LIST);
+	assert(b->type & LISP_LIST);
+
+	if (ulisp_eq(a, nil))
+		return b;
+	if (ulisp_eq(b, nil))
+		return b;
+
+	LispObject* a_it;
+	for (a_it = a; CDR(a_it) != nil; a_it = CDR(a_it));
+
+	CDR(a_it) = b;
+
+	return a;
 }
 
 void ulisp_add_to_environnement(char* name, LispObject* closure) {
@@ -614,7 +632,6 @@ void ulisp_init(void) {
 	mlambda = ulisp_make_symbol("mlambda");
 	define = ulisp_make_symbol("define");
 	rest = ulisp_make_symbol("&rest");
-	not_found = ulisp_make_symbol("not-found");
 
 	free_list_init();
 
@@ -918,6 +935,110 @@ LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
 	dynamic_array_destroy(&labels);
 	dynamic_array_destroy(&literals);
 	return compiled_code;
+}
+
+static long ulisp_label_count = 0;
+
+LispObject* ulisp_compile(LispObject* expression) {
+	if (ulisp_eq(expression, tee) || ulisp_eq(expression, nil)) {
+		goto fetch_literal;
+	}
+	else if (expression->type & LISP_SYMBOL) {
+		LispObject* lookup_instructions =
+			ulisp_cons(
+				ulisp_cons(bytecode_lookup_var, ulisp_cons(expression, nil)),
+				nil);
+
+		return lookup_instructions;
+	}
+	else if (expression->type & LISP_CONS) {
+		LispObject* applied_symbol = CAR(expression);
+
+		if (ulisp_eq(applied_symbol, quote)) {
+			expression = ulisp_car(CDR(expression));
+			goto fetch_literal;
+		}
+		else if (ulisp_eq(applied_symbol, iffe)) {
+			long if_label_count = ulisp_label_count;
+			ulisp_label_count += 2;
+
+			LispObject* test_instructions = ulisp_compile(ulisp_car(CDR(expression)));
+			LispObject* if_instructions = ulisp_compile(ulisp_car(ulisp_cdr(CDR(expression))));
+			LispObject* else_instructions = ulisp_compile(ulisp_car(ulisp_cdr(ulisp_cdr(CDR(expression)))));
+
+			LispObject* branch_true_instructions = ulisp_cons(
+				ulisp_cons(bytecode_branch_else,
+						   ulisp_cons(ulisp_make_integer(if_label_count), nil)),
+				nil);
+
+			LispObject* branch_false_instructions = ulisp_cons(
+				ulisp_cons(bytecode_branch,
+						   ulisp_cons(ulisp_make_integer(if_label_count + 1), nil)),
+				ulisp_cons(
+					ulisp_cons(bytecode_label,
+							   ulisp_cons(ulisp_make_integer(if_label_count), nil)),
+					nil));
+
+			LispObject* label_instructions = ulisp_cons(
+				ulisp_cons(bytecode_label,
+						   ulisp_cons(ulisp_make_integer(if_label_count + 1), nil)),
+				nil);
+
+			return ulisp_nconc(test_instructions,
+							   ulisp_nconc(branch_true_instructions,
+										   ulisp_nconc(if_instructions,
+													   ulisp_nconc(branch_false_instructions,
+																   ulisp_nconc(else_instructions,
+																			   label_instructions)))));
+		}
+		else if (ulisp_eq(applied_symbol, begin)) {
+			LispObject* a = ulisp_compile(ulisp_car(CDR(expression)));
+
+			for (LispObject* it = ulisp_cdr(CDR(expression)); it != nil; it = ulisp_cdr(it)) {
+				a = ulisp_nconc(a, ulisp_compile(ulisp_car(it)));
+			}
+
+			return a;
+		}
+		else {
+			long cont_label_count = ulisp_label_count++;
+
+			LispObject* arguments = ulisp_nreverse(expression);
+			printf("Args: ");
+			ulisp_print(arguments, stdout);
+			printf("\n");
+
+			LispObject* instructions = ulisp_cons(
+				ulisp_cons(bytecode_push_cont,
+						   ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
+				nil);
+
+			LispObject* a;
+			for (a = arguments; ulisp_cdr(a) != nil; a = ulisp_cdr(a)) {
+				instructions = ulisp_nconc(instructions, ulisp_compile(ulisp_car(a)));
+				instructions = ulisp_nconc(instructions, ulisp_cons(ulisp_cons(bytecode_push, nil), nil));
+			}
+
+			return ulisp_nconc(instructions, ulisp_cons(
+								   ulisp_cons(bytecode_lookup_var,
+											  ulisp_cons(ulisp_car(a), nil)),
+								   ulisp_cons(
+									   ulisp_cons(bytecode_apply, nil),
+									   ulisp_cons(ulisp_cons(bytecode_label,
+															 ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
+												  nil))));
+		}
+	}
+	else {
+		LispObject* fetch_instructions;
+
+	fetch_literal:
+		fetch_instructions = ulisp_cons(
+			ulisp_cons(bytecode_fetch_literal, ulisp_cons(expression, nil)),
+			nil);
+
+		return fetch_instructions;
+	}
 }
 
 LispObject* ulisp_read_list_helper(const char* string) {
