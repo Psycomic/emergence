@@ -135,10 +135,14 @@ void ulisp_gc(LispObject* cons_cell) {
 	mark_object(environnement);
 	mark_object(envt_register);
 	mark_object(eval_stack);
-	mark_object(current_continuation);
 
-	for (uint i = 0; i < template_register->literals_count; i++)
-		mark_object(template_register->literals[i]);
+	if (current_continuation)
+		mark_object(current_continuation);
+
+	if (template_register) {
+		for (uint i = 0; i < template_register->literals_count; i++)
+			mark_object(template_register->literals[i]);
+	}
 
 	free_list_sweep();
 
@@ -235,6 +239,12 @@ LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt) {
 	closure->envt = envt;
 
 	return obj;
+}
+
+LispObject* ulisp_prim_make_closure(LispObject* arguments) {
+	LispTemplate* template = ulisp_car(arguments);
+
+	return ulisp_make_closure(template, envt_register);
 }
 
 BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
@@ -611,6 +621,7 @@ void ulisp_init(void) {
 	template_register = NULL;
 	envt_register = nil;
 	ulisp_rip = NULL;
+	current_continuation = NULL;
 
 	bytecode_push = ulisp_make_symbol("push");
 	bytecode_push_cont = ulisp_make_symbol("push-cont");
@@ -654,6 +665,7 @@ void ulisp_init(void) {
 	env_push_fun("mod", ulisp_prim_num_mod);
 	env_push_fun("insert-at-point", ulisp_prim_insert_at_point);
 	env_push_fun("random", ulisp_prim_random);
+	env_push_fun("make-closure", ulisp_prim_make_closure);
 
 	/* ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil); */
 }
@@ -1000,33 +1012,59 @@ LispObject* ulisp_compile(LispObject* expression) {
 
 			return a;
 		}
+		else if (ulisp_eq(applied_symbol, lambda)) {
+			LispObject* closure_instructions = ulisp_compile(
+				ulisp_cons(begin, ulisp_cdr(CDR(expression))));
+
+			for (LispObject* arg = ulisp_car(ulisp_cdr(expression)); arg != nil; arg = ulisp_cdr(arg)) {
+				closure_instructions = ulisp_cons(
+					ulisp_cons(bytecode_bind,
+							   ulisp_cons(ulisp_car(arg), nil)),
+					closure_instructions);
+			}
+
+			closure_instructions = ulisp_nconc(closure_instructions,
+											   ulisp_cons(ulisp_cons(bytecode_restore_cont, nil), nil));
+
+			LispTemplate* compiled_lambda = ulisp_assembly_compile(closure_instructions);
+
+			long cont_label_count = ulisp_label_count++;
+
+			LispObject* instructions = ulisp_cons(
+				ulisp_cons(bytecode_push_cont, ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
+				ulisp_cons(ulisp_cons(bytecode_fetch_literal, ulisp_cons(compiled_lambda, nil)),
+						   ulisp_cons(ulisp_cons(bytecode_push, nil),
+									  ulisp_cons(ulisp_cons(bytecode_lookup_var,
+															ulisp_cons(ulisp_make_symbol("make-closure"), nil)),
+												 ulisp_cons(ulisp_cons(bytecode_apply, nil),
+															ulisp_cons(ulisp_cons(bytecode_label, ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
+																	   nil))))));
+
+			return instructions;
+		}
 		else {
 			long cont_label_count = ulisp_label_count++;
 
 			LispObject* arguments = ulisp_nreverse(expression);
-			printf("Args: ");
-			ulisp_print(arguments, stdout);
-			printf("\n");
-
 			LispObject* instructions = ulisp_cons(
 				ulisp_cons(bytecode_push_cont,
 						   ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
 				nil);
 
 			LispObject* a;
-			for (a = arguments; ulisp_cdr(a) != nil; a = ulisp_cdr(a)) {
+			for (a = arguments; a != nil; a = ulisp_cdr(a)) {
 				instructions = ulisp_nconc(instructions, ulisp_compile(ulisp_car(a)));
-				instructions = ulisp_nconc(instructions, ulisp_cons(ulisp_cons(bytecode_push, nil), nil));
+
+				if (ulisp_cdr(a) != nil) {
+					instructions = ulisp_nconc(instructions, ulisp_cons(ulisp_cons(bytecode_push, nil), nil));
+				}
 			}
 
 			return ulisp_nconc(instructions, ulisp_cons(
-								   ulisp_cons(bytecode_lookup_var,
-											  ulisp_cons(ulisp_car(a), nil)),
-								   ulisp_cons(
-									   ulisp_cons(bytecode_apply, nil),
-									   ulisp_cons(ulisp_cons(bytecode_label,
-															 ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
-												  nil))));
+								   ulisp_cons(bytecode_apply, nil),
+								   ulisp_cons(ulisp_cons(bytecode_label,
+														 ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
+											  nil)));
 		}
 	}
 	else {
