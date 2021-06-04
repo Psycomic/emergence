@@ -1051,14 +1051,15 @@ char* ps_label_text(PsLabel* label) {
 }
 
 void ps_label_set_text(PsLabel* label, char* text) {
-	label->text = text;
+	free(label->text);
+	label->text = m_strdup(text);
 }
 
 PsLabel* ps_label_create(PsWidget* parent, char* text, float size) {
 	PsLabel* label = malloc(sizeof(PsLabel));
 
 	label->color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
-	label->text = text;
+	label->text = m_strdup(text);
 	label->text_size = size;
 
 	label->size.x = ps_text_width(text, size);

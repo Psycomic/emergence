@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 void coroutine_test() {
 	for (uint i = 0; i < 10; i++) {
@@ -130,25 +131,20 @@ void execute_tests(void) {
 	}
 
 	{
-		ulisp_add_to_environnement("a", ulisp_make_float(5));
-		ulisp_add_to_environnement("b", ulisp_make_float(10));
-		ulisp_add_to_environnement("v", ulisp_make_float(0.5));
+		LispObject* definition = ulisp_read(
+			"(begin "
+			"  (def radians->degrees "
+			"     (lambda (rad)"
+			"        (* (/ rad pi) 180)))"
+			"  (def pi 3.1415))");
 
-		LispObject* thing = ulisp_read(
-			"(((lambda (x) (x x))"
-			" (lambda (fact-gen)"
-			"   (lambda (n)"
-			"     (if (= n 0)"
-			"         1"
-			"         (* n ((fact-gen fact-gen) (- n 1))))))) 10)");
+		clock_t t1 = clock();
+		ulisp_eval(definition);
+		LispObject* result = ulisp_eval(ulisp_read("(radians->degrees 1.0)"));
+		clock_t t2 = clock();
 
-		LispTemplate* code = ulisp_assembly_compile(ulisp_compile(thing));
-
-		ulisp_run(code);
-		printf("Result: ");
-		ulisp_print(value_register, stdout);
+		printf("Result found in %ld microseconds: ", t2 - t1);
+		ulisp_print(result, stdout);
 		printf("\n");
 	}
-
-	exit(0);
 }

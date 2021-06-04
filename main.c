@@ -120,8 +120,6 @@ static PsButton* eval_button;
 static PsInput* lisp_input;
 static PsLabel* result_label;
 static Worker* terrain_worker = NULL;
-static float last_position_x = 200.f;
-static float last_position_y = 200.f;
 
 void update(clock_t fps) {
 	scene_draw(scene, background_color);
@@ -132,10 +130,17 @@ void update(clock_t fps) {
 	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
-		/* LispObject* res = ulisp_eval(ulisp_read_list(ps_input_value(lisp_input)), nil); */
-		/* char* result = ulisp_debug_print(res); */
+		clock_t t1 = clock();
+		LispObject* res = ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
+		clock_t t2 = clock();
 
-		ps_label_set_text(result_label, "fuck you");
+		char final_buffer[2048];
+
+		snprintf(final_buffer, sizeof(final_buffer),
+				 "%s\nCompiled and loaded in %.4g seconds",
+				 ulisp_debug_print(res), (double)(t2 - t1) / CLOCKS_PER_SEC);
+
+		ps_label_set_text(result_label, final_buffer);
 	}
 
 	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {

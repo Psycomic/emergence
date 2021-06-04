@@ -12,10 +12,10 @@
 #define CDR(o) ((ConsCell*)(o)->data)->cdr
 #define panic(str) do { printf(str"\n"); exit(-1); } while (0)
 
-LispObject *environnement, *nil, *tee, *quote, *iffe, *begin,
-	*lambda, *mlambda, *define, *rest;
+LispObject *environnement, *read_environnement, /* Global environnements */
+	*nil, *tee, *quote, *iffe, *begin, *lambda, *def, *rest, *def_macro; /* keywords */
 
-#define DEFAULT_WORKSPACESIZE (2 << 16)
+#define DEFAULT_WORKSPACESIZE (2 << 8)
 
 static uint64_t workspace_size = DEFAULT_WORKSPACESIZE;
 static uint64_t free_space = DEFAULT_WORKSPACESIZE;
@@ -97,7 +97,9 @@ mark:
 
 		mark_object(cont->envt_register);
 		mark_object(cont->eval_stack);
-		mark_object(cont->previous_cont);
+
+		if (cont->previous_cont)
+			mark_object(cont->previous_cont);
 	}
 }
 
@@ -622,6 +624,7 @@ void ulisp_init(void) {
 	envt_register = nil;
 	ulisp_rip = NULL;
 	current_continuation = NULL;
+	read_environnement = nil;
 
 	bytecode_push = ulisp_make_symbol("push");
 	bytecode_push_cont = ulisp_make_symbol("push-cont");
@@ -640,8 +643,8 @@ void ulisp_init(void) {
 	iffe = ulisp_make_symbol("if");
 	begin = ulisp_make_symbol("begin");
 	lambda = ulisp_make_symbol("lambda");
-	mlambda = ulisp_make_symbol("mlambda");
-	define = ulisp_make_symbol("define");
+	def = ulisp_make_symbol("def");
+	def_macro = ulisp_make_symbol("def-macro");
 	rest = ulisp_make_symbol("&rest");
 
 	free_list_init();
@@ -667,7 +670,9 @@ void ulisp_init(void) {
 	env_push_fun("random", ulisp_prim_random);
 	env_push_fun("make-closure", ulisp_prim_make_closure);
 
-	/* ulisp_eval(ulisp_read_list(read_file("./lisp/core.ul")), nil); */
+	ulisp_eval(ulisp_read(
+				   "(def range (lambda (min max)"
+				   "	(if (> min max) nil (cons min (range (+ 1 min) max)))))")); /* read_file("./lisp/core.ul") */
 }
 
 void ulisp_eval_stack_push() {
@@ -734,12 +739,18 @@ start:
 	case ULISP_BYTECODE_LOOKUP:
 	{
 		GLboolean found;
-		value_register = ulisp_assoc(envt_register, *(void**)(ulisp_rip + 1), &found);
+		LispObject* symbol = *(void**)(ulisp_rip + 1);
+		value_register = ulisp_assoc(envt_register, symbol, &found);
 
 		if (!found) {
 			GLboolean global_found;
-			value_register = ulisp_assoc(environnement, *(void**)(ulisp_rip + 1), &global_found);
-			assert(global_found);
+			value_register = ulisp_assoc(environnement, symbol, &global_found);
+			if (!global_found) {
+				printf("not found: ");
+				ulisp_print(symbol, stdout);
+				printf("\n");
+				exit(-1);
+			}
 		}
 
 		ulisp_rip += sizeof(void*) + 1;
@@ -951,7 +962,57 @@ LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
 
 static long ulisp_label_count = 0;
 
+LispObject* ulisp_eval(LispObject* expression);
+LispObject* ulisp_compile(LispObject* expression);
+
+LispTemplate* ulisp_compile_lambda(LispObject* expression) {
+	LispObject* closure_instructions = ulisp_compile(
+		ulisp_cons(begin, ulisp_cdr(CDR(expression))));
+
+	LispObject* arguments = ulisp_nreverse(ulisp_car(ulisp_cdr(expression)));
+
+	for (LispObject* arg = arguments; arg != nil; arg = ulisp_cdr(arg)) {
+		closure_instructions = ulisp_cons(
+			ulisp_cons(bytecode_bind,
+					   ulisp_cons(ulisp_car(arg), nil)),
+			closure_instructions);
+	}
+
+	closure_instructions = ulisp_nconc(closure_instructions,
+									   ulisp_cons(ulisp_cons(bytecode_restore_cont, nil), nil));
+
+	return ulisp_assembly_compile(closure_instructions);
+}
+
+LispObject* ulisp_macroexpand(LispObject* expression) {
+	if (expression->type & LISP_CONS) {
+		if (CAR(expression)->type & LISP_SYMBOL) {
+			GLboolean is_found;
+			LispObject* macro = ulisp_assoc(read_environnement, CAR(expression), &is_found);
+			LispClosure* closure = macro->data;
+
+			if (is_found) {
+				LispObject* result;
+
+				ulisp_save_current_continuation(ulisp_rip);
+				envt_register = closure->envt;
+				eval_stack = ulisp_nreverse(CDR(expression));
+
+				ulisp_run(closure->template);
+
+				result = value_register;
+
+				return result;
+			}
+		}
+	}
+
+	return expression;
+}
+
 LispObject* ulisp_compile(LispObject* expression) {
+	expression = ulisp_macroexpand(expression);
+
 	if (ulisp_eq(expression, tee) || ulisp_eq(expression, nil)) {
 		goto fetch_literal;
 	}
@@ -1013,20 +1074,7 @@ LispObject* ulisp_compile(LispObject* expression) {
 			return a;
 		}
 		else if (ulisp_eq(applied_symbol, lambda)) {
-			LispObject* closure_instructions = ulisp_compile(
-				ulisp_cons(begin, ulisp_cdr(CDR(expression))));
-
-			for (LispObject* arg = ulisp_car(ulisp_cdr(expression)); arg != nil; arg = ulisp_cdr(arg)) {
-				closure_instructions = ulisp_cons(
-					ulisp_cons(bytecode_bind,
-							   ulisp_cons(ulisp_car(arg), nil)),
-					closure_instructions);
-			}
-
-			closure_instructions = ulisp_nconc(closure_instructions,
-											   ulisp_cons(ulisp_cons(bytecode_restore_cont, nil), nil));
-
-			LispTemplate* compiled_lambda = ulisp_assembly_compile(closure_instructions);
+			LispTemplate* compiled_lambda = ulisp_compile_lambda(expression);
 
 			long cont_label_count = ulisp_label_count++;
 
@@ -1041,6 +1089,26 @@ LispObject* ulisp_compile(LispObject* expression) {
 																	   nil))))));
 
 			return instructions;
+		}
+		else if (ulisp_eq(applied_symbol, def)) {
+			LispObject* symbol = ulisp_car(ulisp_cdr(expression));
+			LispObject* object = ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(expression))));
+
+			environnement = ulisp_cons(ulisp_cons(symbol, object),
+									   environnement);
+
+			return ulisp_cons(ulisp_cons(bytecode_fetch_literal,
+										 ulisp_cons(symbol, nil)),
+							  nil);
+		}
+		else if (ulisp_eq(applied_symbol, def_macro)) {
+			LispObject* symbol = ulisp_car(ulisp_cdr(expression));
+			LispObject* object = ulisp_eval(ulisp_car(ulisp_cdr(ulisp_cdr(expression))));
+
+			read_environnement = ulisp_cons(ulisp_cons(symbol, object),
+											read_environnement);
+
+			return nil;
 		}
 		else {
 			long cont_label_count = ulisp_label_count++;
@@ -1079,7 +1147,13 @@ LispObject* ulisp_compile(LispObject* expression) {
 	}
 }
 
-LispObject* ulisp_read_list_helper(const char* string) {
+LispObject* ulisp_eval(LispObject* expression) {
+	ulisp_run(ulisp_assembly_compile(ulisp_compile(expression)));
+
+	return value_register;
+}
+
+LispObject* ulisp_read_list(const char* string) {
 	LispObject* list = nil;
 	uint i = 0;
 
@@ -1105,7 +1179,7 @@ LispObject* ulisp_read_list_helper(const char* string) {
 				assert(parens_count >= 0);
 			} while(!(string[j++] == ')' && parens_count == 0));
 
-			list = ulisp_cons(ulisp_read_list_helper(m_strndup(string + i + 1, count - 2)), list);
+			list = ulisp_cons(ulisp_read_list(m_strndup(string + i + 1, count - 2)), list);
 			i += count;
 		}
 		else {
@@ -1144,19 +1218,8 @@ LispObject* ulisp_read_list_helper(const char* string) {
 	return ulisp_nreverse(list);
 }
 
-LispObject* ulisp_read_list(const char* string) {
-	char* real_string = malloc(7 + strlen(string));
-	strcpy(real_string, "begin ");
-	strcpy(real_string + 6, string);
-
-	LispObject* expression = ulisp_read_list_helper(real_string);
-	free(real_string);
-
-	return expression;
-}
-
 LispObject* ulisp_read(const char* string) {
-	return ulisp_car(ulisp_read_list_helper(string));
+	return ulisp_car(ulisp_read_list(string));
 }
 
 char* ulisp_debug_print(LispObject* obj) {

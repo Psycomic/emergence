@@ -64,17 +64,9 @@ typedef struct LispContinuation {
 	uchar* rip;
 } LispContinuation;
 
-extern LispObject *nil, *tee;
-extern LispObject *value_register;
-
-LispObject* ulisp_compile(LispObject* expression);
-LispObject* ulisp_make_integer(long val);
-LispObject* ulisp_make_float(double val);
+LispObject* ulisp_eval(LispObject* expression);
 LispObject* ulisp_read_list(const char* string);
 LispObject* ulisp_read(const char* string);
-void ulisp_run(LispTemplate* template);
-LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt);
-LispTemplate* ulisp_assembly_compile(LispObject* expressions);
 void ulisp_init(void);
 void ulisp_print(LispObject* obj, FILE* stream);
 char* ulisp_debug_print(LispObject* obj);
