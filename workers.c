@@ -59,11 +59,13 @@ typedef struct Worker {
 #undef _THREAD_INTERNAL
 
 #ifdef __linux__
-void* thread_fn_wrapper(void* data) {
+typedef void* thread_wrapper_return_t;
 #endif
 #ifdef _WIN32
-DWORD WINAPI thread_fn_wrapper(void* data) {
+typedef DWORD thread_wrapper_return_t;
 #endif
+
+thread_wrapper_return_t thread_fn_wrapper(void* data) {
 	WorkerData* w_data = data;
 	Worker* self = w_data->self;
 
@@ -90,8 +92,8 @@ Worker* worker_create(FWorker runner_fun, void* data) {
 	worker->signal_queue_size = 0;
 
 	#ifdef __linux__
-	int error = pthread_create(&worker->handle, NULL, thread_fn_wrapper, &worker->data),
-		m_error = pthread_mutex_init(&worker->queue_mutex, NULL);
+	int m_error = pthread_mutex_init(&worker->queue_mutex, NULL);
+	int error = pthread_create(&worker->handle, NULL, thread_fn_wrapper, &worker->data);
 
 	if (error != 0 || m_error != 0) {
 		fprintf(stderr, "Error in thread creation!\n");
@@ -99,8 +101,8 @@ Worker* worker_create(FWorker runner_fun, void* data) {
 	}
 	#endif
 	#ifdef _WIN32
-	worker->handle = CreateThread(NULL, 0, thread_fn_wrapper, &worker->data, 0, &worker->id);
 	worker->queue_mutex = CreateMutex(NULL, FALSE, NULL);
+	worker->handle = CreateThread(NULL, 0, thread_fn_wrapper, &worker->data, 0, &worker->id);
 
 	if (worker->handle == NULL || worker->queue_mutex == NULL) {
 		fprintf(stderr, "Error in thread creation!\n");
@@ -121,49 +123,47 @@ int worker_return_code(Worker* worker) {
 	}
 }
 
-void worker_update(Worker* worker) {
-	if (worker->signal_queue_size > 0) {
+void worker_lock_queue(Worker* worker) {
 #ifdef __linux__
-		mutex_lock(&worker->queue_mutex);
+	mutex_lock(&worker->queue_mutex);
 #endif
 #ifdef _WIN32
-		DWORD dwWaitResult = WaitForSingleObject(worker->queue_mutex, INFINITE);
+	DWORD dwWaitResult = WaitForSingleObject(worker->queue_mutex, INFINITE);
 
-		if (dwWaitResult == WAIT_ABANDONED) {
-			fprintf(stderr, "Mutex error!\n");
-		}
+	if (dwWaitResult == WAIT_ABANDONED) {
+		fprintf(stderr, "Mutex error!\n");
+	}
 #endif
+}
+
+void worker_unlock_queue(Worker* worker) {
+#ifdef __linux__
+	mutex_unlock(&worker->queue_mutex);
+#endif
+#ifdef _WIN32
+	if (!ReleaseMutex(worker->queue_mutex)) {
+		fprintf(stderr, "Mutex error!\n");
+	}
+#endif
+}
+
+void worker_update(Worker* worker) {
+	if (worker->signal_queue_size > 0) {
+		worker_lock_queue(worker);
 
 		for (uint i = 0; i < worker->signal_queue_size; i++) {
 			worker->signal_queue[i].signal(worker->signal_queue[i].data);
 		}
 
 		worker->signal_queue_size = 0;
-
-#ifdef __linux__
-		mutex_unlock(&worker->queue_mutex);
-#endif
-#ifdef _WIN32
-		if (!ReleaseMutex(worker->queue_mutex)) {
-			fprintf(stderr, "Mutex error!\n");
-		}
-#endif
+		worker_unlock_queue(worker);
 	}
 }
 
 void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 	Worker* self = data->self;
 
-#ifdef __linux__
-	mutex_lock(&self->queue_mutex);
-#endif
-#ifdef _WIN32
-	DWORD dwWaitResult = WaitForSingleObject(self->queue_mutex, INFINITE);
-
-	if (dwWaitResult == WAIT_ABANDONED) {
-		fprintf(stderr, "Mutex error!\n");
-	}
-#endif
+	worker_lock_queue(self);
 
 	self->signal_queue[self->signal_queue_size].signal = signal;
 	self->signal_queue[self->signal_queue_size].data = signal_data;
@@ -175,14 +175,7 @@ void worker_emit(WorkerData* data, Signal signal, void* signal_data) {
 		exit(-1);
 	}
 
-#ifdef __linux__
-	mutex_unlock(&self->queue_mutex);
-#endif
-#ifdef _WIN32
-	if (!ReleaseMutex(self->queue_mutex)) {
-		fprintf(stderr, "Mutex error!\n");
-	}
-#endif
+	worker_unlock_queue(self);
 }
 
 bool worker_finished(Worker* worker) {
