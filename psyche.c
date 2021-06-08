@@ -751,7 +751,7 @@ Vector2 ps_widget_anchor(PsWidget* widget) {
 	};
 }
 
-void ps_widget_init(PsWidget* widget, PsWidget* parent, void (*draw_fn)(PsWidget*, float offset), Vector2 (*anchor_fn)(PsWidget*), Vector2 (*size_fn)(PsWidget*)) {
+void ps_widget_init(PsWidget* widget, PsWidget* parent, void (*draw_fn)(PsWidget*, float, float, float), Vector2 (*anchor_fn)(PsWidget*), Vector2 (*size_fn)(PsWidget*)) {
 	widget->parent = parent;
 	widget->draw = draw_fn;
 	widget->anchor = anchor_fn ? anchor_fn : ps_widget_anchor;
