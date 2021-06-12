@@ -9,7 +9,7 @@ debug:
 	${CC} *.c -o ${TARGET_DEBUG} -g -D _DEBUG ${CFLAGS} ${LFLAGS}
 
 release:
-	${CC} *.c -static -o ${TARGET_RELEASE} -O3 -DNDEBUG ${CFLAGS} ${LFLAGS}
+	${CC} *.c -o ${TARGET_RELEASE} -O3 -DNDEBUG ${CFLAGS} ${LFLAGS}
 
 assembly:
 	nasm -f elf64 stack.asm -o stack.o

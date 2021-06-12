@@ -131,7 +131,7 @@ void update(clock_t fps) {
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
 		clock_t t1 = clock();
-		LispObject* res = ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
+		LispObject* res = ulisp_eval_top_level(ulisp_read(ps_input_value(lisp_input)));
 		clock_t t2 = clock();
 
 		char final_buffer[2048];

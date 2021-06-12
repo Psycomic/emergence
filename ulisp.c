@@ -7,7 +7,7 @@
 #include <stdarg.h>
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
-#define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, stdout); puts("");
+#define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, ulisp_standard_output); puts("");
 #define CAR(o) ((ConsCell*)(o)->data)->car
 #define CDR(o) ((ConsCell*)(o)->data)->cdr
 #define panic(str) do { printf(str"\n"); assert(0); } while (0)
@@ -31,8 +31,11 @@ static LispObject* current_continuation;
 static LispTemplate* template_register;
 static uchar* ulisp_rip;
 
+static LispObject* exception_stack;
+
 LispObject* ulisp_car(LispObject* pair);
 LispObject* ulisp_cdr(LispObject* object);
+void ulisp_apply();
 
 typedef struct LispLabel {
 	long id;
@@ -229,6 +232,65 @@ LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_
 	cont->rip = rip;
 
 	return new_cont_obj;
+}
+
+LispObject* ulisp_make_stream(FILE* f) {
+	LispObject* new_stream_obj = malloc(sizeof(LispObject) + sizeof(LispStream));
+	new_stream_obj->type = LISP_STREAM;
+
+	LispStream* stream = new_stream_obj->data;
+	stream->buffer = malloc(8);
+	stream->size = 0;
+	stream->capacity = 8;
+	stream->f = f;
+
+	return new_stream_obj;
+}
+
+void ulisp_stream_write(char* s, LispObject* stream_obj) {
+	size_t size = strlen(s);
+	GLboolean resized = GL_FALSE;
+	LispStream* stream = stream_obj->data;
+
+	if (stream->f)
+		fwrite(s, size, 1, stream->f);
+
+	while (stream->size + size > stream->capacity) {
+		stream->capacity *= 2;
+		resized = GL_TRUE;
+	}
+
+	if (resized) {
+		stream->buffer = realloc(stream->buffer, stream->capacity);
+	}
+
+	memcpy(stream->buffer + stream->size, s, size);
+	stream->size += size;
+}
+
+char* ulisp_stream_finish_output(LispObject* stream_obj) {
+	LispStream* stream = stream_obj->data;
+
+	stream->buffer[stream->size] = '\0';
+	return stream->buffer;
+}
+
+void ulisp_stream_format(LispObject* stream, const char* format, ...) {
+	va_list args;
+
+	va_start(args, format);
+	int size = vsnprintf(NULL, 0, format, args);
+	va_end(args);
+
+	char* s = malloc(size + 1);
+
+	va_start(args, format);
+	vsnprintf(s, size + 1, format, args);
+	va_end(args);
+
+	ulisp_stream_write(s, stream);
+	free(s);
+
 }
 
 LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt) {
@@ -602,6 +664,41 @@ LispObject* ulisp_prim_cons_p(LispObject* args) {
 	return ulisp_car(args)->type & LISP_CONS ? tee : nil;
 }
 
+static jmp_buf ulisp_top_level;
+static LispObject* exception_register;
+
+void invoke_debugger(LispObject* exception) {
+	printf("Unhandled exception: ");
+	ulisp_print(exception, ulisp_standard_output);
+	printf("\n");
+
+	printf("Back to toplevel? ");
+	getchar();
+
+	exception_register = exception;
+	longjmp(ulisp_top_level, 1);
+}
+
+LispObject* ulisp_throw(LispObject* exception) {
+	if (exception_stack == nil) {
+		invoke_debugger(exception);
+	}
+
+	LispObject* cont = CAR(exception_stack);
+	exception_stack = CDR(exception_stack);
+
+	value_register = cont;
+	eval_stack = ulisp_cons(exception, nil);
+	ulisp_apply();
+
+	return value_register;
+}
+
+LispObject* ulisp_prim_throw(LispObject* arguments) {
+	ulisp_throw(ulisp_car(arguments));
+	return value_register;
+}
+
 void env_push_fun(const char* name, void* function) {
 	environnement = ulisp_cons(ulisp_cons(ulisp_make_symbol(name),
 										  ulisp_builtin_proc(function)),
@@ -612,6 +709,8 @@ static LispObject *bytecode_push, *bytecode_push_cont, *bytecode_lookup_var,
 	*bytecode_apply, *bytecode_restore_cont, *bytecode_fetch_literal, *bytecode_label,
 	*bytecode_bind, *bytecode_branch_if, *bytecode_branch_else, *bytecode_branch,
 	*bytecode_fetch_cc;
+
+LispObject* ulisp_standard_output;
 
 void ulisp_init(void) {
 	stack_init(&gc_stack);
@@ -626,6 +725,7 @@ void ulisp_init(void) {
 	ulisp_rip = NULL;
 	current_continuation = NULL;
 	read_environnement = nil;
+	exception_stack = nil;
 
 	bytecode_push = ulisp_make_symbol("push");
 	bytecode_push_cont = ulisp_make_symbol("push-cont");
@@ -673,10 +773,13 @@ void ulisp_init(void) {
 	env_push_fun("insert-at-point", ulisp_prim_insert_at_point);
 	env_push_fun("random", ulisp_prim_random);
 	env_push_fun("make-closure", ulisp_prim_make_closure);
+	env_push_fun("throw", ulisp_prim_throw);
 
-	ulisp_eval(ulisp_read(
-				   "(def range (lambda (min max)"
-				   "	(if (> min max) nil (cons min (range (+ 1 min) max)))))")); /* read_file("./lisp/core.ul") */
+	ulisp_standard_output = ulisp_make_stream(stdout);
+
+	ulisp_eval_top_level(ulisp_read(
+							 "(def range (lambda (min max)"
+							 "	(if (> min max) nil (cons min (range (+ 1 min) max)))))")); /* read_file("./lisp/core.ul") */
 }
 
 void ulisp_eval_stack_push() {
@@ -725,7 +828,7 @@ void ulisp_apply() {
 		current_continuation = cont->previous_cont;
 	}
 	else {
-		ulisp_print(value_register, stdout);
+		ulisp_print(value_register, ulisp_standard_output);
 		panic(" is not a function!");
 	}
 }
@@ -765,7 +868,7 @@ start:
 			value_register = ulisp_assoc(environnement, symbol, &global_found);
 			if (!global_found) {
 				printf("not found: ");
-				ulisp_print(symbol, stdout);
+				ulisp_print(symbol, ulisp_standard_output);
 				printf("\n");
 				assert(0);
 			}
@@ -863,7 +966,7 @@ void ulisp_scan_labels(LispObject* code, DynamicArray* target) {
 			label->offset = offset;
 		}
 		else {
-			ulisp_print(instruction, stdout);
+			ulisp_print(instruction, ulisp_standard_output);
 			panic(": Invalid instruction!");
 		}
 	}
@@ -967,7 +1070,7 @@ LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
 		}
 		else {
 			printf("operand not understood: ");
-			ulisp_print(applied_symbol, stdout);
+			ulisp_print(applied_symbol, ulisp_standard_output);
 			panic("\nCompiler error.");
 		}
 	}
@@ -1176,7 +1279,7 @@ LispObject* ulisp_compile(LispObject* expression) {
 																				   ulisp_cons(ulisp_make_integer(cont_label_count), nil)),
 																		nil))))));
 
-			ulisp_print(instructions, stdout);
+			ulisp_print(instructions, ulisp_standard_output);
 			printf("\n");
 
 			stack_pop(&gc_stack, stack_count);
@@ -1240,7 +1343,7 @@ LispObject* ulisp_eval(LispObject* expression) {
 
 	LispObject* compiled = ulisp_compile(expression);
 
-	ulisp_print(compiled, stdout);
+	ulisp_print(compiled, ulisp_standard_output);
 	printf("\n");
 
 	ulisp_run(ulisp_assembly_compile(compiled));
@@ -1249,6 +1352,20 @@ LispObject* ulisp_eval(LispObject* expression) {
 	printf("Stack size: %ld\n", gc_stack.top);
 
 	return value_register;
+}
+
+LispObject* ulisp_eval_top_level(LispObject* expression) {
+	LispObject* final_result;
+
+	if (setjmp(ulisp_top_level) == 0) {
+		final_result = ulisp_eval(expression);
+	}
+	else {
+		printf("Escaped from exception!\n");
+		final_result = exception_register;
+	}
+
+	return final_result;
 }
 
 LispObject* ulisp_read_list(const char* string) {
@@ -1321,52 +1438,48 @@ LispObject* ulisp_read(const char* string) {
 }
 
 char* ulisp_debug_print(LispObject* obj) {
-	char* buffer = NULL;
-	size_t bufferSize = 0;
-	FILE* myStream = open_memstream(&buffer, &bufferSize);
-	ulisp_print(obj, myStream);
+	LispObject* stream = ulisp_make_stream(NULL);
+	ulisp_print(obj, stream);
 
-	fclose(myStream);
-
-	return buffer;
+	return ulisp_stream_finish_output(stream);
 }
 
-void ulisp_print(LispObject* obj, FILE* stream) {
+void ulisp_print(LispObject* obj, LispObject* stream) {
 	if (obj->type & LISP_SYMBOL) {
-		fprintf(stream, "%s", ulisp_symbol_string(obj));
+		ulisp_stream_format(stream, "%s", ulisp_symbol_string(obj));
 	}
 	else if (obj->type & LISP_CONS) {
-		fprintf(stream, "(");
+		ulisp_stream_format(stream, "(");
 
 		LispObject* c = obj;
 		for(; c->type & LISP_CONS; c = ulisp_cdr(c)) {
 			ulisp_print(ulisp_car(c), stream);
 
 			if (ulisp_cdr(c)->type & LISP_CONS)
-				fprintf(stream, " ");
+				ulisp_stream_format(stream, " ");
 		}
 
 		if (!(c == nil)) {
-			fprintf(stream, " . ");
+			ulisp_stream_format(stream, " . ");
 			ulisp_print(c, stream);
 		}
 
-		fprintf(stream, ")");
+		ulisp_stream_format(stream, ")");
 	}
 	else if (obj->type & LISP_PROC_BUILTIN) {
-		fprintf(stream, "<BUILTIN-PROC at %p>", *(void**)obj->data);
+		ulisp_stream_format(stream, "<BUILTIN-PROC at %p>", *(void**)obj->data);
 	}
 	else if (obj->type & LISP_PROC) {
 		LispClosure* proc = (LispClosure*)obj->data;
-		fprintf(stream, "<PROC at %p>", proc);
+		ulisp_stream_format(stream, "<PROC at %p>", proc);
 	}
 	else if (obj->type & LISP_INTEGER) {
-		fprintf(stream, "%ld", *(long*)obj->data);
+		ulisp_stream_format(stream, "%ld", *(long*)obj->data);
 	}
 	else if (obj->type & LISP_FLOAT) {
-		fprintf(stream, "%gf", *(double*)obj->data);
+		ulisp_stream_format(stream, "%gf", *(double*)obj->data);
 	}
 	else {
-		fprintf(stream, "#<NOT PRINTABLE>");
+		ulisp_stream_format(stream, "#<NOT PRINTABLE>");
 	}
 }

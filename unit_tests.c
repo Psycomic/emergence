@@ -139,12 +139,26 @@ void execute_tests(void) {
 			"  (def pi 3.1415))");
 
 		clock_t t1 = clock();
-		ulisp_eval(definition);
-		LispObject* result = ulisp_eval(ulisp_read("(radians->degrees 1.0)"));
+		ulisp_eval_top_level(definition);
+		LispObject* result = ulisp_eval_top_level(ulisp_read("(radians->degrees 1.0)"));
 		clock_t t2 = clock();
 
 		printf("Result found in %ld microseconds: ", t2 - t1);
-		ulisp_print(result, stdout);
+		ulisp_print(result, ulisp_standard_output);
 		printf("\n");
+	}
+
+	{
+		LispObject* sstream = ulisp_make_stream(NULL);
+
+		ulisp_stream_write("Hello, world!\n", sstream);
+		ulisp_stream_write("FUck you!\n", sstream);
+
+		int a = 87, b = 42;
+		float c = 5.1f, d = 6.3f;
+
+		ulisp_stream_format(sstream, "A: %d, B : %d\n", a, b);
+		ulisp_stream_format(sstream, "Fuck everybody!!!!\n");
+		ulisp_stream_format(sstream, "C: %f, D: %f\n", c, d);
 	}
 }
