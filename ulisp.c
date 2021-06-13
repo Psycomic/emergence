@@ -12,7 +12,8 @@
 #define CDR(o) ((ConsCell*)(o)->data)->cdr
 #define panic(str) do { printf(str"\n"); assert(0); } while (0)
 #define AS(o, t) ((t *)o->data)
-#define ASSERT(v) if (!(v)) { ulisp_throw(ulisp_make_symbol("assertion: "#v" in " __FILE__)); }
+//#define ASSERT(v) if (!(v)) { ulisp_throw(ulisp_make_symbol("assertion: "#v" in " __FILE__)); }
+#define ASSERT(v) assert(v)
 
 LispObject *environnement, *read_environnement, /* Global environnements */
 	*nil = NULL, *tee, *quote, *iffe, *begin, *lambda, *def, *rest, *def_macro, *call_cc,
@@ -1401,67 +1402,78 @@ LispObject* ulisp_eval(LispObject* expression) {
 
 LispObject* ulisp_read_list(const char* string) {
 	LispObject* list = nil;
-	uint i = 0;
+	size_t string_size = strlen(string);
 
-	while (string[i] != '\0') {
-		for (; IS_BLANK(string[i]); i++) { /* Skip all blank chars */
-			if (string[i] == '\0')
+	int i = string_size - 1;
+
+	while (i >= 0) {
+		for (; IS_BLANK(string[i]); i--) { /* Skip all blank chars */
+			if (i < 0)
 				break;
 		}
 
-		if (string[i] == '(') {
+		if (string[i] == ')') {
 			int parens_count = 0;
-			uint j = i, count = 0;
+			int j = i, count = 0;
 
 			do {
-				if (string[j] == '(')
+				if (string[j] == ')')
 					parens_count++;
-				else if (string[j] == ')')
+				else if (string[j] == '(')
 					parens_count--;
 
-				ASSERT(string[j] != '\0');
+				ASSERT(j >= 0);
 
 				count++;
 				ASSERT(parens_count >= 0);
-			} while(!(string[j++] == ')' && parens_count == 0));
+			} while(!(string[j--] == '(' && parens_count == 0));
 
-			list = ulisp_cons(ulisp_read_list(m_strndup(string + i + 1, count - 2)), list);
-			i += count;
+			list = ulisp_cons(ulisp_read_list(m_strndup(string + j + 2, count - 2)), list);
+			i -= count;
 		}
 		else {
-			uint count = 0;
-			for (uint j = i; !IS_BLANK(string[j]); j++) {
-				ASSERT(string[j] != ')');
+			int count = 0;
+			int j = i;
+
+			for (; !IS_BLANK(string[j]); j--) {
+				ASSERT(string[j] != '(');
 
 				if (string[j] == '\0')
 					break;
+
 				count++;
 			}
 
 			if (count == 0)
 				break;
 
-			char* symbol_string = m_strndup(string + i, count);
+			char* symbol_string = m_strndup(string + j + 1, count);
 
-			long integer;
-			double floating;
+			if (strcmp(symbol_string, ".") == 0) { /* Dotted list */
+				ASSERT(ulisp_cdr(list) == nil);
+				list = ulisp_car(list);
+			}
+			else {
+				long integer;
+				double floating;
 
-			int type = parse_number(symbol_string, &integer, &floating);
+				int type = parse_number(symbol_string, &integer, &floating);
 
-			if (type == 0)
-				list = ulisp_cons(ulisp_make_integer(integer), list);
-			else if (type == 1)
-				list = ulisp_cons(ulisp_make_float(floating), list);
-			else
-				list = ulisp_cons(ulisp_make_symbol(symbol_string), list);
+				if (type == 0)
+					list = ulisp_cons(ulisp_make_integer(integer), list);
+				else if (type == 1)
+					list = ulisp_cons(ulisp_make_float(floating), list);
+				else
+					list = ulisp_cons(ulisp_make_symbol(symbol_string), list);
+			}
 
 			free(symbol_string);
 
-			i += count;
+			i -= count;
 		}
 	}
 
-	return ulisp_nreverse(list);
+	return list;
 }
 
 LispObject* ulisp_read(const char* string) {
