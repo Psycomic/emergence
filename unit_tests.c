@@ -139,8 +139,18 @@ void execute_tests(void) {
 			"  (def pi 3.1415))");
 
 		clock_t t1 = clock();
-		ulisp_eval_top_level(definition);
-		LispObject* result = ulisp_eval_top_level(ulisp_read("(radians->degrees 1.0)"));
+
+		LispObject* result;
+
+		ULISP_TOPLEVEL {
+			ulisp_eval(definition);
+			result = ulisp_eval(ulisp_read("(radians->degrees 1.0)"));
+		}
+		ULISP_ABORT {
+			printf("Problemos...\n");
+			exit(0);
+		}
+
 		clock_t t2 = clock();
 
 		printf("Result found in %ld microseconds: ", t2 - t1);

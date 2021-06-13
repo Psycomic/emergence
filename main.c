@@ -131,7 +131,17 @@ void update(clock_t fps) {
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
 		clock_t t1 = clock();
-		LispObject* res = ulisp_eval_top_level(ulisp_read(ps_input_value(lisp_input)));
+
+		LispObject* res;
+
+		ULISP_TOPLEVEL {
+			res = ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
+		}
+		ULISP_ABORT {
+			printf("Aborting on exception\n");
+			res = exception_register;
+		}
+
 		clock_t t2 = clock();
 
 		char final_buffer[2048];
@@ -141,6 +151,7 @@ void update(clock_t fps) {
 				 ulisp_debug_print(res), (double)(t2 - t1) / CLOCKS_PER_SEC);
 
 		ps_label_set_text(result_label, final_buffer);
+		ps_input_set_value(lisp_input, "");
 	}
 
 	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {

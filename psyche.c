@@ -1451,6 +1451,10 @@ char* ps_input_value(PsInput* input) {
 	return input->value;
 }
 
+void ps_input_set_value(PsInput* input, const char* value) {
+	strncpy(input->value, value, INPUT_MAX_ENTERED_TEXT);
+}
+
 PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float width) {
 	PsInput* input = malloc(sizeof(PsInput));
 
@@ -1460,7 +1464,7 @@ PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float w
 	input->lines_count = 0;
 	input->selected = GL_FALSE;
 
-	strncpy(input->value, value, INPUT_MAX_ENTERED_TEXT);
+	ps_input_set_value(input, value);
 
 	ps_widget_init(SUPER(input), parent, ps_input_draw, NULL, ps_input_size);
 	return input;

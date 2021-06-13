@@ -28,10 +28,11 @@ enum ObjectType {
 #define ULISP_BYTECODE_RESUME_CONT   5
 #define ULISP_BYTECODE_FETCH_LITERAL 6
 #define ULISP_BYTECODE_BIND          7
-#define ULISP_BYTECODE_BRANCH_IF     8
-#define ULISP_BYTECODE_BRANCH_ELSE   9
-#define ULISP_BYTECODE_BRANCH		 10
-#define ULISP_BYTECODE_FETCH_CC      11
+#define ULISP_BYTECODE_LIST_BIND     8
+#define ULISP_BYTECODE_BRANCH_IF     9
+#define ULISP_BYTECODE_BRANCH_ELSE   10
+#define ULISP_BYTECODE_BRANCH		 11
+#define ULISP_BYTECODE_FETCH_CC      12
 
 typedef struct {
 	enum ObjectType type;
@@ -73,8 +74,7 @@ typedef struct {
 	size_t capacity;
 } LispStream;
 
-LispObject* ulisp_eval_top_level(LispObject* expression);
-LispObject* ulisp_read_list(const char* string);
+LispObject* ulisp_eval(LispObject* expression);
 LispObject* ulisp_read(const char* string);
 void ulisp_init(void);
 void ulisp_print(LispObject* obj, LispObject* stream);
@@ -82,6 +82,12 @@ char* ulisp_debug_print(LispObject* obj);
 void ulisp_add_to_environnement(char* name, LispObject* closure);
 
 LispObject* ulisp_standard_output;
+LispObject* exception_register;
+
+jmp_buf ulisp_top_level, ulisp_run_level;
+
+#define ULISP_TOPLEVEL if (setjmp(ulisp_top_level) == 0)
+#define ULISP_ABORT else
 
 /* Unit tests */
 LispObject* ulisp_make_stream(FILE* f);

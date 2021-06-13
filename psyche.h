@@ -56,6 +56,7 @@ PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float ma
 PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float width);
 void ps_input_insert_at_point(PsInput* input, char* string);
 char* ps_input_value(PsInput* input);
+void ps_input_set_value(PsInput* input, const char* value);
 
 void ps_draw_gui();
 #endif
