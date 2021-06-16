@@ -134,7 +134,7 @@ void execute_tests(void) {
 		LispObject* definition = ulisp_read(
 			"(begin "
 			"  (def radians->degrees "
-			"     (lambda (rad)"
+			"     (n-lambda radians->degrees (rad)"
 			"        (* (/ rad pi) 180)))"
 			"  (def pi 3.1415))");
 
@@ -170,5 +170,12 @@ void execute_tests(void) {
 		ulisp_stream_format(sstream, "A: %d, B : %d\n", a, b);
 		ulisp_stream_format(sstream, "Fuck everybody!!!!\n");
 		ulisp_stream_format(sstream, "C: %f, D: %f\n", c, d);
+	}
+
+	{
+		LispObject* test_list = ulisp_list(ulisp_make_symbol("hello"), ulisp_make_symbol("world"), NULL);
+		printf("Result: ");
+		ulisp_print(test_list, ulisp_standard_output);
+		printf("\n");
 	}
 }

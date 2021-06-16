@@ -1,132 +1,131 @@
-(define list
-	(lambda (&rest args)
-	  args))
+(begin
+  (def list (n-lambda list args args))
 
-(define null?
-	(lambda (x)
-	  (if x nil t)))
+  (def null? (n-lambda null? (x) (if x nil t)))
 
-(define append
-	(lambda (a b)
-	  (if (null? a)
-		  b
-		  (if (null? b)
-			  a
-			  (cons (car a)
-					(append (cdr a) b))))))
+  (def append
+	   (n-lambda append (a b)
+				 (if (null? a)
+					 b
+					 (if (null? b)
+						 a
+						 (cons (car a)
+							   (append (cdr a) b))))))
 
-(define '
-  (mlambda (sym)
-		   (list (quote quote) sym)))
+  (def-macro lambda
+	(n-lambda lambda (args . body)
+			  (append (list (quote n-lambda) (quote anonymous-closure)
+							args)
+					  body)))
 
-(define defun
-  (mlambda (name lambda-list &rest body)
-		   (list (' define) name
-				 (append (list (' lambda) lambda-list)
-						 body))))
+  (def-macro defun
+	(n-lambda defun (name lambda-list . body)
+	  (list (quote def) name
+			(append (list (quote n-lambda) name lambda-list)
+					body))))
 
-(define defmacro
-  (mlambda (name lambda-list &rest body)
-		   (list (' define) name
-				 (append (list (' mlambda) lambda-list)
-						 body))))
+  (def-macro defmacro
+	(n-lambda defmacro (name lambda-list . body)
+	  (list (quote def-macro) name
+			(append (list (quote n-lambda) name lambda-list)
+					body))))
 
-(defmacro let (bindings &rest body)
-  (append (list (append (list (quote lambda) (map car bindings))
-						body))
-		  (map (lambda (x) (car (cdr x))) bindings)))
+  (defun map (fn lst)
+	(if (null? lst)
+		nil
+		(cons (fn (car lst))
+			  (map fn (cdr lst)))))
 
-(defun cond-helper (clauses)
-  (let ((c (car clauses)))
-	(if (null? (cdr clauses))
-		(list (' if) (car c)
-			  (car (cdr c)))
-	    (list (' if) (car c)
-			  (car (cdr c))
-			  (cond-helper (cdr clauses))))))
+  (defmacro let (bindings . body)
+	(append (list (append (list (quote lambda) (map car bindings))
+						  body))
+			(map (lambda (x) (car (cdr x))) bindings)))
 
-(defmacro cond (&rest clauses)
-  (cond-helper clauses))
+  (defun cond-helper (clauses)
+	(let ((c (car clauses)))
+	  (if (null? (cdr clauses))
+		  (list (quote if) (car c)
+				(car (cdr c)))
+		  (list (quote if) (car c)
+				(car (cdr c))
+				(cond-helper (cdr clauses))))))
 
-(defun map (fn lst)
-  (if (null? lst)
-	  nil
-	  (cons (fn (car lst))
-			(map fn (cdr lst)))))
+  (defmacro cond clauses
+	(cond-helper clauses))
 
-(defun 1+ (x)
-  (+ x 1))
+  (defun 1+ (x)
+	(+ x 1))
 
-(defun 1- (x)
-  (- x 1))
+  (defun 1- (x)
+	(- x 1))
 
-(defun ! (x)
-  (if (< x 1)
-	  1
-	  (* x (! (1- x)))))
+  (defun ! (x)
+	(if (< x 1)
+		1
+		(* x (! (1- x)))))
 
-(defun range (min max)
-  (if (> min max)
-	  nil
-	  (cons min (range (1+ min) max))))
+  (defun range (min max)
+	(if (> min max)
+		nil
+		(cons min (range (1+ min) max))))
 
-(defun fizzbuzz-helper (n max)
-  (if (> n max)
-	  nil
-	  (cons (if (= (mod n 3) 0)
-				(if (= (mod n 5) 0)
-					(quote fizzbuzz)
-					(quote fizz))
-				(if (= (mod n 5) 0)
-					(quote buzz)
-					n))
-			(fizzbuzz-helper (1+ n) max))))
+  (defun fizzbuzz-helper (n max)
+	(if (> n max)
+		nil
+		(cons (if (= (mod n 3) 0)
+				  (if (= (mod n 5) 0)
+					  (quote fizzbuzz)
+					  (quote fizz))
+				  (if (= (mod n 5) 0)
+					  (quote buzz)
+					  n))
+			  (fizzbuzz-helper (1+ n) max))))
 
-(defun fizzbuzz (max)
-  (fizzbuzz-helper 0 max))
+  (defun fizzbuzz (max)
+	(fizzbuzz-helper 0 max))
 
-(defun sqrt-iter (guess x)
-  (if (good-enough? guess x)
-	  guess
-	  (sqrt-iter (improve guess x) x)))
+  (defun sqrt-iter (guess x)
+	(if (good-enough? guess x)
+		guess
+		(sqrt-iter (improve guess x) x)))
 
-(defun improve (guess x)
-  (average guess (/ x guess)))
+  (defun improve (guess x)
+	(average guess (/ x guess)))
 
-(defun average (x y)
-  (/ (+ x y) 2))
+  (defun average (x y)
+	(/ (+ x y) 2))
 
-(defun good-enough? (guess x)
-  (< (abs (- (square guess) x)) 0.00001))
+  (defun good-enough? (guess x)
+	(< (abs (- (square guess) x)) 0.00001))
 
-(defun abs (x)
-  (if (< x 0.0)
-	  (- y) x))
+  (defun abs (x)
+	(if (< x 0.0)
+		(- y) x))
 
-(defun square (x)
-  (* x x))
+  (defun square (x)
+	(* x x))
 
-(defun sqrt (x)
-  (sqrt-iter 1.0 x))
+  (defun sqrt (x)
+	(sqrt-iter 1.0 x))
 
-(defun nth-helper (lst n i)
-  (if (= n i)
-	  (car lst)
-	  (nth-helper (cdr lst) n (1+ i))))
+  (defun nth-helper (lst n i)
+	(if (= n i)
+		(car lst)
+		(nth-helper (cdr lst) n (1+ i))))
 
-(defun nth (lst n)
-  (nth-helper lst n 0))
+  (defun nth (lst n)
+	(nth-helper lst n 0))
 
-(defun make-board (dims)
-  (cond ((null? dims) nil)
-		((cons? dims)
-			(cons (make-board (car dims))
-				  (make-board (cdr dims))))
-		((= dims 0) nil)
-		(t (cons (random 2)
-				 (make-board (1- dims))))))
+  (defun make-board (dims)
+	(cond ((null? dims) nil)
+		  ((cons? dims)
+		   (cons (make-board (car dims))
+				 (make-board (cdr dims))))
+		  ((= dims 0) nil)
+		  (t (cons (random 2)
+				   (make-board (1- dims))))))
 
-(define *board* (make-board (' (10 10))))
+  (def *board* (make-board (quote (10 10))))
 
-(defun board-get (x y)
-  (nth (nth *board* y) x))
+  (defun board-get (x y)
+	(nth (nth *board* y) x)))

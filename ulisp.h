@@ -50,6 +50,7 @@ typedef struct {
 
 typedef struct {
 	uchar* code;
+	LispObject* name;
 	uint literals_count;
 	LispObject* literals[];
 } LispTemplate;
@@ -58,6 +59,11 @@ typedef struct {
 	LispObject* envt;
 	LispTemplate* template;
 } LispClosure;
+
+typedef struct {
+	LispObject* name;
+	LispObject* (*fn)(LispObject*);
+} LispBuiltinProc;
 
 typedef struct LispContinuation {
 	LispObject* previous_cont;
@@ -84,15 +90,22 @@ void ulisp_add_to_environnement(char* name, LispObject* closure);
 LispObject* ulisp_standard_output;
 LispObject* exception_register;
 
-jmp_buf ulisp_top_level, ulisp_run_level;
+#define MAX_ULISP_RUN_LEVEL 10
+
+jmp_buf ulisp_top_level;
+jmp_buf ulisp_run_level_stack[MAX_ULISP_RUN_LEVEL];
+
+size_t ulisp_run_level_top;
 
 #define ULISP_TOPLEVEL if (setjmp(ulisp_top_level) == 0)
 #define ULISP_ABORT else
 
 /* Unit tests */
+LispObject* ulisp_make_symbol(const char* string);
 LispObject* ulisp_make_stream(FILE* f);
 void ulisp_stream_write(char* s, LispObject* stream);
 void ulisp_stream_format(LispObject* stream, const char* format, ...);
 char* ulisp_stream_finish_output(LispObject* stream);
+LispObject* ulisp_list(LispObject* a, ...);
 
 #endif // __ULISP_H_

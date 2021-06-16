@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <stdarg.h>
 
 #include "misc.h"
 
@@ -244,6 +245,21 @@ char* m_strndup(const char* str, size_t count) {
 	n[i] = '\0';
 
 	return n;
+}
+
+int m_scanf(const char* fmt, ...) {
+	va_list args;
+	char buffer[128];
+
+	va_start(args, fmt);
+	if (fgets(buffer, sizeof(buffer), stdin)) {
+		if (vsscanf(buffer, fmt, args) == 1) {
+			return 0;
+		}
+	}
+	va_end(args);
+
+	return -1;
 }
 
 int parse_number(char* str, long* integer, double* floating) {

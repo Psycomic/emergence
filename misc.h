@@ -100,6 +100,7 @@ void dynamic_array_destroy(DynamicArray* arr);
 
 char* m_strdup(const char* str);
 char* m_strndup(const char* str, size_t count);
+int m_scanf(const char* fmt, ...);
 void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n);
 size_t strcount(const char* str, char c);
 
