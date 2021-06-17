@@ -31,7 +31,6 @@ static Stack gc_stack;
 
 static LispObject* eval_stack;
 static LispObject* envt_register;
-LispObject* value_register;
 static LispObject* current_continuation;
 static LispObject* last_called_proc = NULL;
 static LispTemplate* template_register;
@@ -373,7 +372,7 @@ LispObject* ulisp_assoc(LispObject* plist, LispObject* symbol, GLboolean* out_fo
 LispObject* ulisp_map(LispObject* (*fn)(LispObject*), LispObject* list) {
 	LispObject* new_list = nil;
 
-	for (LispObject* a = list; a != nil; a = ulisp_cdr(list)) {
+	for (LispObject* a = list; a != nil; a = ulisp_cdr(a)) {
 		new_list = ulisp_cons(fn(ulisp_car(a)), new_list);
 		stack_push(&gc_stack, new_list);
 
@@ -710,23 +709,33 @@ LispObject* ulisp_prim_cons_p(LispObject* args) {
 
 void ulisp_invoke_debugger(LispObject* exception) {
 	printf("Backtrace:\n");
+	uint i = 0;
 
-	if (last_called_proc->type & LISP_PROC_BUILTIN) {
-		printf("0 -> %s ", ulisp_symbol_string(AS(last_called_proc, LispBuiltinProc)->name));
-	} else {
-		printf("0 -> %s ", ulisp_symbol_string(AS(last_called_proc, LispClosure)->template->name));
+	if (last_called_proc) {
+		LispObject* name;
+		if (last_called_proc->type & LISP_PROC_BUILTIN)
+			name = AS(last_called_proc, LispBuiltinProc)->name;
+		else
+			name = AS(last_called_proc, LispClosure)->template->name;
+
+		printf("0 -> ");
+		ulisp_print(ulisp_cons(name, eval_stack), ulisp_standard_output);
+		printf("\n");
+
+		i = 1;
 	}
 
-	ulisp_print(eval_stack, ulisp_standard_output);
-	printf("\n");
+	LispObject* last_cont = NULL;
 
-	uint i = 1;
 	for (LispObject* cont = current_continuation; cont != NULL; cont = ((LispContinuation*)cont->data)->previous_cont) {
 		LispContinuation* continuation = cont->data;
 
-		printf("%d -> %s ", i++, ulisp_symbol_string(continuation->current_template->name));
-		ulisp_print(continuation->envt_register, ulisp_standard_output);
+		printf("%d -> ", i++);
+		ulisp_print(ulisp_cons(continuation->current_template->name, ulisp_map(ulisp_cdr, continuation->envt_register)),
+					ulisp_standard_output);
 		printf("\n");
+
+		last_cont = cont;
 	}
 
 	printf("\nUnhandled exception: ");
@@ -748,9 +757,15 @@ choice:
 	}
 
 	if (choice == 1) {
-		current_continuation = NULL;
+		if (last_cont) {
+			eval_stack = ulisp_cons(exception, nil);
+			value_register = last_cont;
+			ulisp_apply();
+		}
+		else {
+			value_register = exception;
+		}
 
-		exception_register = exception;
 		longjmp(ulisp_top_level, 1);
 	}
 	else if (choice == 2) {
@@ -779,6 +794,9 @@ choice:
 
 			i++;
 		}
+
+		printf("No such level!\n");
+		goto choice;
 	}
 	else if (choice == 3) {
 		assert(0);
@@ -959,6 +977,8 @@ void ulisp_apply() {
 		ulisp_print(value_register, ulisp_standard_output);
 		panic(" is not a function!");
 	}
+
+	last_called_proc = NULL;
 }
 
 LispObject* ulisp_pop() {

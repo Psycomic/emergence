@@ -132,15 +132,14 @@ void update(clock_t fps) {
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
 		clock_t t1 = clock();
 
-		LispObject* res;
-
 		ULISP_TOPLEVEL {
-			res = ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
+			ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
 		}
 		ULISP_ABORT {
 			printf("Aborting on exception\n");
-			res = exception_register;
 		}
+
+		LispObject* res = value_register;
 
 		clock_t t2 = clock();
 

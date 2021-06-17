@@ -100,7 +100,7 @@
 
   (defun abs (x)
 	(if (< x 0.0)
-		(- y) x))
+		(- x) x))
 
   (defun square (x)
 	(* x x))
@@ -128,4 +128,7 @@
   (def *board* (make-board (quote (10 10))))
 
   (defun board-get (x y)
-	(nth (nth *board* y) x)))
+	(nth (nth *board* y) x))
+
+  (defmacro macro-error ()
+	(throw (quote error))))

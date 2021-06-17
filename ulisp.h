@@ -88,7 +88,7 @@ char* ulisp_debug_print(LispObject* obj);
 void ulisp_add_to_environnement(char* name, LispObject* closure);
 
 LispObject* ulisp_standard_output;
-LispObject* exception_register;
+LispObject* value_register;
 
 #define MAX_ULISP_RUN_LEVEL 10
 
