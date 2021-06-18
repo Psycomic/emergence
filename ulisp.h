@@ -33,6 +33,7 @@ enum ObjectType {
 #define ULISP_BYTECODE_BRANCH_ELSE   10
 #define ULISP_BYTECODE_BRANCH		 11
 #define ULISP_BYTECODE_FETCH_CC      12
+#define ULISP_BYTECODE_SET			 13
 
 typedef struct {
 	enum ObjectType type;

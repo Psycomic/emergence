@@ -131,4 +131,19 @@
 	(nth (nth *board* y) x))
 
   (defmacro macro-error ()
-	(throw (quote error))))
+	(throw (quote error)))
+
+  (defun current-continuation ()
+	(call/cc (lambda (cc) (cc cc))))
+
+  (defun try-fn (fn catch-fn)
+	(let ((cc (current-continuation)))
+	  (if (continuation? cc)
+		  (begin (set! exception-stack
+					   (cons cc exception-stack))
+				 (fn))
+		  (catch-fn))))
+
+  (defmacro try (form . catched)
+	(list try-fn (list (quote lambda) nil form)
+		  (append (list (quote lambda) nil) catched))))

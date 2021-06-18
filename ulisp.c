@@ -17,7 +17,7 @@
 
 LispObject *environnement, *read_environnement, /* Global environnements */
 	*nil = NULL, *tee, *quote, *iffe, *begin, *named_lambda, *def, *rest, *def_macro, *call_cc,
-	*quasiquote, *unquote,/* keywords */
+	*quasiquote, *unquote, *set,/* keywords */
 	*assertion_symbol, *top_level, *make_closure;
 
 #define DEFAULT_WORKSPACESIZE (2 << 11)
@@ -36,7 +36,7 @@ static LispObject* last_called_proc = NULL;
 static LispTemplate* template_register;
 static uchar* ulisp_rip;
 
-static LispObject* exception_stack;
+static LispObject** exception_stack = NULL;
 
 LispObject* ulisp_car(LispObject* pair);
 LispObject* ulisp_cdr(LispObject* object);
@@ -502,6 +502,20 @@ LispObject* ulisp_prim_plus(LispObject* args) {
 	return ulisp_make_integer(sum);
 }
 
+LispObject* ulisp_prim_symbol_p(LispObject* args) {
+	return ulisp_car(args)->type & LISP_SYMBOL ? tee : nil;
+}
+
+LispObject* ulisp_prim_proc_p(LispObject* args) {
+	LispObject* o = ulisp_car(args);
+
+	return (o->type & LISP_PROC || o->type & LISP_PROC_BUILTIN) ? tee : nil;
+}
+
+LispObject* ulisp_prim_cont_p(LispObject* args) {
+	return ulisp_car(args)->type & LISP_CONTINUATION ? tee : nil;
+}
+
 LispObject* ulisp_prim_minus(LispObject* args) {
 	long sum = 0;
 	double fsum = 0.f;
@@ -527,7 +541,6 @@ LispObject* ulisp_prim_minus(LispObject* args) {
 		else
 			return ulisp_make_integer(-sum);
 	}
-
 
 	for(LispObject* i = ulisp_cdr(args); i != nil; i = ulisp_cdr(i)) {
 		LispObject* number = ulisp_car(i);
@@ -808,12 +821,12 @@ choice:
 }
 
 void ulisp_throw(LispObject* exception) {
-	if (exception_stack == nil) {
+	if (*exception_stack == nil) {
 		ulisp_invoke_debugger(exception);
 	}
 
-	LispObject* cont = CAR(exception_stack);
-	exception_stack = CDR(exception_stack);
+	LispObject* cont = CAR(*exception_stack);
+	*exception_stack = CDR(*exception_stack);
 
 	value_register = cont;
 	eval_stack = ulisp_cons(exception, nil);
@@ -838,7 +851,7 @@ void env_push_fun(const char* name, void* function) {
 static LispObject *bytecode_push, *bytecode_push_cont, *bytecode_lookup_var,
 	*bytecode_apply, *bytecode_restore_cont, *bytecode_fetch_literal, *bytecode_label,
 	*bytecode_bind, *bytecode_branch_if, *bytecode_branch_else, *bytecode_branch,
-	*bytecode_fetch_cc, *bytecode_list_bind;
+	*bytecode_fetch_cc, *bytecode_list_bind, *bytecode_set;
 
 LispObject* ulisp_standard_output;
 
@@ -856,7 +869,7 @@ void ulisp_init(void) {
 	ulisp_rip = NULL;
 	current_continuation = NULL;
 	read_environnement = nil;
-	exception_stack = nil;
+	exception_stack = NULL;
 
 	bytecode_push = ulisp_make_symbol("push");
 	bytecode_push_cont = ulisp_make_symbol("push-cont");
@@ -871,6 +884,7 @@ void ulisp_init(void) {
 	bytecode_branch = ulisp_make_symbol("branch");
 	bytecode_fetch_cc = ulisp_make_symbol("fetch-cc");
 	bytecode_list_bind = ulisp_make_symbol("list-bind");
+	bytecode_set = ulisp_make_symbol("set");
 
 	tee = ulisp_make_symbol("t");
 	quote = ulisp_make_symbol("quote");
@@ -886,21 +900,29 @@ void ulisp_init(void) {
 	unquote = ulisp_make_symbol("unquote");
 	top_level = ulisp_make_symbol("top_level");
 	make_closure = ulisp_make_symbol("make-closure");
+	set = ulisp_make_symbol("set!");
 
 	free_list_init();
+
+	LispObject* exception_stack_pair = ulisp_cons(ulisp_make_symbol("exception-stack"),
+												  nil);
 
 	environnement = nil;
 	environnement = ulisp_cons(ulisp_cons(nil, nil),
 							   ulisp_cons(ulisp_cons(tee, tee),
-										  ulisp_cons(ulisp_cons(ulisp_make_symbol("exception-stack"),
-																exception_stack),
+										  ulisp_cons(exception_stack_pair,
 													 environnement)));
+
+	exception_stack = &CDR(exception_stack_pair);
 
 	env_push_fun("car", ulisp_prim_car);
 	env_push_fun("cdr", ulisp_prim_cdr);
 	env_push_fun("cons", ulisp_prim_cons);
 	env_push_fun("eq?", ulisp_prim_eq);
 	env_push_fun("cons?", ulisp_prim_cons_p);
+	env_push_fun("symbol?", ulisp_prim_symbol_p);
+	env_push_fun("procedure?", ulisp_prim_proc_p);
+	env_push_fun("continuation?", ulisp_prim_cont_p);
 	env_push_fun("+", ulisp_prim_plus);
 	env_push_fun("-", ulisp_prim_minus);
 	env_push_fun("*", ulisp_prim_mul);
@@ -1000,6 +1022,28 @@ void ulisp_list_bind(LispObject* symbol) {
 	eval_stack = nil;
 }
 
+void ulisp_set(LispObject* symbol) {
+	GLboolean found = GL_FALSE;
+
+	for (LispObject* binding = envt_register; binding != nil; binding = CDR(binding)) {
+		if (ulisp_eq(symbol, CAR(CAR(binding)))) {
+			CDR(CAR(binding)) = value_register;
+			found = GL_TRUE;
+			break;
+		}
+	}
+
+	if (!found) {
+		for (LispObject* binding = environnement; binding != nil; binding = CDR(binding)) {
+			if (ulisp_eq(symbol, CAR(CAR(binding)))) {
+				CDR(CAR(binding)) = value_register;
+				found = GL_TRUE;
+				break;
+			}
+		}
+	}
+}
+
 void ulisp_run(LispTemplate* template) {
 	ulisp_rip = template->code;
 	template_register = template;
@@ -1077,6 +1121,10 @@ start:
 		ulisp_list_bind(*(void**)(ulisp_rip + 1));
 		ulisp_rip += sizeof(void*) + 1;
 		break;
+	case ULISP_BYTECODE_SET:
+		ulisp_set(*(void**)(ulisp_rip + 1));
+		ulisp_rip += sizeof(void*) + 1;
+		break;
 	case ULISP_BYTECODE_END:
 		goto end;
 	default:
@@ -1100,6 +1148,7 @@ void ulisp_scan_labels(LispObject* code, DynamicArray* target) {
 		if (ulisp_eq(instruction, bytecode_lookup_var)	||
 			ulisp_eq(instruction, bytecode_bind)		||
 			ulisp_eq(instruction, bytecode_list_bind)	||
+			ulisp_eq(instruction, bytecode_set)			||
 			ulisp_eq(instruction, bytecode_push_cont))
 		{
 			offset += 1 + sizeof(void*);
@@ -1232,6 +1281,12 @@ LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
 		else if (ulisp_eq(applied_symbol, bytecode_fetch_cc)) {
 			uchar* instructions = dynamic_array_push_back(&bytecode, 1);
 			instructions[0] = ULISP_BYTECODE_FETCH_CC;
+		}
+		else if (ulisp_eq(applied_symbol, bytecode_set)) {
+			uchar* instructions = dynamic_array_push_back(&bytecode, 1 + sizeof(void*));
+			instructions[0] = ULISP_BYTECODE_SET;
+
+			*(void**)(instructions + 1) = ulisp_car(ulisp_cdr(current_exp));
 		}
 		else if (ulisp_eq(applied_symbol, bytecode_label)) {
 			continue;
@@ -1465,6 +1520,13 @@ LispObject* ulisp_compile(LispObject* expression) {
 
 			stack_pop(&gc_stack, stack_count);
 			return instructions;
+		}
+		else if (ulisp_eq(applied_symbol, set)) {
+			LispObject* value_instructions = ulisp_compile(ulisp_car(ulisp_cdr(ulisp_cdr(expression))));
+
+			stack_pop(&gc_stack, stack_count);
+			return ulisp_nconc(value_instructions,
+							   ulisp_cons(ulisp_list(bytecode_set, ulisp_car(ulisp_cdr(expression)), NULL), nil));
 		}
 		else {
 			long cont_label_count;
