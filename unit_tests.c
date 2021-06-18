@@ -173,9 +173,6 @@ void execute_tests(void) {
 	}
 
 	{
-		LispObject* test_list = ulisp_list(ulisp_make_symbol("hello"), ulisp_make_symbol("world"), NULL);
-		printf("Result: ");
-		ulisp_print(test_list, ulisp_standard_output);
-		printf("\n");
+		ulisp_eval(ulisp_read("(fizzbuzz 100)"));
 	}
 }

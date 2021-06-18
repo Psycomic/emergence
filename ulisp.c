@@ -29,6 +29,11 @@ static LispObject* free_list;
 static uchar* workspace;
 static Stack gc_stack;
 
+#define CUSTOM_ALLOCATOR_SIZE (2 << 17)
+
+static uchar* custom_allocator;
+static uchar* alloc_ptr;
+
 static LispObject* eval_stack;
 static LispObject* envt_register;
 static LispObject* current_continuation;
@@ -49,6 +54,20 @@ typedef struct LispLabel {
 	long id;
 	size_t offset;
 } LispLabel;
+
+void custom_allocator_init() {
+	custom_allocator = malloc(CUSTOM_ALLOCATOR_SIZE);
+	alloc_ptr = custom_allocator;
+}
+
+void* custom_allocator_alloc(size_t size) {
+	assert((alloc_ptr - custom_allocator) + size < CUSTOM_ALLOCATOR_SIZE);
+
+	uchar* p = alloc_ptr;
+	alloc_ptr += size;
+
+	return p;
+}
 
 void free_list_init() {
 	workspace = malloc(cons_cell_size * free_space);
@@ -205,7 +224,7 @@ LispObject* ulisp_list(LispObject* a, ...) {
 LispObject* ulisp_make_symbol(const char* string) {
 	int string_length = strlen(string);
 
-	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(LispSymbol) + sizeof(char) * string_length + 1);
+	LispObject* new_object = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispSymbol) + sizeof(char) * string_length + 1);
 
 	new_object->type = LISP_SYMBOL;
 
@@ -227,7 +246,7 @@ char* ulisp_symbol_string(LispObject* symbol) {
 }
 
 LispObject* ulisp_make_integer(long val) {
-	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(long));
+	LispObject* new_object = custom_allocator_alloc(sizeof(LispObject) + sizeof(long));
 
 	new_object->type = LISP_INTEGER | LISP_NUMBER;
 	*(long*)new_object->data = val;
@@ -236,7 +255,7 @@ LispObject* ulisp_make_integer(long val) {
 }
 
 LispObject* ulisp_make_float(double val) {
-	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(double));
+	LispObject* new_object = custom_allocator_alloc(sizeof(LispObject) + sizeof(double));
 
 	new_object->type = LISP_FLOAT | LISP_NUMBER;
 	*(double*)new_object->data = val;
@@ -245,7 +264,7 @@ LispObject* ulisp_make_float(double val) {
 }
 
 LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_stack, LispObject* current_cont, LispTemplate* current_template, uchar* rip) {
-	LispObject* new_cont_obj = malloc(sizeof(LispObject) + sizeof(LispContinuation));
+	LispObject* new_cont_obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispContinuation));
 	new_cont_obj->type = LISP_CONTINUATION;
 
 	LispContinuation* cont = (LispContinuation*)new_cont_obj->data;
@@ -260,7 +279,7 @@ LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_
 }
 
 LispObject* ulisp_make_stream(FILE* f) {
-	LispObject* new_stream_obj = malloc(sizeof(LispObject) + sizeof(LispStream));
+	LispObject* new_stream_obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispStream));
 	new_stream_obj->type = LISP_STREAM;
 
 	LispStream* stream = new_stream_obj->data;
@@ -318,7 +337,7 @@ void ulisp_stream_format(LispObject* stream, const char* format, ...) {
 }
 
 LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt) {
-	LispObject* obj = malloc(sizeof(LispObject) + sizeof(LispClosure));
+	LispObject* obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispClosure));
 	obj->type = LISP_PROC;
 
 	LispClosure* closure = obj->data;
@@ -435,7 +454,7 @@ uint ulisp_length(LispObject* list) {
 }
 
 LispObject* ulisp_builtin_proc(void* function, LispObject* name) {
-	LispObject* proc = malloc(sizeof(LispObject) + sizeof(LispBuiltinProc));
+	LispObject* proc = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispBuiltinProc));
 	proc->type = LISP_PROC_BUILTIN;
 	LispBuiltinProc* builtin = proc->data;
 
@@ -857,6 +876,8 @@ LispObject* ulisp_standard_output;
 
 void ulisp_init(void) {
 	stack_init(&gc_stack);
+	custom_allocator_init();
+
 	ulisp_run_level_top = 0;
 
 	nil = ulisp_make_symbol("nil");
