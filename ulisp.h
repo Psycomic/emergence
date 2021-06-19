@@ -17,7 +17,9 @@ enum ObjectType {
 	LISP_LIST = 1 << 7,
 	LISP_CONTINUATION = 1 << 8,
 	LISP_STREAM = 1 << 9,
-	GC_MARKED = 1 << 10
+	LISP_FILE_STREAM = 1 << 10,
+	LISP_STRING_STREAM = 1 << 11,
+	GC_MARKED = 1 << 13
 };
 
 #define ULISP_BYTECODE_APPLY         0
@@ -75,11 +77,14 @@ typedef struct LispContinuation {
 } LispContinuation;
 
 typedef struct {
-	FILE* f;
 	char* buffer;
 	size_t size;
 	size_t capacity;
-} LispStream;
+} LispStringStream;
+
+typedef struct {
+	FILE *f;
+} LispFileStream;
 
 LispObject* ulisp_eval(LispObject* expression);
 LispObject* ulisp_read(const char* string);
@@ -103,7 +108,8 @@ size_t ulisp_run_level_top;
 
 /* Unit tests */
 LispObject* ulisp_make_symbol(const char* string);
-LispObject* ulisp_make_stream(FILE* f);
+LispObject* ulisp_make_file_stream(FILE* f);
+LispObject* ulisp_make_string_stream();
 void ulisp_stream_write(char* s, LispObject* stream);
 void ulisp_stream_format(LispObject* stream, const char* format, ...);
 char* ulisp_stream_finish_output(LispObject* stream);

@@ -160,7 +160,7 @@ void execute_tests(void) {
 	}
 
 	{
-		LispObject* sstream = ulisp_make_stream(NULL);
+		LispObject* sstream = ulisp_make_string_stream();
 
 		ulisp_stream_write("Hello, world!\n", sstream);
 		ulisp_stream_write("FUck you!\n", sstream);

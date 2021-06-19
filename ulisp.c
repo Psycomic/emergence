@@ -278,45 +278,71 @@ LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_
 	return new_cont_obj;
 }
 
-LispObject* ulisp_make_stream(FILE* f) {
-	LispObject* new_stream_obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispStream));
-	new_stream_obj->type = LISP_STREAM;
+LispObject* ulisp_make_file_stream(FILE* f) {
+	LispObject* new_stream_obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispFileStream));
+	new_stream_obj->type = LISP_STREAM | LISP_FILE_STREAM;
 
-	LispStream* stream = new_stream_obj->data;
-	stream->buffer = malloc(8);
-	stream->size = 0;
-	stream->capacity = 8;
+	LispFileStream* stream = new_stream_obj->data;
 	stream->f = f;
 
 	return new_stream_obj;
 }
 
+LispObject* ulisp_make_string_stream() {
+	LispObject* new_stream_obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispStringStream));
+	new_stream_obj->type = LISP_STREAM | LISP_STRING_STREAM;
+
+	LispStringStream* stream = new_stream_obj->data;
+
+	stream->buffer = malloc(8);
+	stream->size = 0;
+	stream->capacity = 8;
+
+	return new_stream_obj;
+}
+
 void ulisp_stream_write(char* s, LispObject* stream_obj) {
+	assert(stream_obj->type & LISP_STREAM);
+
 	size_t size = strlen(s);
-	GLboolean resized = GL_FALSE;
-	LispStream* stream = stream_obj->data;
 
-	if (stream->f)
+	if (stream_obj->type & LISP_STRING_STREAM) {
+		GLboolean resized = GL_FALSE;
+		LispStringStream* stream = stream_obj->data;
+
+		while (stream->size + size > stream->capacity) {
+			stream->capacity *= 2;
+			resized = GL_TRUE;
+		}
+
+		if (resized) {
+			stream->buffer = realloc(stream->buffer, stream->capacity);
+		}
+
+		memcpy(stream->buffer + stream->size, s, size);
+		stream->size += size;
+	}
+	else {
+		LispFileStream* stream = stream_obj->data;
 		fwrite(s, size, 1, stream->f);
-
-	while (stream->size + size > stream->capacity) {
-		stream->capacity *= 2;
-		resized = GL_TRUE;
 	}
-
-	if (resized) {
-		stream->buffer = realloc(stream->buffer, stream->capacity);
-	}
-
-	memcpy(stream->buffer + stream->size, s, size);
-	stream->size += size;
 }
 
 char* ulisp_stream_finish_output(LispObject* stream_obj) {
-	LispStream* stream = stream_obj->data;
+	assert(stream_obj->type & LISP_STREAM);
 
-	stream->buffer[stream->size] = '\0';
-	return stream->buffer;
+	if (stream_obj->type & LISP_STRING_STREAM) {
+		LispStringStream* stream = stream_obj->data;
+
+		stream->buffer[stream->size] = '\0';
+		return stream->buffer;
+	}
+	else {
+		LispFileStream* stream = stream_obj->data;
+
+		fflush(stream->f);
+		return NULL;
+	}
 }
 
 void ulisp_stream_format(LispObject* stream, const char* format, ...) {
@@ -957,7 +983,7 @@ void ulisp_init(void) {
 	env_push_fun("make-closure", ulisp_prim_make_closure);
 	env_push_fun("throw", ulisp_prim_throw);
 
-	ulisp_standard_output = ulisp_make_stream(stdout);
+	ulisp_standard_output = ulisp_make_file_stream(stdout);
 
 	ULISP_TOPLEVEL {
 		LispObject* expressions = ulisp_read(read_file("lisp/core.ul"));
@@ -1702,7 +1728,7 @@ LispObject* ulisp_read(const char* string) {
 }
 
 char* ulisp_debug_print(LispObject* obj) {
-	LispObject* stream = ulisp_make_stream(NULL);
+	LispObject* stream = ulisp_make_string_stream();
 	ulisp_print(obj, stream);
 
 	return ulisp_stream_finish_output(stream);
@@ -1737,13 +1763,19 @@ void ulisp_print(LispObject* obj, LispObject* stream) {
 	}
 	else if (obj->type & LISP_PROC) {
 		LispClosure* proc = (LispClosure*)obj->data;
-		ulisp_stream_format(stream, "<PROC %s at %p>", ulisp_debug_print(proc->template->name), proc);
+		ulisp_stream_format(stream, "<PROC %s at %p>", ulisp_debug_print(proc->template->name), obj);
 	}
 	else if (obj->type & LISP_INTEGER) {
 		ulisp_stream_format(stream, "%ld", *(long*)obj->data);
 	}
 	else if (obj->type & LISP_FLOAT) {
 		ulisp_stream_format(stream, "%gf", *(double*)obj->data);
+	}
+	else if (obj->type & LISP_CONTINUATION) {
+		ulisp_stream_format(stream, "#<CONTINUATION at %p>", obj);
+	}
+	else if (obj->type & LISP_STREAM) {
+		ulisp_stream_format(stream, "#<STREAM at %p>", obj);
 	}
 	else {
 		ulisp_stream_format(stream, "#<NOT PRINTABLE>");
