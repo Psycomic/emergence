@@ -64,7 +64,7 @@ typedef struct {
 } DynamicArray;
 
 typedef struct HashTableEntry {
-	char* key;
+	uint key_hash;
 	struct HashTableEntry* next_entry;
 	char data[];
 } HashTableEntry;
@@ -72,6 +72,7 @@ typedef struct HashTableEntry {
 typedef struct {
 	HashTableEntry** entries;
 	uint size;
+	uint (*hash_function)(void*);
 } HashTable;
 
 typedef struct {
@@ -109,14 +110,14 @@ int parse_number(char* str, long* integer, double* floating);
 
 void m_bzero(void* dst, size_t size);
 
-uint hash(uchar *str);
+uint hash_string(uchar *str);
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);
 
-HashTable* hash_table_create(uint size);
-int hash_table_set(HashTable* table, char* key, void* value, uint value_size);
-void* hash_table_get(HashTable* table, char* key);
+HashTable* hash_table_create(uint size, uint (*hash)(void*));
+int hash_table_set(HashTable* table, void* key, void* value, uint value_size);
+void* hash_table_get(HashTable* table, void* key);
 
 void stack_init(Stack* stack);
 void stack_push(Stack* stack, void* value);

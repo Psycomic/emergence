@@ -231,7 +231,7 @@ LispObject* ulisp_make_symbol(const char* string) {
 	LispSymbol* symbol = (LispSymbol*)new_object->data;
 	strcpy(symbol->str, string);
 
-	symbol->hash = hash((uchar*)string);
+	symbol->hash = hash_string((uchar*)string);
 
 	if (nil && symbol->hash == ((LispSymbol*)nil->data)->hash)
 		return nil;

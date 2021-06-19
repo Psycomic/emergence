@@ -5,6 +5,7 @@
 #include "random.h"
 #include "workers.h"
 #include "crypto.h"
+#include "protocol7.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -44,7 +45,7 @@ void execute_tests(void) {
 	printf("Dest: %s\n", dest);
 
 	// Hash table test
-	HashTable* table = hash_table_create(3);
+	HashTable* table = hash_table_create(3, hash_string);
 
 	uint value_one = 10,
 		value_two = 20,
@@ -174,5 +175,15 @@ void execute_tests(void) {
 
 	{
 		ulisp_eval(ulisp_read("(fizzbuzz 100)"));
+	}
+
+	{
+		if (p7_init() < 0) {
+			printf("Failed!\n");
+		} else {
+			printf("Success!\n");
+		}
+
+		/* p7_node_discover("127.0.0.1", P7_PORT); */
 	}
 }

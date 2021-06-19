@@ -17,6 +17,7 @@
 #include "window.h"
 #include "workers.h"
 #include "ulisp.h"
+#include "protocol7.h"
 
 #define WORLD_STEP 0.1f
 
@@ -122,6 +123,7 @@ static PsLabel* result_label;
 static Worker* terrain_worker = NULL;
 
 void update(clock_t fps) {
+	p7_loop();
 	scene_draw(scene, background_color);
 
 	char buf[256];
@@ -189,15 +191,6 @@ void update(clock_t fps) {
 		drawable_update(triangle1_drawable);
 		drawable_update(triangle2_drawable);
 	}
-
-/*	ps_begin_path();
-	ps_line_to(0.f, 0.f);
-	ps_line_to(100.f, 0.f);
-	ps_line_to(100.f, 100.f);
-	ps_line_to(0.f, 100.f);
-	ps_line_to(g_window.cursor_position.x, g_window.cursor_position.y);
-	ps_close_path();
-	ps_stroke((Vector4) { { 1.f, 0.f, 0.f, 1.f } }, 10.f);*/
 }
 
 void setup() {

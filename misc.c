@@ -127,17 +127,17 @@ void dynamic_array_destroy(DynamicArray* arr) {
 	arr->data = NULL;
 }
 
-uint hash(uchar *str) {
+uint hash_string(uchar *str) {
     uint hash = 5381;
     int c;
 
     while ((c = *str++))
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + c;
 
     return hash;
 }
 
-HashTable* hash_table_create(uint size) {
+HashTable* hash_table_create(uint size, uint (*hash)(void*)) {
 	assert(size >= 1);
 
 	HashTable* hash_table = malloc(sizeof(HashTable));
@@ -146,6 +146,7 @@ HashTable* hash_table_create(uint size) {
 		return NULL;
 
 	hash_table->size = size;
+	hash_table->hash_function = hash;
 
 	if ((hash_table->entries = malloc(sizeof(HashTableEntry*) * size)) == NULL)
 		return NULL;
@@ -156,8 +157,9 @@ HashTable* hash_table_create(uint size) {
 	return hash_table;
 }
 
-int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
-	uint index = hash((uchar*)key) % table->size;
+int hash_table_set(HashTable* table, void* key, void* value, uint value_size) {
+	uint key_hash = table->hash_function(key);
+	uint index = key_hash % table->size;
 
 	if (table->entries[index] == NULL) {	// If no collisions
 		if ((table->entries[index] = malloc(sizeof(HashTableEntry) + value_size)) == NULL)
@@ -165,7 +167,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 
 		HashTableEntry* entry = table->entries[index];
 
-		entry->key = key;
+		entry->key_hash = key_hash;
 		entry->next_entry = NULL;
 
 		if (memcpy(entry->data, value, value_size) != 0)
@@ -175,7 +177,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 		HashTableEntry* entry = table->entries[index];
 
 		for (; entry->next_entry != NULL; entry = entry->next_entry) {
-			if (strcmp(entry->key, key) == 0) {	// If already exists
+			if (key_hash == entry->key_hash) {	// If already exists
 				if (memcpy(entry->data, value, value_size) != 0)
 					return -1;
 
@@ -183,7 +185,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 			}
 		}
 
-		if (strcmp(entry->key, key) == 0) {
+		if (key_hash == entry->key_hash) {
 			if (memcpy(entry->data, value, value_size) != 0)
 				return -1;
 
@@ -193,7 +195,7 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 		if ((entry->next_entry = malloc(sizeof(HashTableEntry) + value_size)) == NULL)
 			return -1;
 
-		entry->next_entry->key = key;
+		entry->next_entry->key_hash = key_hash;
 		entry->next_entry->next_entry = NULL;
 
 		if (memcpy(entry->next_entry->data, value, value_size))
@@ -203,20 +205,21 @@ int hash_table_set(HashTable* table, char* key, void* value, uint value_size) {
 	return 0;
 }
 
-void* hash_table_get(HashTable* table, char* key) {
-	uint index = hash((uchar*)key) % table->size;
+void* hash_table_get(HashTable* table, void* key) {
+	uint key_hash = table->hash_function(key);
+	uint index = key_hash % table->size;
 
 	HashTableEntry* entry = table->entries[index];
 
 	if (entry == NULL)
 		return NULL;
 
-	if (entry->next_entry == NULL || strcmp(key, entry->key) == 0)	// Sole entry in list
+	if (entry->next_entry == NULL || (key_hash == entry->key_hash))	// Sole entry in list
 		return entry->data;
 	else if (entry->next_entry == NULL)
 		return NULL;
 
-	for (; strcmp(entry->key, key) != 0; entry = entry->next_entry);
+	for (; key_hash != entry->key_hash; entry = entry->next_entry);
 
 	return entry->data;
 }
