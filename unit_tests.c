@@ -174,10 +174,6 @@ void execute_tests(void) {
 	}
 
 	{
-		ulisp_eval(ulisp_read("(fizzbuzz 100)"));
-	}
-
-	{
 		if (p7_init() < 0) {
 			printf("Failed!\n");
 		} else {

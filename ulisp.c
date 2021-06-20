@@ -17,7 +17,7 @@
 
 LispObject *environnement, *read_environnement, /* Global environnements */
 	*nil = NULL, *tee, *quote, *iffe, *begin, *named_lambda, *def, *rest, *def_macro, *call_cc,
-	*quasiquote, *unquote, *set,/* keywords */
+	*quasiquote, *unquote, *set, *standard_output, /* keywords */
 	*assertion_symbol, *top_level, *make_closure;
 
 #define DEFAULT_WORKSPACESIZE (2 << 11)
@@ -29,16 +29,13 @@ static LispObject* free_list;
 static uchar* workspace;
 static Stack gc_stack;
 
-#define CUSTOM_ALLOCATOR_SIZE (2 << 17)
-
-static uchar* custom_allocator;
-static uchar* alloc_ptr;
+DynamicArray allocated_pointers;
 
 static LispObject* eval_stack;
 static LispObject* envt_register;
 static LispObject* current_continuation;
 static LispObject* last_called_proc = NULL;
-static LispTemplate* template_register;
+static LispObject* template_register;
 static uchar* ulisp_rip;
 
 static LispObject** exception_stack = NULL;
@@ -56,23 +53,44 @@ typedef struct LispLabel {
 } LispLabel;
 
 void custom_allocator_init() {
-	custom_allocator = malloc(CUSTOM_ALLOCATOR_SIZE);
-	alloc_ptr = custom_allocator;
+	DYNAMIC_ARRAY_CREATE(&allocated_pointers, LispObject*);
 }
 
 void* custom_allocator_alloc(size_t size) {
-	assert((alloc_ptr - custom_allocator) + size < CUSTOM_ALLOCATOR_SIZE);
+	LispObject* p = malloc(size);
 
-	uchar* p = alloc_ptr;
-	alloc_ptr += size;
+	LispObject** push_pointer = dynamic_array_push_back(&allocated_pointers, 1);
+	*push_pointer = p;
 
 	return p;
 }
 
+void custom_allocator_sweep() {
+	DynamicArray new_allocated_pointers;
+	DYNAMIC_ARRAY_CREATE(&new_allocated_pointers, LispObject*);
+
+	uint freed_count = 0;
+
+	for (uint i = 0; i < allocated_pointers.size; i++) {
+		LispObject* obj = *(LispObject**)dynamic_array_at(&allocated_pointers, i);
+
+		if (!(obj->type & GC_MARKED)) {
+			free(obj);
+			freed_count++;
+		}
+		else {
+			obj->type &= ~GC_MARKED;
+			*(LispObject**)dynamic_array_push_back(&new_allocated_pointers, 1) = obj;
+		}
+	}
+
+	printf("Freed %u allocations!\n", freed_count);
+	dynamic_array_destroy(&allocated_pointers);
+	allocated_pointers = new_allocated_pointers;
+}
+
 void free_list_init() {
 	workspace = malloc(cons_cell_size * free_space);
-	assert(workspace != NULL);
-
 	free_list = (LispObject*)workspace;
 
 	LispObject* free_list_ptr = free_list;
@@ -106,9 +124,10 @@ void mark_object(LispObject* object) {
 mark:
 	if (object->type & GC_MARKED) return;
 
-	if (object->type & LISP_CONS) {
+	if (!(object->type & LISP_SYMBOL))
 		object->type |= GC_MARKED;
 
+	if (object->type & LISP_CONS) {
 		mark_object(ulisp_car(object));
 		object = ulisp_cdr(object);
 		goto mark;
@@ -117,18 +136,23 @@ mark:
 		LispClosure* proc = object->data;
 
 		mark_object(proc->envt);
-
-		for (uint i = 0; i < proc->template->literals_count; i++)
-			mark_object(proc->template->literals[i]);
+		mark_object(proc->template);
 	}
 	else if (object->type & LISP_CONTINUATION) {
 		LispContinuation* cont = object->data;
 
 		mark_object(cont->envt_register);
 		mark_object(cont->eval_stack);
+		mark_object(cont->current_template);
 
 		if (cont->previous_cont)
 			mark_object(cont->previous_cont);
+	}
+	else if (object->type & LISP_TEMPLATE) {
+		LispTemplate* template = AS(object, LispTemplate);
+
+		for (uint i = 0; i < template->literals_count; i++)
+			mark_object(template->literals[i]);
 	}
 }
 
@@ -171,11 +195,9 @@ void ulisp_gc() {
 	if (current_continuation)
 		mark_object(current_continuation);
 
-	if (template_register) {
-		for (uint i = 0; i < template_register->literals_count; i++)
-			mark_object(template_register->literals[i]);
-	}
+	mark_object(template_register);
 
+	custom_allocator_sweep();
 	free_list_sweep();
 
 	printf("Now having %lu free space!\n", free_space);
@@ -224,7 +246,7 @@ LispObject* ulisp_list(LispObject* a, ...) {
 LispObject* ulisp_make_symbol(const char* string) {
 	int string_length = strlen(string);
 
-	LispObject* new_object = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispSymbol) + sizeof(char) * string_length + 1);
+	LispObject* new_object = malloc(sizeof(LispObject) + sizeof(LispSymbol) + sizeof(char) * string_length + 1);
 
 	new_object->type = LISP_SYMBOL;
 
@@ -263,7 +285,7 @@ LispObject* ulisp_make_float(double val) {
 	return new_object;
 }
 
-LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_stack, LispObject* current_cont, LispTemplate* current_template, uchar* rip) {
+LispObject* ulisp_make_continuation(LispObject* envt_register, LispObject* eval_stack, LispObject* current_cont, LispObject* current_template, uchar* rip) {
 	LispObject* new_cont_obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispContinuation));
 	new_cont_obj->type = LISP_CONTINUATION;
 
@@ -362,7 +384,7 @@ void ulisp_stream_format(LispObject* stream, const char* format, ...) {
 	free(s);
 }
 
-LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt) {
+LispObject* ulisp_make_closure(LispObject* template, LispObject* envt) {
 	LispObject* obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispClosure));
 	obj->type = LISP_PROC;
 
@@ -375,8 +397,7 @@ LispObject* ulisp_make_closure(LispTemplate* template, LispObject* envt) {
 }
 
 LispObject* ulisp_prim_make_closure(LispObject* arguments) {
-	LispTemplate* template = ulisp_car(arguments);
-
+	LispObject* template = ulisp_car(arguments);
 	return ulisp_make_closure(template, envt_register);
 }
 
@@ -774,7 +795,7 @@ void ulisp_invoke_debugger(LispObject* exception) {
 		if (last_called_proc->type & LISP_PROC_BUILTIN)
 			name = AS(last_called_proc, LispBuiltinProc)->name;
 		else
-			name = AS(last_called_proc, LispClosure)->template->name;
+			name =  AS(AS(last_called_proc, LispClosure)->template, LispTemplate)->name;
 
 		printf("0 -> ");
 		ulisp_print(ulisp_cons(name, eval_stack), ulisp_standard_output);
@@ -789,7 +810,8 @@ void ulisp_invoke_debugger(LispObject* exception) {
 		LispContinuation* continuation = cont->data;
 
 		printf("%d -> ", i++);
-		ulisp_print(ulisp_cons(continuation->current_template->name, ulisp_map(ulisp_cdr, continuation->envt_register)),
+		ulisp_print(ulisp_cons(AS(continuation->current_template, LispTemplate)->name,
+							   ulisp_map(ulisp_cdr, continuation->envt_register)),
 					ulisp_standard_output);
 		printf("\n");
 
@@ -948,17 +970,21 @@ void ulisp_init(void) {
 	top_level = ulisp_make_symbol("top_level");
 	make_closure = ulisp_make_symbol("make-closure");
 	set = ulisp_make_symbol("set!");
+	standard_output = ulisp_make_symbol("*standard-output*");
 
 	free_list_init();
 
 	LispObject* exception_stack_pair = ulisp_cons(ulisp_make_symbol("exception-stack"),
 												  nil);
 
+	ulisp_standard_output = ulisp_make_file_stream(stdout);
+
 	environnement = nil;
 	environnement = ulisp_cons(ulisp_cons(nil, nil),
 							   ulisp_cons(ulisp_cons(tee, tee),
 										  ulisp_cons(exception_stack_pair,
-													 environnement)));
+													 ulisp_cons(ulisp_cons(standard_output, ulisp_standard_output),
+																environnement))));
 
 	exception_stack = &CDR(exception_stack_pair);
 
@@ -982,8 +1008,6 @@ void ulisp_init(void) {
 	env_push_fun("random", ulisp_prim_random);
 	env_push_fun("make-closure", ulisp_prim_make_closure);
 	env_push_fun("throw", ulisp_prim_throw);
-
-	ulisp_standard_output = ulisp_make_file_stream(stdout);
 
 	ULISP_TOPLEVEL {
 		LispObject* expressions = ulisp_read(read_file("lisp/core.ul"));
@@ -1029,7 +1053,7 @@ void ulisp_apply() {
 
 		envt_register = closure->envt;
 		template_register = closure->template;
-		ulisp_rip = closure->template->code;
+		ulisp_rip = AS(closure->template, LispTemplate)->code;
 	}
 	else if (value_register->type & LISP_CONTINUATION) {
 		LispContinuation* cont = value_register->data;
@@ -1091,8 +1115,8 @@ void ulisp_set(LispObject* symbol) {
 	}
 }
 
-void ulisp_run(LispTemplate* template) {
-	ulisp_rip = template->code;
+void ulisp_run(LispObject* template) {
+	ulisp_rip = AS(template, LispTemplate)->code;
 	template_register = template;
 
 	setjmp(ulisp_run_level_stack[ulisp_run_level_top++]);
@@ -1126,7 +1150,7 @@ start:
 		break;
 	case ULISP_BYTECODE_PUSH_CONT:
 	{
-		ulisp_save_current_continuation(template_register->code + *(size_t*)(ulisp_rip + 1));
+		ulisp_save_current_continuation(AS(template_register, LispTemplate)->code + *(size_t*)(ulisp_rip + 1));
 		ulisp_rip += sizeof(void*) + 1;
 	}
 		break;
@@ -1137,23 +1161,23 @@ start:
 		if (value_register == nil)
 			ulisp_rip += sizeof(size_t) + 1;
 		else
-			ulisp_rip = template_register->code + *(size_t*)(ulisp_rip + 1);
+			ulisp_rip = AS(template_register, LispTemplate)->code + *(size_t*)(ulisp_rip + 1);
 		break;
 	case ULISP_BYTECODE_BRANCH_ELSE:
 		if (value_register == nil)
-			ulisp_rip = template_register->code + *(size_t*)(ulisp_rip + 1);
+			ulisp_rip = AS(template_register, LispTemplate)->code + *(size_t*)(ulisp_rip + 1);
 		else
 			ulisp_rip += sizeof(size_t) + 1;
 		break;
 	case ULISP_BYTECODE_BRANCH:
-		ulisp_rip = template_register->code + *(size_t*)(ulisp_rip + 1);
+		ulisp_rip = AS(template_register, LispTemplate)->code + *(size_t*)(ulisp_rip + 1);
 		break;
 	case ULISP_BYTECODE_PUSH_EVAL:
 		ulisp_eval_stack_push();
 		ulisp_rip++;
 		break;
 	case ULISP_BYTECODE_FETCH_LITERAL:
-		value_register = template_register->literals[*(uint*)(ulisp_rip + 1)];
+		value_register = AS(template_register, LispTemplate)->literals[*(uint*)(ulisp_rip + 1)];
 		ulisp_rip += sizeof(uint) + 1;
 		break;
 	case ULISP_BYTECODE_FETCH_CC:
@@ -1249,7 +1273,7 @@ size_t ulisp_label_find_rip(DynamicArray* labels, long target_label_num) {
 	return cont_rip;
 }
 
-LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
+LispObject* ulisp_assembly_compile(LispObject* expressions) {
 	DynamicArray bytecode, literals, labels;
 	DYNAMIC_ARRAY_CREATE(&bytecode, uchar);
 	DYNAMIC_ARRAY_CREATE(&literals, LispObject*);
@@ -1348,9 +1372,14 @@ LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
 	uchar* end = dynamic_array_push_back(&bytecode, 1);
 	*end = ULISP_BYTECODE_END;
 
-	LispTemplate* compiled_code = malloc(sizeof(LispTemplate) + sizeof(LispObject*) * literals.size);
+	LispObject* template = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispTemplate) +
+												  sizeof(LispObject*) * literals.size);
+	template->type = LISP_TEMPLATE;
+
+	LispTemplate* compiled_code = template->data;
+
 	compiled_code->code = bytecode.data;
-	compiled_code->literals_count = 0;
+	compiled_code->literals_count = literals.size;
 	compiled_code->name = top_level;
 
 	for (uint i = 0; i < literals.size; i++)
@@ -1358,7 +1387,7 @@ LispTemplate* ulisp_assembly_compile(LispObject* expressions) {
 
 	dynamic_array_destroy(&labels);
 	dynamic_array_destroy(&literals);
-	return compiled_code;
+	return template;
 }
 
 static long ulisp_label_count = 0;
@@ -1366,7 +1395,7 @@ static long ulisp_label_count = 0;
 LispObject* ulisp_eval(LispObject* expression);
 LispObject* ulisp_compile(LispObject* expression);
 
-LispTemplate* ulisp_compile_lambda(LispObject* expression) {
+LispObject* ulisp_compile_lambda(LispObject* expression) {
 	LispObject* closure_instructions = ulisp_compile(
 		ulisp_cons(begin, ulisp_cdr(ulisp_cdr((CDR(expression))))));
 
@@ -1393,8 +1422,8 @@ LispTemplate* ulisp_compile_lambda(LispObject* expression) {
 	closure_instructions = ulisp_nconc(closure_instructions,
 									   ulisp_cons(ulisp_cons(bytecode_restore_cont, nil), nil));
 
-	LispTemplate* template = ulisp_assembly_compile(closure_instructions);
-	template->name = ulisp_car(ulisp_cdr(expression));
+	LispObject* template = ulisp_assembly_compile(closure_instructions);
+	AS(template, LispTemplate)->name = ulisp_car(ulisp_cdr(expression));
 	return template;
 }
 
@@ -1510,7 +1539,7 @@ LispObject* ulisp_compile(LispObject* expression) {
 			return a;
 		}
 		else if (ulisp_eq(applied_symbol, named_lambda)) {
-			LispTemplate* compiled_lambda = ulisp_compile_lambda(expression);
+			LispObject* compiled_lambda = ulisp_compile_lambda(expression);
 
 			long cont_label_count = ulisp_label_count++;
 
@@ -1681,11 +1710,10 @@ LispObject* ulisp_read_list(const char* string) {
 			int j = i;
 
 			for (; !IS_BLANK(string[j]); j--) {
-				ASSERT(string[j] != '(');
-
-				if (string[j] == '\0')
+				if (j < 0)
 					break;
 
+				ASSERT(string[j] != '(');
 				count++;
 			}
 
@@ -1763,7 +1791,7 @@ void ulisp_print(LispObject* obj, LispObject* stream) {
 	}
 	else if (obj->type & LISP_PROC) {
 		LispClosure* proc = (LispClosure*)obj->data;
-		ulisp_stream_format(stream, "<PROC %s at %p>", ulisp_debug_print(proc->template->name), obj);
+		ulisp_stream_format(stream, "<PROC %s at %p>", ulisp_debug_print(AS(proc->template, LispTemplate)->name), obj);
 	}
 	else if (obj->type & LISP_INTEGER) {
 		ulisp_stream_format(stream, "%ld", *(long*)obj->data);

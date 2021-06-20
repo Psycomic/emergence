@@ -19,6 +19,7 @@ enum ObjectType {
 	LISP_STREAM = 1 << 9,
 	LISP_FILE_STREAM = 1 << 10,
 	LISP_STRING_STREAM = 1 << 11,
+	LISP_TEMPLATE = 1 << 12,
 	GC_MARKED = 1 << 13
 };
 
@@ -60,7 +61,7 @@ typedef struct {
 
 typedef struct {
 	LispObject* envt;
-	LispTemplate* template;
+	LispObject* template;
 } LispClosure;
 
 typedef struct {
@@ -72,7 +73,7 @@ typedef struct LispContinuation {
 	LispObject* previous_cont;
 	LispObject* envt_register;
 	LispObject* eval_stack;
-	LispTemplate* current_template;
+	LispObject* current_template;
 	uchar* rip;
 } LispContinuation;
 
