@@ -12,12 +12,6 @@
 #include <string.h>
 #include <time.h>
 
-void coroutine_test() {
-	for (uint i = 0; i < 10; i++) {
-		printf("Printing %u\n", i);
-	}
-}
-
 void sig(void* data) {
 	printf("Recieved %d!\n", (int)data);
 }
@@ -180,6 +174,11 @@ void execute_tests(void) {
 			printf("Success!\n");
 		}
 
-		/* p7_node_discover("127.0.0.1", P7_PORT); */
+		p7_node_discover("127.0.0.1", P7_PORT);
+
+		while (GL_TRUE) {
+			p7_loop();
+			usleep(1000);
+		}
 	}
 }
