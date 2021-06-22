@@ -15,9 +15,11 @@
 #define ASSERT(v) if (!(v)) { ulisp_throw(ulisp_make_symbol("assertion: "#v" in " __FILE__)); }
 #define S_OFFSET(s, slot) (size_t)(&((s*)NULL)->slot)
 
+#define LIST_ITERATE(i, list) for (LispObject* i = list; i != nil; i = ulisp_cdr(i))
+
 LispObject *environnement, *read_environnement, /* Global environnements */
 	*nil = NULL, *tee, *quote, *iffe, *begin, *named_lambda, *def, *rest, *def_macro, *call_cc,
-	*quasiquote, *unquote, *set, *standard_output, /* keywords */
+	*quasiquote, *unquote, *set, *standard_output, *let, *letrec, /* keywords */
 	*assertion_symbol, *top_level, *make_closure;
 
 #define DEFAULT_WORKSPACESIZE (2 << 11)
@@ -44,6 +46,7 @@ LispObject* ulisp_car(LispObject* pair);
 LispObject* ulisp_cdr(LispObject* object);
 void ulisp_apply();
 void ulisp_throw(LispObject* exception);
+uint ulisp_length(LispObject* list);
 LispObject* ulisp_nreverse(LispObject* obj);
 LispObject* ulisp_make_symbol(const char* string);
 
@@ -323,6 +326,63 @@ LispObject* ulisp_make_string_stream() {
 	return new_stream_obj;
 }
 
+LispObject* ulisp_make_array(LispObject* dimensions, LispObject* initial_element) {
+	ASSERT(dimensions->type & LISP_CONS || dimensions->type & LISP_INTEGER);
+
+	uint length;
+	if (dimensions->type & LISP_INTEGER)
+		length = 1;
+	else
+		length = ulisp_length(dimensions);
+
+	LispObject* obj = custom_allocator_alloc(sizeof(LispObject) + sizeof(LispArray) +
+											 sizeof(long) * length);
+	obj->type = LISP_ARRAY;
+	LispArray* array = obj->data;
+	array->dimensions_count = length;
+
+	size_t size = 1;
+	if (dimensions->type & LISP_INTEGER) {
+		size = *AS(dimensions, long);
+		array->dimensions[0] = *AS(dimensions, long);
+	}
+	else {
+		uint j = 0;
+		LIST_ITERATE(i, dimensions) {
+			size *= *AS(ulisp_car(i), long);
+			array->dimensions[j++] = *AS(ulisp_car(i), long);
+		}
+	}
+
+	array->size = size;
+	array->capacity = size;
+	array->data = malloc(sizeof(LispObject*) * size);
+
+	for (uint i = 0; i < size; i++) {
+		array->data[i] = initial_element;
+	}
+
+	return obj;
+}
+
+LispObject* ulisp_array_ref(LispObject* array_obj, LispObject* index) {
+	ASSERT(array_obj->type & LISP_ARRAY);
+	ASSERT(index->type & LISP_INTEGER);
+
+	LispArray* array = AS(array_obj, LispArray);
+	return array->data[*AS(index, long)];
+}
+
+LispObject* ulisp_array_set(LispObject* array_obj, LispObject* index, LispObject* value) {
+	ASSERT(array_obj->type & LISP_ARRAY);
+	ASSERT(index->type & LISP_INTEGER);
+
+	LispArray* array = AS(array_obj, LispArray);
+	array->data[*AS(index, long)] = value;
+
+	return value;
+}
+
 void ulisp_stream_write(char* s, LispObject* stream_obj) {
 	assert(stream_obj->type & LISP_STREAM);
 
@@ -399,6 +459,19 @@ LispObject* ulisp_make_closure(LispObject* template, LispObject* envt) {
 LispObject* ulisp_prim_make_closure(LispObject* arguments) {
 	LispObject* template = ulisp_car(arguments);
 	return ulisp_make_closure(template, envt_register);
+}
+
+LispObject* ulisp_prim_make_array(LispObject* arguments) {
+	return ulisp_make_array(ulisp_car(arguments), ulisp_car(ulisp_cdr(arguments)));
+}
+
+LispObject* ulisp_prim_array_ref(LispObject* arguments) {
+	return ulisp_array_ref(ulisp_car(arguments), ulisp_car(ulisp_cdr(arguments)));
+}
+
+LispObject* ulisp_prim_array_set(LispObject* arguments) {
+	return ulisp_array_set(ulisp_car(arguments), ulisp_car(ulisp_cdr(arguments)),
+						   ulisp_car(ulisp_cdr(ulisp_cdr(arguments))));
 }
 
 BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
@@ -971,6 +1044,8 @@ void ulisp_init(void) {
 	make_closure = ulisp_make_symbol("make-closure");
 	set = ulisp_make_symbol("set!");
 	standard_output = ulisp_make_symbol("*standard-output*");
+	let = ulisp_make_symbol("let");
+	letrec = ulisp_make_symbol("letrec");
 
 	free_list_init();
 
@@ -1008,6 +1083,9 @@ void ulisp_init(void) {
 	env_push_fun("random", ulisp_prim_random);
 	env_push_fun("make-closure", ulisp_prim_make_closure);
 	env_push_fun("throw", ulisp_prim_throw);
+	env_push_fun("make-array", ulisp_prim_make_array);
+	env_push_fun("array-ref", ulisp_prim_array_ref);
+	env_push_fun("array-set!", ulisp_prim_array_set);
 
 	ULISP_TOPLEVEL {
 		LispObject* expressions = ulisp_read(read_file("lisp/core.ul"));
@@ -1523,6 +1601,47 @@ LispObject* ulisp_compile(LispObject* expression) {
 																   ulisp_nconc(else_instructions,
 																			   label_instructions)))));
 		}
+		else if (ulisp_eq(applied_symbol, let)) {
+			LispObject* instructions = nil;
+			LispObject* bindings = ulisp_car(ulisp_cdr(expression));
+
+			LIST_ITERATE(b, bindings) {
+				instructions = ulisp_cons(ulisp_list(bytecode_bind, ulisp_car(ulisp_car(b)), NULL),
+										  instructions);
+				stack_push(&gc_stack, instructions);
+				stack_count++;
+			}
+
+			LIST_ITERATE(b, ulisp_nreverse(bindings)) {
+				LispObject* compiled = ulisp_compile(ulisp_car(ulisp_cdr(ulisp_car(b))));
+				stack_push(&gc_stack, compiled);
+				stack_count++;
+
+				instructions = ulisp_nconc(ulisp_nconc(compiled, ulisp_list(ulisp_list(bytecode_push, NULL), NULL)),
+										   instructions);
+				stack_push(&gc_stack, instructions);
+				stack_count++;
+			}
+
+			long cont_label_count = ulisp_label_count++;
+			LispObject* id = ulisp_make_integer(cont_label_count);
+
+			instructions = ulisp_nconc(ulisp_nconc(ulisp_cons(
+													   ulisp_list(bytecode_push_cont, id, NULL),
+													   instructions),
+												   ulisp_compile(
+													   ulisp_cons(begin, ulisp_cdr(ulisp_cdr(expression))))),
+									   ulisp_list(ulisp_cons(bytecode_restore_cont, nil),
+												  ulisp_list(bytecode_label, id, NULL),
+												  NULL));
+
+			printf("Instructions here:\n");
+			ulisp_print(instructions, ulisp_standard_output);
+			printf("\n");
+
+			stack_pop(&gc_stack, stack_count);
+			return instructions;
+		}
 		else if (ulisp_eq(applied_symbol, begin)) {
 			LispObject* a = ulisp_compile(ulisp_car(CDR(expression)));
 			stack_push(&gc_stack, a);
@@ -1804,6 +1923,18 @@ void ulisp_print(LispObject* obj, LispObject* stream) {
 	}
 	else if (obj->type & LISP_STREAM) {
 		ulisp_stream_format(stream, "#<STREAM at %p>", obj);
+	}
+	else if (obj->type & LISP_ARRAY) {
+		LispArray* array = AS(obj, LispArray);
+
+		ulisp_stream_format(stream, "#(");
+		for (uint i = 0; i < array->size; i++) {
+			ulisp_print(array->data[i], stream);
+
+			if (i != array->size - 1)
+				ulisp_stream_write(" ", stream);
+		}
+		ulisp_stream_format(stream, ")");
 	}
 	else {
 		ulisp_stream_format(stream, "#<NOT PRINTABLE>");

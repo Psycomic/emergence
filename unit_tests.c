@@ -175,10 +175,11 @@ void execute_tests(void) {
 		}
 
 		p7_node_discover("127.0.0.1", P7_PORT);
-
+/*
 		while (GL_TRUE) {
 			p7_loop();
 			usleep(1000);
 		}
+*/
 	}
 }

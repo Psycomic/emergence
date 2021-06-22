@@ -20,7 +20,8 @@ enum ObjectType {
 	LISP_FILE_STREAM = 1 << 10,
 	LISP_STRING_STREAM = 1 << 11,
 	LISP_TEMPLATE = 1 << 12,
-	GC_MARKED = 1 << 13
+	LISP_ARRAY = 1 << 13,
+	GC_MARKED = 1 << 14
 };
 
 #define ULISP_BYTECODE_APPLY         0
@@ -82,6 +83,14 @@ typedef struct {
 	size_t size;
 	size_t capacity;
 } LispStringStream;
+
+typedef struct {
+	LispObject** data;
+	size_t capacity;
+	size_t size;
+	unsigned short dimensions_count;
+	long dimensions[];
+} LispArray;
 
 typedef struct {
 	FILE *f;

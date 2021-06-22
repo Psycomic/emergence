@@ -36,11 +36,6 @@
 		(cons (fn (car lst))
 			  (map fn (cdr lst)))))
 
-  (defmacro let (bindings . body)
-	(append (list (append (list (quote lambda) (map car bindings))
-						  body))
-			(map (lambda (x) (car (cdr x))) bindings)))
-
   (defun cond-helper (clauses)
 	(let ((c (car clauses)))
 	  (if (null? (cdr clauses))
@@ -52,6 +47,16 @@
 
   (defmacro cond clauses
 	(cond-helper clauses))
+
+  (defmacro letrec (bindings . body)
+	(append (append
+			 (list (quote let) (map (lambda (b)
+									  (list (car b) nil))
+									bindings))
+			 (map (lambda (b)
+					(list (quote set!) (car b) (car (cdr b))))
+				  bindings))
+			body))
 
   (defun 1+ (x)
 	(+ x 1))
