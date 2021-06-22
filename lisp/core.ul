@@ -50,9 +50,10 @@
 
   (defmacro letrec (bindings . body)
 	(append (append
-			 (list (quote let) (map (lambda (b)
-									  (list (car b) nil))
-									bindings))
+			 (list (quote let)
+				   (map (lambda (b)
+						  (list (car b) nil))
+						bindings))
 			 (map (lambda (b)
 					(list (quote set!) (car b) (car (cdr b))))
 				  bindings))
@@ -120,6 +121,18 @@
 
   (defun nth (lst n)
 	(nth-helper lst n 0))
+
+  (defun array-map (fn arr)
+	(let ((dims (array-dimensions arr))
+		  (new-array (make-array (array-dimensions arr) 0)))
+	  (letrec ((loop
+				(lambda (i)
+				  (if (< i dims)
+					  (begin (array-set! new-array i
+										 (fn (array-ref arr i)))
+							 (loop (1+ i)))
+					  new-array))))
+		(loop 0))))
 
   (defun make-board (dims)
 	(cond ((null? dims) nil)

@@ -170,7 +170,8 @@ void execute_tests(void) {
 	{
 		if (p7_init() < 0) {
 			printf("Failed!\n");
-		} else {
+		}
+		else {
 			printf("Success!\n");
 		}
 

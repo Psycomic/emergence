@@ -157,6 +157,13 @@ mark:
 		for (uint i = 0; i < template->literals_count; i++)
 			mark_object(template->literals[i]);
 	}
+	else if (object->type & LISP_ARRAY) {
+		LispArray* array = AS(object, LispArray);
+
+		for (uint i = 0; i < array->size; i++) {
+			mark_object(array->data[i]);
+		}
+	}
 }
 
 void free_list_free(LispObject* object) {
@@ -383,6 +390,20 @@ LispObject* ulisp_array_set(LispObject* array_obj, LispObject* index, LispObject
 	return value;
 }
 
+LispObject* ulisp_array_dimensions(LispObject* array_obj) {
+	LispArray* array = array_obj->data;
+	if (array->dimensions_count == 1)
+		return ulisp_make_integer(array->dimensions[0]);
+
+	LispObject* dims = nil;
+	for (int i = array->dimensions_count - 1; i >= 0; i--) {
+		dims = ulisp_cons(ulisp_make_integer(array->dimensions[i]),
+						  dims);
+	}
+
+	return dims;
+}
+
 void ulisp_stream_write(char* s, LispObject* stream_obj) {
 	assert(stream_obj->type & LISP_STREAM);
 
@@ -472,6 +493,10 @@ LispObject* ulisp_prim_array_ref(LispObject* arguments) {
 LispObject* ulisp_prim_array_set(LispObject* arguments) {
 	return ulisp_array_set(ulisp_car(arguments), ulisp_car(ulisp_cdr(arguments)),
 						   ulisp_car(ulisp_cdr(ulisp_cdr(arguments))));
+}
+
+LispObject* ulisp_prim_array_dimensions(LispObject* arguments) {
+	return ulisp_array_dimensions(ulisp_car(arguments));
 }
 
 BOOL ulisp_eq(LispObject* obj1, LispObject* obj2) {
@@ -1086,6 +1111,7 @@ void ulisp_init(void) {
 	env_push_fun("make-array", ulisp_prim_make_array);
 	env_push_fun("array-ref", ulisp_prim_array_ref);
 	env_push_fun("array-set!", ulisp_prim_array_set);
+	env_push_fun("array-dimensions", ulisp_prim_array_dimensions);
 
 	ULISP_TOPLEVEL {
 		LispObject* expressions = ulisp_read(read_file("lisp/core.ul"));
