@@ -45,6 +45,9 @@
 				(car (cdr c))
 				(cond-helper (cdr clauses))))))
 
+  (defun cadr (pair)
+	(car (cdr pair)))
+
   (defmacro cond clauses
 	(cond-helper clauses))
 
@@ -58,6 +61,35 @@
 					(list (quote set!) (car b) (car (cdr b))))
 				  bindings))
 			body))
+
+  (defmacro n-let (name bindings . body)
+	(list (quote letrec)
+		  (list (list name
+					  (append (list (quote lambda) (map car bindings))
+							  body)))
+		  (cons name (map cadr bindings))))
+
+  (defmacro or clauses
+	(letrec ((or-helper
+			  (lambda (clauses)
+				(if (null? clauses)
+					nil
+					(list (quote if) (car clauses)
+						  t
+						  (or-helper (cdr clauses)))))))
+	  (or-helper clauses)))
+
+  (defmacro and (a b)
+	(list (quote if) a
+		  (list (quote if) b
+				t)))
+
+  (defmacro dotimes (var times . body)
+	(list (quote n-let) (quote loop) (list (list var 0))
+		  (list (quote if) (list (quote <) var times)
+				(cons (quote begin)
+					  (append body (list (list (quote loop) (list (quote 1+) var)))))
+				var)))
 
   (defun 1+ (x)
 	(+ x 1))
@@ -122,31 +154,69 @@
   (defun nth (lst n)
 	(nth-helper lst n 0))
 
+  (defun product (lst)
+	(if (cons? lst)
+		(if (null? (cdr lst))
+			(car lst)
+			(* (car lst) (product (cdr lst))))
+		lst))
+
+  (defun array-flatten (arr)
+	(make-array (array-total-size arr) nil arr))
+
   (defun array-map (fn arr)
-	(let ((dims (array-dimensions arr))
-		  (new-array (make-array (array-dimensions arr) 0)))
-	  (letrec ((loop
-				(lambda (i)
-				  (if (< i dims)
-					  (begin (array-set! new-array i
-										 (fn (array-ref arr i)))
-							 (loop (1+ i)))
-					  new-array))))
-		(loop 0))))
+	(let ((dims (array-total-size arr))
+		  (flat-arr (array-flatten arr))
+		  (new-array (make-array (array-dimensions arr) nil)))
+	  (let ((flat-new-array (array-flatten new-array)))
+		(n-let loop ((i 0))
+			   (if (< i dims)
+				   (begin (array-set! flat-new-array
+									  (fn (array-ref flat-arr i))
+									  i)
+						  (loop (1+ i)))
+				   new-array)))))
 
   (defun make-board (dims)
-	(cond ((null? dims) nil)
-		  ((cons? dims)
-		   (cons (make-board (car dims))
-				 (make-board (cdr dims))))
-		  ((= dims 0) nil)
-		  (t (cons (random 2)
-				   (make-board (1- dims))))))
+	(array-map (lambda (x) (random 2))
+			   (make-array dims nil)))
 
   (def *board* (make-board (quote (10 10))))
 
-  (defun board-get (x y)
-	(nth (nth *board* y) x))
+  (defun board-get (board x y)
+	(if (or (< x 0) (< y 0)
+			(> x 9) (> y 9))
+		0
+		(array-ref board x y)))
+
+  (defun board-set! (board x y val)
+	(array-set! board val x y))
+
+  (defun neightbors (board x y)
+	(+ (board-get board (1- x) y)
+	   (board-get board (1+ x) y)
+	   (board-get board x (1- y))
+	   (board-get board x (1+ y))
+	   (board-get board (1- x) (1- y))
+	   (board-get board (1+ x) (1- y))
+	   (board-get board (1- x) (1+ y))
+	   (board-get board (1+ x) (1+ y))))
+
+  (defun next-life (board)
+	(let ((new-board (make-array (array-dimensions board) 0)))
+	  (dotimes x 10
+			   (dotimes y 10
+						(let ((c (board-get board x y))
+							  (n (neightbors board x y)))
+						  (if (and (= c 1) (or (= n 2) (= n 3)))
+							  (board-set! new-board x y 1))
+						  (if (and (= c 0) (= n 3))
+							  (board-set! new-board x y 1)))))
+	  new-board))
+
+  (defun next ()
+	(set! *board* (next-life *board*))
+	*board*)
 
   (defmacro macro-error ()
 	(throw (quote error)))
