@@ -633,6 +633,82 @@ void ps_fill_rect(float x, float y, float w, float h, Vector4 color) {
 	list->ibo_last_index += 4;
 }
 
+void ps_fill_rect_vertical_gradient(float x, float y, float w, float h, Vector4 top_color, Vector4 bottom_color) {
+	PsDrawList* list = ps_ctx.draw_lists[0];
+	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
+
+	PsVert* rect_verts = dynamic_array_push_back(&list->vbo, 4);
+	PsIndex* rect_indexes = dynamic_array_push_back(&list->ibo, 6);
+
+	rect_verts[0].position.x = x;
+	rect_verts[0].position.y = y;
+	rect_verts[0].uv_coords = ps_white_pixel;
+	rect_verts[0].color = bottom_color;
+
+	rect_verts[1].position.x = x + w;
+	rect_verts[1].position.y = y;
+	rect_verts[1].uv_coords = ps_white_pixel;
+	rect_verts[1].color = bottom_color;
+
+	rect_verts[2].position.x = x + w;
+	rect_verts[2].position.y = y + h;
+	rect_verts[2].uv_coords = ps_white_pixel;
+	rect_verts[2].color = top_color;
+
+	rect_verts[3].position.x = x;
+	rect_verts[3].position.y = y + h;
+	rect_verts[3].uv_coords = ps_white_pixel;
+	rect_verts[3].color = top_color;
+
+	rect_indexes[0] = list->ibo_last_index + 0;
+	rect_indexes[1] = list->ibo_last_index + 3;
+	rect_indexes[2] = list->ibo_last_index + 1;
+	rect_indexes[3] = list->ibo_last_index + 3;
+	rect_indexes[4] = list->ibo_last_index + 2;
+	rect_indexes[5] = list->ibo_last_index + 1;
+
+	cmd->elements_count += 6;
+	list->ibo_last_index += 4;
+}
+
+void ps_fill_rect_horizontal_gradient(float x, float y, float w, float h, Vector4 left_color, Vector4 right_color) {
+	PsDrawList* list = ps_ctx.draw_lists[0];
+	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
+
+	PsVert* rect_verts = dynamic_array_push_back(&list->vbo, 4);
+	PsIndex* rect_indexes = dynamic_array_push_back(&list->ibo, 6);
+
+	rect_verts[0].position.x = x;
+	rect_verts[0].position.y = y;
+	rect_verts[0].uv_coords = ps_white_pixel;
+	rect_verts[0].color = left_color;
+
+	rect_verts[1].position.x = x + w;
+	rect_verts[1].position.y = y;
+	rect_verts[1].uv_coords = ps_white_pixel;
+	rect_verts[1].color = right_color;
+
+	rect_verts[2].position.x = x + w;
+	rect_verts[2].position.y = y + h;
+	rect_verts[2].uv_coords = ps_white_pixel;
+	rect_verts[2].color = right_color;
+
+	rect_verts[3].position.x = x;
+	rect_verts[3].position.y = y + h;
+	rect_verts[3].uv_coords = ps_white_pixel;
+	rect_verts[3].color = left_color;
+
+	rect_indexes[0] = list->ibo_last_index + 0;
+	rect_indexes[1] = list->ibo_last_index + 3;
+	rect_indexes[2] = list->ibo_last_index + 1;
+	rect_indexes[3] = list->ibo_last_index + 3;
+	rect_indexes[4] = list->ibo_last_index + 2;
+	rect_indexes[5] = list->ibo_last_index + 1;
+
+	cmd->elements_count += 6;
+	list->ibo_last_index += 4;
+}
+
 void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 	uint64_t text_length = strlen(str),
 		line_return_count;
@@ -665,6 +741,8 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 	const float size_height = size,
 		size_width = size * (glyph_width / glyph_height);
 
+	float max_width = 0.f;
+
 	for (uint64_t i = 0, j = 0; str[j] != '\0'; j++) {
 		if (str[j] == '\n') {
 			y_stride--;
@@ -681,10 +759,14 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 			Vector2 uv_down_left = { { x_pos, (y_pos + (1.f / half_height)) } };
 			Vector2 uv_down_right = { { x_pos + 1.f / half_width, (y_pos + (1.f / half_height)) } };
 
+			float width = i * size_width + size_width;
+
 			Vector2 vertex_up_left = { { i * size_width, -size_height + y_stride * size_height } };
-			Vector2 vertex_up_right = { { i * size_width + size_width, -size_height + y_stride * size_height } };
+			Vector2 vertex_up_right = { { width, -size_height + y_stride * size_height } };
 			Vector2 vertex_down_left = { { i * size_width, y_stride * size_height } };
-			Vector2 vertex_down_right = { { i * size_width + size_width, y_stride * size_height } };
+			Vector2 vertex_down_right = { { width, y_stride * size_height } };
+
+			max_width = width > max_width ? width : max_width;
 
 			vector2_add(&vertex_up_left, vertex_up_left, position);
 			vector2_add(&vertex_down_left, vertex_down_left, position);
@@ -727,6 +809,8 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 
 	list->ibo_last_index += text_length * 4;
 	cmd->elements_count += text_length * 6;
+
+	return max_width;
 }
 
 float ps_font_width(float size) {
@@ -734,7 +818,6 @@ float ps_font_width(float size) {
 		glyph_height = ps_current_font.glyph_height;
 
 	return size * (glyph_width / glyph_height);
-
 }
 
 #define WINDOW_DEFAULT_WIDTH 400.f
@@ -830,9 +913,10 @@ Vector2 ps_window_anchor(PsWindow* window) {
 	};
 }
 
-static Vector4 ps_window_background_color = { { 0.f, 0.f, 0.f, 1.f } };
-static Vector4 ps_window_border_color = { { 0.f, 0.f, 1.f, 1.f } };
-static Vector4 ps_window_title_color = { { 1.f, 1.f, 1.f, 1.f } };
+static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 0.1f, 0.9f } };
+static Vector4 ps_window_border_active_color = { { 0.2f, 0.2f, 1.f, 1.f } };
+static Vector4 ps_window_border_inactive_color = { { 0.5f, 0.5f, 0.5f, 1.f } };
+static Vector4 resize_triangle_color = { { 0.3f, 0.3f, 0.35f, 0.7f } };
 static float ps_window_border_size = 2.f;
 
 Vector2 ps_window_position_offset(PsWindow* window) {
@@ -855,11 +939,6 @@ Vector2 ps_window_title_position(PsWindow* window) {
 BOOL ps_window_inside(PsWindow* window, Vector2 point) {
 	return vector2_inside_rectangle(point, window->position.x, window->position.y,
 									window->size.x + ps_window_border_size, window->size.y + ps_window_border_size + 20.f);
-}
-
-BOOL ps_window_title_inside(PsWindow* window, Vector2 point) {
-	return vector2_inside_rectangle(point, window->position.x, window->position.y + window->size.y,
-									window->size.x + ps_window_border_size, ps_window_border_size + 20.f);
 }
 
 BOOL ps_window_resize_triangle_inside(PsWindow* window, Vector2 point) {
@@ -900,49 +979,105 @@ float ps_text_height(const char* text, float size) {
 	return c * size;
 }
 
-static Vector4 resize_triangle_color = { { 0.3f, 0.3f, 0.35f, 0.7f } };
-
-void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height) {
-	float global_transparency = 1.0f;
-
-	if (window->flags & PS_WINDOW_SELECTED_BIT) {
-		ps_window_handle_events(window);
-		SUPER(window)->flags = PS_WIDGET_SELECTED;
-	}
-	else {
-		SUPER(window)->flags &= ~PS_WIDGET_SELECTED;
-		global_transparency = 0.5f;
-	}
-
-	Vector4 background_color = ps_window_background_color,
-		border_color = ps_window_border_color,
-		title_color = ps_window_title_color;
-
-	background_color.w *= global_transparency;
-	border_color.w *= global_transparency;
-	title_color.w *= global_transparency;
-
-	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, background_color);
-
-	Vector2 title_position = ps_window_title_position(window);
-
-	ps_fill_rect(window->position.x, window->position.y + window->size.y, window->size.x, ps_window_border_size + 20.f, border_color);
+void ps_menubar_draw() {
+	PsWindow* selected_window = ps_windows[ps_windows_count - 1];
 
 	char title_format[1024];
 	float font_width = ps_font_width(18.f);
 
-	if ((strlen(window->title) + 1) * font_width > window->size.x) {
-		int length = window->size.x / font_width - 4;
-		snprintf(title_format, sizeof(title_format), "%*.*s...", length, length, window->title);
+	if ((strlen(selected_window->title) + 1) * font_width > selected_window->size.x) {
+		int length = selected_window->size.x / font_width - 4;
+		snprintf(title_format, sizeof(title_format), "%*.*s...", length, length, selected_window->title);
 	}
 	else {
-		strncpy(title_format, window->title, sizeof(title_format));
+		strncpy(title_format, selected_window->title, sizeof(title_format));
 	}
 
-	ps_text(title_format, title_position, 18.f, title_color);
+	ps_fill_rect_horizontal_gradient(-g_window.size.x / 2, g_window.size.y / 2 - 24.f, g_window.size.x, 24.f,
+									 (Vector4) { { 0.2f, 0.2f, 1.f, 1.f } }, (Vector4) { { 1.f, 0.2f, 0.2f, 1.f } });
 
-	Vector4 tc = resize_triangle_color;
-	tc.z *= global_transparency;
+	ps_fill_rect_vertical_gradient(-g_window.size.x / 2, g_window.size.y / 2 - 48.f, g_window.size.x, 24.f,
+								   (Vector4) { { 0.f, 0.f, 0.f, 0.7f } }, (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
+
+	char buf[256];
+	snprintf(buf, sizeof(buf), "%lu FPS", g_window.fps);
+
+	float fps_size = ps_text_width(buf, 20.f);
+	ps_text(buf, (Vector2) { { g_window.size.x / 2 - fps_size, g_window.size.y / 2 - 4.f } },
+			20.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
+
+	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } },
+			20.f, (Vector4) { { 1.f, 1.f, 1.f, 1.f } });
+}
+
+void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height) {
+	Vector4 border_color;
+
+	if (window->flags & PS_WINDOW_SELECTED_BIT) {
+		ps_window_handle_events(window);
+		SUPER(window)->flags = PS_WIDGET_SELECTED;
+		border_color = ps_window_border_active_color;
+	}
+	else {
+		SUPER(window)->flags &= ~PS_WIDGET_SELECTED;
+		border_color = ps_window_border_inactive_color;
+	}
+
+	Vector4 brighter_border_color = border_color;
+	brighter_border_color.x += 0.5;
+	brighter_border_color.y += 0.5;
+	brighter_border_color.z += 0.5;
+
+	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, ps_window_background_color); /* Background */
+
+	float o_ax = window->position.x - ps_window_border_size,
+		o_ay = window->position.y + window->size.y + ps_window_border_size,
+		o_bx = o_ax + window->size.x + 2 * ps_window_border_size,
+		o_by = o_ay,
+		o_cx = o_bx,
+		o_cy = window->position.y - ps_window_border_size,
+		o_dx = o_ax,
+		o_dy = o_cy,
+		i_ax = window->position.x,
+		i_ay = window->position.y + window->size.y,
+		i_bx = window->position.x + window->size.x,
+		i_by = i_ay,
+		i_cx = i_bx,
+		i_cy = window->position.y,
+		i_dx = i_ax,
+		i_dy = i_cy;
+
+	ps_begin_path();			/* Top bar */
+	ps_line_to(i_ax, i_ay);
+	ps_line_to(i_bx, i_by);
+	ps_line_to(o_bx, o_by);
+	ps_line_to(o_ax, o_ay);
+	ps_close_path();
+	ps_fill(border_color, PS_FILLED_POLY);
+
+	ps_begin_path();			/* Left bar */
+	ps_line_to(i_ax, i_ay);
+	ps_line_to(i_dx, i_dy);
+	ps_line_to(o_dx, o_dy);
+	ps_line_to(o_ax, o_ay);
+	ps_close_path();
+	ps_fill(border_color, PS_FILLED_POLY);
+
+	ps_begin_path();			/* Right bar */
+	ps_line_to(i_bx, i_by);
+	ps_line_to(i_cx, i_cy);
+	ps_line_to(o_cx, o_cy);
+	ps_line_to(o_bx, o_by);
+	ps_close_path();
+	ps_fill(border_color, PS_FILLED_POLY);
+
+	ps_begin_path();			/* Bottom bar */
+	ps_line_to(i_cx, i_cy);
+	ps_line_to(i_dx, i_dy);
+	ps_line_to(o_dx, o_dy);
+	ps_line_to(o_cx, o_cy);
+	ps_close_path();
+	ps_fill(border_color, PS_FILLED_POLY);
 
 	ps_begin_path();
 	ps_line_to(window->position.x + window->size.x, window->position.y);
@@ -961,6 +1096,8 @@ void ps_draw_gui() {
 		ps_window_draw(ps_windows[i], 0.f, FLT_MAX, FLT_MAX);
 		ps_windows[i]->flags &= ~PS_WINDOW_SELECTED_BIT;
 	}
+
+	ps_menubar_draw();
 }
 
 void ps_window_switch_to(uint64_t id) {
@@ -983,7 +1120,7 @@ void ps_window_handle_events(PsWindow* selected_window) {
 
 	if (state == GLFW_PRESS) {
 		if (selected_window->flags & PS_WINDOW_DRAGGING_BIT ||
-			ps_window_title_inside(selected_window, pointer_position))
+			(ps_window_inside(selected_window, pointer_position) && g_window.keys[GLFW_KEY_LEFT_ALT]))
 		{
 			if (!(selected_window->flags & PS_WINDOW_DRAGGING_BIT))
 				vector2_sub(&window_drag_anchor, selected_window->position, pointer_position);

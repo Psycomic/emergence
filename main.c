@@ -122,14 +122,9 @@ static PsInput* lisp_input;
 static PsLabel* result_label;
 static Worker* terrain_worker = NULL;
 
-void update(clock_t fps) {
+void update() {
 	p7_loop();
 	scene_draw(scene, background_color);
-
-	char buf[256];
-	snprintf(buf, sizeof(buf), "%lu FPS", fps);
-
-	ps_text(buf, (Vector2) { { -400.f, 300.f } }, 30.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
 		clock_t t1 = clock();

@@ -22,7 +22,7 @@ void window_character_callback(GLFWwindow* w, uint codepoint) {
 	window_new_key(codepoint, GL_TRUE);
 }
 
-int window_create(int width, int height, const char* title, void(*setup)(), void(*update)(clock_t)) {
+int window_create(int width, int height, const char* title, void(*setup)(), void(*update)()) {
 	glewExperimental = 1;
 
 	if (!glfwInit()) {
@@ -247,13 +247,11 @@ void window_mainloop() {
 	DYNAMIC_ARRAY_CREATE(&frames, clock_t);
 
 	clock_t start = clock();
-	clock_t fps = 0;
 	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
 
 	while (!g_window.should_close) {
 		window_update();
-
-		g_window.update(fps);
+		g_window.update();
 
 		glfwSwapBuffers(g_window.w);
 		glfwPollEvents();
@@ -265,7 +263,7 @@ void window_mainloop() {
 		global_time += ((float)*delta) / CLOCKS_PER_SEC;
 
 		if (count++ % 10 == 0)
-			fps = CLOCKS_PER_SEC / *delta;
+			g_window.fps = CLOCKS_PER_SEC / *delta;
 
 		clock_t wait_time = max(spf - *delta, 0);
 		usleep(wait_time);

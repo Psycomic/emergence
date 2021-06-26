@@ -37,7 +37,9 @@ typedef struct {
 	int mouse_button_left_state;
 	int mouse_button_right_state;
 
-	void (*update)(clock_t);
+	clock_t fps;
+
+	void (*update)();
 
 	struct RHook {
 		void (*fn)(void*, int, int);
