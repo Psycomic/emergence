@@ -914,7 +914,7 @@ Vector2 ps_window_anchor(PsWindow* window) {
 }
 
 static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 0.1f, 0.9f } };
-static Vector4 ps_window_border_active_color = { { 0.2f, 0.2f, 1.f, 1.f } };
+static Vector4 ps_window_border_active_color = { { 0.f, 0.f, 1.f, 1.f } };
 static Vector4 ps_window_border_inactive_color = { { 0.5f, 0.5f, 0.5f, 1.f } };
 static Vector4 resize_triangle_color = { { 0.3f, 0.3f, 0.35f, 0.7f } };
 static float ps_window_border_size = 2.f;
@@ -938,7 +938,7 @@ Vector2 ps_window_title_position(PsWindow* window) {
 
 BOOL ps_window_inside(PsWindow* window, Vector2 point) {
 	return vector2_inside_rectangle(point, window->position.x, window->position.y,
-									window->size.x + ps_window_border_size, window->size.y + ps_window_border_size + 20.f);
+									window->size.x + ps_window_border_size, window->size.y + ps_window_border_size);
 }
 
 BOOL ps_window_resize_triangle_inside(PsWindow* window, Vector2 point) {
@@ -993,21 +993,20 @@ void ps_menubar_draw() {
 		strncpy(title_format, selected_window->title, sizeof(title_format));
 	}
 
-	ps_fill_rect_horizontal_gradient(-g_window.size.x / 2, g_window.size.y / 2 - 24.f, g_window.size.x, 24.f,
-									 (Vector4) { { 0.2f, 0.2f, 1.f, 1.f } }, (Vector4) { { 1.f, 0.2f, 0.2f, 1.f } });
-
+	ps_fill_rect(-g_window.size.x / 2, g_window.size.y / 2 - 24.f, g_window.size.x, 24.f,
+				 (Vector4) { { 0.2f, 0.2f, 0.2f, 0.9f } });
 	ps_fill_rect_vertical_gradient(-g_window.size.x / 2, g_window.size.y / 2 - 48.f, g_window.size.x, 24.f,
-								   (Vector4) { { 0.f, 0.f, 0.f, 0.7f } }, (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
+								   (Vector4) { { 0.f, 0.f, 0.f, 0.5f } }, (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
 
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%lu FPS", g_window.fps);
 
 	float fps_size = ps_text_width(buf, 20.f);
-	ps_text(buf, (Vector2) { { g_window.size.x / 2 - fps_size, g_window.size.y / 2 - 4.f } },
-			20.f, (Vector4){ { 1.f, 1.f, 1.f, 1.f } });
+	ps_text(buf, (Vector2) { { g_window.size.x / 2 - fps_size, g_window.size.y / 2 - 4.f } }, 20.f,
+			(Vector4){ { 0.9f, 0.9f, 0.9f, 1.f } });
 
-	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } },
-			20.f, (Vector4) { { 1.f, 1.f, 1.f, 1.f } });
+	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } }, 20.f,
+			(Vector4) { { 0.9f, 0.9f, 0.9f, 1.f } });
 }
 
 void ps_window_draw(PsWindow* window, float offset, float min_width, float min_height) {
@@ -1055,6 +1054,9 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 	ps_close_path();
 	ps_fill(border_color, PS_FILLED_POLY);
 
+	ps_fill_rect_vertical_gradient(o_ax - ps_window_border_size, o_ay, o_bx - o_ax + ps_window_border_size * 2, 5.f,
+								   (Vector4) { { 0.f, 0.f, 0.f, 0.f } }, (Vector4) { { 0.f, 0.f, 0.f, 0.7f } });
+
 	ps_begin_path();			/* Left bar */
 	ps_line_to(i_ax, i_ay);
 	ps_line_to(i_dx, i_dy);
@@ -1062,6 +1064,10 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 	ps_line_to(o_ax, o_ay);
 	ps_close_path();
 	ps_fill(border_color, PS_FILLED_POLY);
+
+	ps_fill_rect_horizontal_gradient(o_ax - 5.f, o_ay, 5.f, o_dy - o_ay,
+									 (Vector4) { { 0.f, 0.f, 0.f, 0.f } },
+									 (Vector4) { { 0.f, 0.f, 0.f, 0.7f } });
 
 	ps_begin_path();			/* Right bar */
 	ps_line_to(i_bx, i_by);
@@ -1071,6 +1077,10 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 	ps_close_path();
 	ps_fill(border_color, PS_FILLED_POLY);
 
+	ps_fill_rect_horizontal_gradient(o_bx, o_ay, 5.f, o_dy - o_ay,
+									 (Vector4) { { 0.f, 0.f, 0.f, 0.7f } },
+									 (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
+
 	ps_begin_path();			/* Bottom bar */
 	ps_line_to(i_cx, i_cy);
 	ps_line_to(i_dx, i_dy);
@@ -1078,6 +1088,11 @@ void ps_window_draw(PsWindow* window, float offset, float min_width, float min_h
 	ps_line_to(o_cx, o_cy);
 	ps_close_path();
 	ps_fill(border_color, PS_FILLED_POLY);
+
+	ps_fill_rect_vertical_gradient(o_dx - ps_window_border_size, o_dy - 5.f,
+								   o_cx - o_dx + ps_window_border_size * 2, 5.f,
+								   (Vector4) { { 0.f, 0.f, 0.f, 0.7f } },
+								   (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
 
 	ps_begin_path();
 	ps_line_to(window->position.x + window->size.x, window->position.y);
