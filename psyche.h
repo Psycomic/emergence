@@ -17,6 +17,9 @@
 #define PS_WIDGET_CLICKING	(1 << 2)
 #define PS_WIDGET_CLICKED	(1 << 3)
 
+#define PS_WIDGET(o) ((PsWidget*)o)
+#define PS_CONTAINER(o) ((PsContainer*)o)
+
 #ifndef _PSYCHE_INTERNAL
 typedef void PsWindow;
 typedef void PsWidget;
@@ -43,17 +46,18 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color);
 
 PsWindow* ps_window_create(char* title);
 void ps_window_destroy(PsWindow* window);
+void ps_window_set_root(PsWindow* window, PsWidget* root_widget);
 
-PsLabel* ps_label_create(PsWidget* parent, char* text, float size);
+PsLabel* ps_label_create(char* text, float size);
 char* ps_label_text(PsLabel* label);
 void ps_label_set_text(PsLabel* label, char* text);
 
-PsButton* ps_button_create(PsWidget* parent, char* text, float size);
+PsButton* ps_button_create(char* text, float size);
 uint8_t ps_button_state(PsButton* button);
 
-PsSlider* ps_slider_create(PsWidget* parent, float* val, float min_val, float max_val, float text_size, float width, void (*callback)());
+PsSlider* ps_slider_create(float* val, float min_val, float max_val, float text_size, float width, void (*callback)());
 
-PsInput* ps_input_create(PsWidget* parent, char* value, float text_size, float width);
+PsInput* ps_input_create(char* value, float text_size, float width);
 void ps_input_insert_at_point(PsInput* input, char* string);
 char* ps_input_value(PsInput* input);
 void ps_input_set_value(PsInput* input, const char* value);

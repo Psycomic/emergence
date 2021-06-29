@@ -126,7 +126,7 @@ void update() {
 	p7_loop();
 	scene_draw(scene, background_color);
 
-	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
+/*	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
 		clock_t t1 = clock();
 
 		ULISP_TOPLEVEL {
@@ -174,7 +174,7 @@ void update() {
 			printf("Already started!\n");
 		}
 	}
-
+*/
 	if (scene->flags & SCENE_GUI_MODE)
 		ps_render();
 
@@ -301,7 +301,12 @@ int main() {
 	random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
 	update_fractal();
 
-	PsWindow* hopalong_window = ps_window_create("Hopalong fractal");
+	PsWindow* test_window = ps_window_create("Hello, world!");
+	PsButton* button = ps_button_create("Click me!", 16);
+
+	ps_window_set_root(test_window, button);
+
+/*	PsWindow* hopalong_window = ps_window_create("Hopalong fractal");
 
 	PsLabel* a_label = ps_label_create(hopalong_window, "Variable A:", 15);
 	PsSlider* a_slider = ps_slider_create(hopalong_window, &hopalong_a, -1.f, 1.f, 16, 150.f, update_fractal);
@@ -324,7 +329,7 @@ int main() {
 	lisp_input = ps_input_create(terrain_window, "", 16, 500);
 	eval_button = ps_button_create(terrain_window, "Eval", 15);
 	result_label = ps_label_create(terrain_window, "Results will be here", 16);
-
+*/
 	window_mainloop();
 
 	return 0;
