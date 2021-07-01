@@ -1,3 +1,6 @@
+/* Date of creation:
+ * Sun Jun 14 09:30:50 2020 */
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 

@@ -1091,7 +1091,8 @@ void ps_window_draw(PsWindow* window) {
 								   (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
 
 	if (window->root) {
-		if (window->flags & PS_WINDOW_SELECTED_BIT)
+		if (window->flags & PS_WINDOW_SELECTED_BIT &&
+			!(window->flags & PS_WINDOW_DRAGGING_BIT || window->flags & PS_WINDOW_RESIZE_BIT))
 			window->root->flags |= PS_WIDGET_SELECTED;
 
 		window->last_widget_min_size = ps_widget_draw(PS_WIDGET(window->root), ps_window_anchor(window), window->size);
@@ -1185,8 +1186,7 @@ void ps_window_handle_events(PsWindow* selected_window) {
 		}
 	}
 	if (state == GLFW_RELEASE) {
-		selected_window->flags &=
-			~(PS_WINDOW_DRAGGING_BIT | PS_WINDOW_SELECTION_BIT | PS_WINDOW_RESIZE_BIT);
+		selected_window->flags &= ~(PS_WINDOW_DRAGGING_BIT | PS_WINDOW_SELECTION_BIT | PS_WINDOW_RESIZE_BIT);
 	}
 }
 
@@ -1262,6 +1262,10 @@ PsWidget* ps_box_create(PsDirection direction, float spacing) {
 
 Vector2 ps_label_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsLabel* label = (PsLabel*)widget;
+
+	float width = ps_text_width(label->text, label->text_size);
+
+	anchor.x += min_size.x / 2.f - width / 2.f;
 
 	ps_text(label->text, anchor, label->text_size, label->color);
 	return label->size;
@@ -1399,18 +1403,6 @@ Vector2 ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		bg_color = slider_background_color,
 		txt_color = slider_text_color;
 
-	ps_fill_rect(x, y, w, h, bg_color);
-	ps_fill_rect(x, y, w * ((*slider->val - slider->min_val) / (slider->max_val - slider->min_val)), h, fg_color);
-
-	char buffer[1024];
-	snprintf(buffer, sizeof(buffer), "%.2f\n", *slider->val);
-
-	ps_text(buffer, (Vector2) { {
-				x + slider_width / 2 - ps_text_width(buffer, slider->text_size) / 2,
-					anchor.y - slider_margin
-					} },
-		slider->text_size, slider_text_color);
-
 	if (PS_WIDGET(slider)->flags & PS_WIDGET_SELECTED) {
 		PS_WIDGET(slider)->flags &= ~(PS_WIDGET_HOVERED | PS_WIDGET_CLICKING);
 
@@ -1441,6 +1433,18 @@ Vector2 ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 			}
 		}
 	}
+
+	ps_fill_rect(x, y, w, h, bg_color);
+	ps_fill_rect(x, y, w * ((*slider->val - slider->min_val) / (slider->max_val - slider->min_val)), h, fg_color);
+
+	char buffer[1024];
+	snprintf(buffer, sizeof(buffer), "%.2f\n", *slider->val);
+
+	ps_text(buffer, (Vector2) { {
+				x + slider_width / 2 - ps_text_width(buffer, slider->text_size) / 2,
+					anchor.y - slider_margin
+					} },
+		slider->text_size, slider_text_color);
 
 	return (Vector2) { { ps_text_width(buffer, slider->text_size),
 				ps_text_height(buffer, slider->text_size) } };
@@ -1527,33 +1531,6 @@ Vector2 ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		w = input_width;
 
 	Vector4 bc_color = input_background_color;
-	ps_fill_rect(x - input_border_size, y, input_border_size, h, input_border_color);
-	ps_fill_rect(x + w, y, input_border_size, h, input_border_color);
-
-	ps_fill_rect(x - input_border_size, y - input_border_size, w + input_border_size * 2, input_border_size, input_border_color);
-	ps_fill_rect(x - input_border_size, y + h, w + input_border_size * 2, input_border_size, input_border_color);
-
-	ps_fill_rect(x, y, w, h, bc_color);
-
-	ps_text(input->value, (Vector2) { { x, y + h } }, input->text_size, input_text_color);
-
-	uint pos_x = 0, pos_y = 0, update = 0;
-	int i = input->cursor_position;
-
-	while (i-- > 0) {
-		if (input->value[i] == '\n') {
-			update = GL_TRUE;
-			pos_y++;
-		}
-		else if (!update) {
-			pos_x++;
-		}
-	}
-
-	if (input->selected)
-		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, input_cursor_color);
-
-	PS_WIDGET(input)->flags &= ~(PS_WIDGET_CLICKING | PS_WIDGET_HOVERED);
 
 	if (PS_WIDGET(input)->flags & PS_WIDGET_SELECTED) {
 		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
@@ -1658,6 +1635,34 @@ Vector2 ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 			last_character_read = GL_TRUE;
 		}
 	}
+
+	ps_fill_rect(x - input_border_size, y, input_border_size, h, input_border_color);
+	ps_fill_rect(x + w, y, input_border_size, h, input_border_color);
+
+	ps_fill_rect(x - input_border_size, y - input_border_size, w + input_border_size * 2, input_border_size, input_border_color);
+	ps_fill_rect(x - input_border_size, y + h, w + input_border_size * 2, input_border_size, input_border_color);
+
+	ps_fill_rect(x, y, w, h, bc_color);
+
+	ps_text(input->value, (Vector2) { { x, y + h } }, input->text_size, input_text_color);
+
+	uint pos_x = 0, pos_y = 0, update = 0;
+	int i = input->cursor_position;
+
+	while (i-- > 0) {
+		if (input->value[i] == '\n') {
+			update = GL_TRUE;
+			pos_y++;
+		}
+		else if (!update) {
+			pos_x++;
+		}
+	}
+
+	if (input->selected)
+		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, input_cursor_color);
+
+ 	PS_WIDGET(input)->flags &= ~(PS_WIDGET_CLICKING | PS_WIDGET_HOVERED);
 
 	return (Vector2) { { input->width + input_border_size * 2,
 				ps_text_height(input->value, input->text_size) + input_border_size * 2 } };
