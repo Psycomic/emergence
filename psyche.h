@@ -20,15 +20,16 @@
 #define PS_WIDGET(o) ((PsWidget*)o)
 #define PS_CONTAINER(o) ((PsContainer*)o)
 
+typedef enum {
+	PS_DIRECTION_VERTICAL,
+	PS_DIRECTION_HORIZONTAL
+} PsDirection;
+
 #ifndef _PSYCHE_INTERNAL
 typedef void PsWindow;
 typedef void PsWidget;
-typedef void PsLabel;
-typedef void PsButton;
-typedef void PsSlider;
-typedef void PsInput;
 
-extern PsInput* ps_current_input;
+extern PsWidget* ps_current_input;
 
 void ps_init();
 void ps_render();
@@ -48,19 +49,23 @@ PsWindow* ps_window_create(char* title);
 void ps_window_destroy(PsWindow* window);
 void ps_window_set_root(PsWindow* window, PsWidget* root_widget);
 
-PsLabel* ps_label_create(char* text, float size);
-char* ps_label_text(PsLabel* label);
-void ps_label_set_text(PsLabel* label, char* text);
+void ps_container_add(PsWidget* container_widget, PsWidget* widget);
 
-PsButton* ps_button_create(char* text, float size);
-uint8_t ps_button_state(PsButton* button);
+PsWidget* ps_box_create(PsDirection direction, float spacing);
 
-PsSlider* ps_slider_create(float* val, float min_val, float max_val, float text_size, float width, void (*callback)());
+PsWidget* ps_label_create(char* text, float size);
+char* ps_label_text(PsWidget* label);
+void ps_label_set_text(PsWidget* label, char* text);
 
-PsInput* ps_input_create(char* value, float text_size, float width);
-void ps_input_insert_at_point(PsInput* input, char* string);
-char* ps_input_value(PsInput* input);
-void ps_input_set_value(PsInput* input, const char* value);
+PsWidget* ps_button_create(char* text, float size);
+uint8_t ps_button_state(PsWidget* button);
+
+PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_size, void (*callback)());
+
+PsWidget* ps_input_create(char* value, float text_size);
+void ps_input_insert_at_point(PsWidget* input, char* string);
+char* ps_input_value(PsWidget* input);
+void ps_input_set_value(PsWidget* input, const char* value);
 
 void ps_draw_gui();
 #endif

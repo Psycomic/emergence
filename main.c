@@ -35,6 +35,10 @@ static BOOL octaves_initialized = GL_FALSE;
 
 float global_time = 0.f;
 
+char bible[] = "At the beggining, there was darkness.\n"
+	"And god created light, and light was.\n"
+	"And he saw that light was good, so he created the day";
+
 void execute_tests(void);
 
 float terrain_noise(float x, float y) {
@@ -115,18 +119,18 @@ static World* physic_world;
 static Drawable* triangle1_drawable;
 static Drawable* triangle2_drawable;
 static Vector3 background_color = { { 0, 0, 0.2f } };
-static PsButton* randomize_btn;
-static PsButton* regenerate_button;
-static PsButton* eval_button;
-static PsInput* lisp_input;
-static PsLabel* result_label;
+static PsWidget* randomize_btn;
+static PsWidget* regenerate_button;
+static PsWidget* eval_button;
+static PsWidget* lisp_input;
+static PsWidget* result_label;
 static Worker* terrain_worker = NULL;
 
 void update() {
 	p7_loop();
 	scene_draw(scene, background_color);
 
-/*	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
+	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
 		clock_t t1 = clock();
 
 		ULISP_TOPLEVEL {
@@ -174,7 +178,7 @@ void update() {
 			printf("Already started!\n");
 		}
 	}
-*/
+
 	if (scene->flags & SCENE_GUI_MODE)
 		ps_render();
 
@@ -301,35 +305,52 @@ int main() {
 	random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
 	update_fractal();
 
-	PsWindow* test_window = ps_window_create("Hello, world!");
-	PsButton* button = ps_button_create("Click me!", 16);
+	PsWindow* hopalong_window = ps_window_create("Hopalong fractal");
+	PsWidget* vbox = ps_box_create(PS_DIRECTION_VERTICAL, 5);
 
-	ps_window_set_root(test_window, button);
+	ps_window_set_root(hopalong_window, vbox);
 
-/*	PsWindow* hopalong_window = ps_window_create("Hopalong fractal");
+	PsWidget* label = ps_label_create("Variable A:", 15);
+	PsWidget* slider = ps_slider_create(&hopalong_a, -2.f, 2.f, 16, update_fractal);
 
-	PsLabel* a_label = ps_label_create(hopalong_window, "Variable A:", 15);
-	PsSlider* a_slider = ps_slider_create(hopalong_window, &hopalong_a, -1.f, 1.f, 16, 150.f, update_fractal);
+	ps_container_add(vbox, label);
+	ps_container_add(vbox, slider);
 
-	PsLabel* b_label = ps_label_create(hopalong_window, "Variable B:", 15);
-	PsSlider* b_slider = ps_slider_create(hopalong_window, &hopalong_b, -1.f, 1.f, 16, 150.f, update_fractal);
+	label = ps_label_create("Variable B:", 15);
+	slider = ps_slider_create(&hopalong_b, -2.f, 2.f, 16, update_fractal);
 
-	PsLabel* c_label = ps_label_create(hopalong_window, "Variable C:", 15);
-	PsSlider* c_slider = ps_slider_create(hopalong_window, &hopalong_c, -1.f, 1.f, 16, 150.f, update_fractal);
+	ps_container_add(vbox, label);
+	ps_container_add(vbox, slider);
 
-	randomize_btn = ps_button_create(hopalong_window, "Randomize fractal", 16);
+	label = ps_label_create("Variable C:", 15);
+	slider = ps_slider_create(&hopalong_c, -2.f, 2.f, 16, update_fractal);
+
+	ps_container_add(vbox, label);
+	ps_container_add(vbox, slider);
+
+	randomize_btn = ps_button_create("Randomize fractal", 16);
 
 	PsWindow* terrain_window = ps_window_create("Terrain");
+	vbox = ps_box_create(PS_DIRECTION_VERTICAL, 10);
 
-	PsSlider* frequency_slider = ps_slider_create(terrain_window, &terrain_frequency, 1.f, 2.f, 14, 150.f, NULL);
-	PsSlider* amplitude_slider = ps_slider_create(terrain_window, &terrain_amplitude, 0.f, 1.f, 14, 150.f, NULL);
+	ps_window_set_root(terrain_window, vbox);
 
-	regenerate_button = ps_button_create(terrain_window, "Re-generate terrain", 16);
+	slider = ps_slider_create(&terrain_frequency, 1.f, 2.f, 14, NULL);
+	ps_container_add(vbox, slider);
 
-	lisp_input = ps_input_create(terrain_window, "", 16, 500);
-	eval_button = ps_button_create(terrain_window, "Eval", 15);
-	result_label = ps_label_create(terrain_window, "Results will be here", 16);
-*/
+	slider = ps_slider_create(&terrain_amplitude, 0.f, 1.f, 14, NULL);
+	ps_container_add(vbox, slider);
+
+	regenerate_button = ps_button_create("Re-generate terrain", 16);
+	lisp_input = ps_input_create("", 16);
+	eval_button = ps_button_create("Eval", 15);
+	result_label = ps_label_create("Results will be here", 16);
+
+	ps_container_add(vbox, regenerate_button);
+	ps_container_add(vbox, lisp_input);
+	ps_container_add(vbox, eval_button);
+	ps_container_add(vbox, result_label);
+
 	window_mainloop();
 
 	return 0;
