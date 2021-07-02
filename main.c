@@ -334,7 +334,7 @@ int main() {
 	randomize_btn = ps_button_create("Randomize fractal", 16);
 
 	PsWindow* terrain_window = ps_window_create("Terrain");
-	vbox = ps_box_create(PS_DIRECTION_VERTICAL, 10);
+	vbox = ps_box_create(PS_DIRECTION_VERTICAL, 5);
 
 	ps_window_set_root(terrain_window, vbox);
 
@@ -345,14 +345,21 @@ int main() {
 	ps_container_add(vbox, slider);
 
 	regenerate_button = ps_button_create("Re-generate terrain", 16);
+	ps_container_add(vbox, regenerate_button);
+
+	PsWidget* hbox = ps_box_create(PS_DIRECTION_HORIZONTAL, 5);
+	ps_container_add(vbox, hbox);
+
 	lisp_input = ps_input_create("", 16);
 	eval_button = ps_button_create("Eval", 15);
 	result_label = ps_label_create("Results will be here", 16);
 
-	ps_container_add(vbox, regenerate_button);
-	ps_container_add(vbox, lisp_input);
-	ps_container_add(vbox, eval_button);
-	ps_container_add(vbox, result_label);
+	PsWidget* button = ps_button_create("New button", 16);
+
+	ps_container_add(hbox, lisp_input);
+	ps_container_add(hbox, eval_button);
+	ps_container_add(hbox, button);
+	ps_container_add(hbox, result_label);
 
 	window_mainloop();
 

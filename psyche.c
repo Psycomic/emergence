@@ -864,11 +864,14 @@ PsWindow* ps_window_create(char* title) {
 	window->size.x = WINDOW_DEFAULT_WIDTH;
 	window->size.y = WINDOW_DEFAULT_HEIGHT;
 
+	window->last_widget_min_size.x = 0.f;
+	window->last_widget_min_size.y = 0.f;
+
 	float half_width = ps_ctx.display_size.x / 2,
 		half_height = ps_ctx.display_size.y / 2;
 
-	window->position.x = random_uniform(-half_width, half_width - window->size.x);
-	window->position.y = random_uniform(-half_height, half_height - window->size.y);
+	window->position.x = 0.f;// random_uniform(-half_width, half_width - window->size.x);
+	window->position.y = 0.f;// random_uniform(-half_height, half_height - window->size.y);
 
 	window->title = title;
 	window->flags = PS_WINDOW_RESIZABLE_BIT;
@@ -1262,12 +1265,10 @@ PsWidget* ps_box_create(PsDirection direction, float spacing) {
 
 Vector2 ps_label_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsLabel* label = (PsLabel*)widget;
-
-	float width = ps_text_width(label->text, label->text_size);
-
-	anchor.x += min_size.x / 2.f - width / 2.f;
+	anchor.x += max(0.f, min_size.x / 2.f - label->size.x / 2.f);
 
 	ps_text(label->text, anchor, label->text_size, label->color);
+
 	return label->size;
 }
 
@@ -1278,8 +1279,8 @@ char* ps_label_text(PsLabel* label) {
 void ps_label_set_text(PsLabel* label, char* text) {
 	free(label->text);
 	label->text = m_strdup(text);
-	label->size.x = ps_text_width(text, label->text_size);
-	label->size.y = ps_text_height(text, label->text_size);
+	label->size.x = ps_text_width(label->text, label->text_size);
+	label->size.y = ps_text_height(label->text, label->text_size);
 }
 
 PsWidget* ps_label_create(char* text, float size) {
