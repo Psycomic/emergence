@@ -79,15 +79,18 @@ void execute_tests(void) {
 		uint8_t aes_key[32];
 		memset(aes_key, '2', sizeof(*aes_key) * 32);
 
-		uint8_t aes_message[120];
-		memset(aes_message, 'A', sizeof(*aes_message) * 120);
+		uint8_t aes_message[16];
+		memset(aes_message, 'A', sizeof(*aes_message) * 16);
 
-		uint8_t out[128];
-		aes_encrypt(aes_message, 120, aes_key, out);
+		uint8_t out[16];
+		aes_encrypt_block(aes_message, aes_key, out);
 
-		for (uint i = 0; i < 128; i += sizeof(uint64_t)) {
-			printf("message: 0x%016llx\n", *(uint64_t*)&out[i]);
+		printf("Encrypted: ");
+		for (uint i = 0; i < 16; i++) {
+			printf("%02x", out[i]);
 		}
+
+		printf("\n");
 	}
 
 	{
