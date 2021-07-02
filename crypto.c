@@ -60,6 +60,13 @@ uint8_t aes_inv_sub_table[0x10][0x10] = {
 	{ 0xfb, 0xcb, 0x4e, 0x25, 0x92, 0x84, 0x06, 0x6b, 0x73, 0x6e, 0x1b, 0xf4, 0x5f, 0xef, 0x61, 0x7d }
 };
 
+uint8_t aes_initialization_vector[16] = {
+	13, 244, 45, 98,
+	146, 212, 23, 12,
+	76, 12, 123, 209,
+	23, 107, 123, 23
+};
+
 uint8_t aes_sub_byte(uint8_t byte) {
 	uint8_t first = byte >> 4;
 	uint8_t second = byte & 0x0f;
@@ -283,7 +290,7 @@ void aes_decrypt_block(uint8_t* block, uint8_t* key, uint8_t* out) {
 	memcpy(out, state, 16);
 }
 
-void aes_encrypt(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t* out) {
+void aes_encrypt_ecb(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t* out) {
 	uint32_t pad_size = message_size % 16;
 	uint32_t blocks_count = message_size / 16 + (pad_size == 0 ? 0 : 1);
 
@@ -298,11 +305,61 @@ void aes_encrypt(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t*
 	free(padded_message);
 }
 
-void aes_decrypt(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t* out) {
+void aes_decrypt_ecb(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t* out) {
 	uint32_t blocks_count = message_size / 16 + (message_size % 16 == 0 ? 0 : 1);
 
 	for (uint32_t i = 0; i < blocks_count; i++) {
 		aes_decrypt_block(message + i * 16, key, out + i * 16);
+	}
+}
+
+void aes_encrypt_cbc(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t* out) {
+	uint8_t last_block[16];
+	memcpy(last_block, aes_initialization_vector, 16);
+	uint blocks_count = message_size / 16;
+
+	for (uint i = 0; i < blocks_count; i++) {
+		uint8_t block[16];
+		for (uint j = 0; j < 16; j++) {
+			block[j] = message[i * 16 + j] ^ last_block[j];
+		}
+
+		aes_encrypt_block(block, key, last_block);
+		memcpy(out + i * 16, last_block, 16);
+	}
+}
+
+void aes_decrypt_cbc(uint8_t* message, uint64_t message_size, uint8_t* key, uint8_t* out) {
+	uint8_t last_block[16];
+	memcpy(last_block, aes_initialization_vector, 16);
+
+	uint blocks_count = message_size / 16;
+
+	for (uint i = 0; i < blocks_count; i++) {
+		uint8_t block[16];
+		aes_decrypt_block(message + i * 16, key, block);
+
+		for (uint j = 0; j < 16; j++) {
+			out[i * 16 + j] = block[j] ^ last_block[j];
+		}
+
+		memcpy(last_block, message + i * 16, 16);
+	}
+}
+
+void pad_message(uint8_t* message, uint64_t message_size, uint32_t block_size, uint8_t* out) {
+	uint padding_size = message_size % block_size;
+
+	if (padding_size == 0) {
+		memcpy(out, message, message_size);
+		return;
+	}
+
+	for (uint i = 0; i < message_size + (block_size - padding_size); i++) {
+		if (i < message_size)
+			out[i] = message[i];
+		else
+			out[i] = 0;
 	}
 }
 

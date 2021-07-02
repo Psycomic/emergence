@@ -77,20 +77,24 @@ void execute_tests(void) {
 
 	{
 		uint8_t aes_key[32];
-		memset(aes_key, '2', sizeof(*aes_key) * 32);
+		random_csprng_bytes(aes_key, 32);
 
-		uint8_t aes_message[16];
-		memset(aes_message, 'A', sizeof(*aes_message) * 16);
+		char message_text[] =
+			"HELLO COMRADES! I LOVE DONALD TRUMP AND I'M A RIGHT WING EXTREMIST!!!"
+			"PLEASE LOOK AT ME CIA NIGGERS I WILL SHOOT YOU TO AVENGE TERRY DAVIS";
 
-		uint8_t out[16];
-		aes_encrypt_block(aes_message, aes_key, out);
+		uint8_t message[16 * 10];
+		pad_message((uint8_t*)message_text, strlen(message_text), 16, message);
 
-		printf("Encrypted: ");
-		for (uint i = 0; i < 16; i++) {
-			printf("%02x", out[i]);
-		}
+		size_t message_size = 16 * 10;
 
-		printf("\n");
+		uint8_t encrypted_message[16 * 10];
+		aes_encrypt_cbc((uint8_t*)message, message_size, aes_key, encrypted_message);
+
+		uint8_t decrypted_message[16 * 10];
+		aes_decrypt_cbc(encrypted_message, message_size, aes_key, decrypted_message);
+
+		printf("Decrypted: %s\n", decrypted_message);
 	}
 
 	{
@@ -186,4 +190,6 @@ void execute_tests(void) {
 		}
 */
 	}
+
+	exit(0);
 }
