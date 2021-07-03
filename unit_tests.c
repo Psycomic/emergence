@@ -125,17 +125,6 @@ void execute_tests(void) {
 	}
 
 	{
-		uint8_t message = 9;
-		uint8_t encoded;
-
-		hamming_7_4_encode(message, &encoded);
-		encoded |= (1 << 4);
-		printf("Modified to ");
-		binary_print(encoded);
-
-		int error_pos = hamming_7_4_decode(encoded);
-		binary_print(error_pos);
-
 		BinaryMatrix* matrix = binary_matrix_allocate(10, 10);
 		for (uint i = 0; i < 10; i++)
 			binary_matrix_set(matrix, i, i, 1);
@@ -149,6 +138,19 @@ void execute_tests(void) {
 
 		printf("Generated vector:\n");
 		binary_vector_print((uint8_t*)&result, 10);
+
+		BinaryMatrix* hamming_generator = binary_matrix_allocate(7, 4);
+		binary_matrix_make_hamming_7_4(hamming_generator);
+
+		printf("Hamming code generator matrix\n");
+		binary_matrix_print(hamming_generator);
+
+		uint8_t value = 11;
+		uint16_t encoded_value;
+		binary_matrix_vector_multiply((uint8_t*)&value, hamming_generator, (uint8_t*)&encoded_value);
+
+		printf("%d encoded is ", value);
+		binary_vector_print((uint8_t*)&encoded_value, 7);
 	}
 
 	{

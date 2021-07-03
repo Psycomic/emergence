@@ -517,65 +517,7 @@ compute_hash:
 	free(padded_message);
 }
 
-/* Hamming codes are a form of error correction
- * abcd xyz
- * 100 -> x
- * 010 -> y
- * 001 -> z
- * 011 -> a
- * 101 -> b
- * 110 -> c
- * 111 -> d
- */
-
-void binary_print(uint8_t byte) {
-	for (int i = 7; i >= 0; i--) {
-		if (byte & (1 << i))
-			printf("1");
-		else
-			printf("0");
-	}
-
-	printf("\n");
-}
-
 #define BIT(a, n) ((a & (1 << (n))) != 0)
-
-void hamming_7_4_encode(uint8_t bits, uint8_t* codeword) {
-	printf("Bits are ");
-	binary_print(bits);
-
-	uint8_t d = BIT(bits, 0);
-	uint8_t c = BIT(bits, 1);
-	uint8_t b = BIT(bits, 2);
-	uint8_t a = BIT(bits, 3);
-
-	uint8_t x = b ^ c ^ d;
-	uint8_t y = a ^ c ^ d;
-	uint8_t z = a ^ b ^ d;
-
-	*codeword = bits << 3 | x << 2 | y << 1 | z;
-
-	printf("Codeword is ");
-	binary_print(*codeword);
-}
-
-int hamming_7_4_decode(uint8_t codeword) {
-	uint8_t z = BIT(codeword, 0);
-	uint8_t y = BIT(codeword, 1);
-	uint8_t x = BIT(codeword, 2);
-
-	uint8_t d = BIT(codeword, 3);
-	uint8_t c = BIT(codeword, 4);
-	uint8_t b = BIT(codeword, 5);
-	uint8_t a = BIT(codeword, 6);
-
-	uint8_t nx = b ^ c ^ d ^ x;
-	uint8_t ny = a ^ c ^ d ^ y;
-	uint8_t nz = a ^ b ^ d ^ z;
-
-	return nx << 2 | ny << 1 | nz;
-}
 
 BinaryMatrix* binary_matrix_allocate(uint64_t width, uint64_t height) {
 	uint bytes_width = width / 8 + 1;
@@ -651,4 +593,26 @@ void binary_vector_print(uint8_t* vector, uint64_t vector_size) {
 	}
 
 	printf("\n");
+}
+
+void binary_matrix_make_hamming_7_4(BinaryMatrix* matrix) {
+	assert(matrix->width == 7);
+	assert(matrix->height == 4);
+
+	for (uint i = 0; i < 4; i++) {
+		binary_matrix_set(matrix, i, i, 1);
+	}
+
+	binary_matrix_set(matrix, 4, 0, 1);
+	binary_matrix_set(matrix, 5, 0, 1);
+
+	binary_matrix_set(matrix, 4, 1, 1);
+	binary_matrix_set(matrix, 6, 1, 1);
+
+	binary_matrix_set(matrix, 5, 2, 1);
+	binary_matrix_set(matrix, 6, 2, 1);
+
+	binary_matrix_set(matrix, 4, 3, 1);
+	binary_matrix_set(matrix, 5, 3, 1);
+	binary_matrix_set(matrix, 6, 3, 1);
 }
