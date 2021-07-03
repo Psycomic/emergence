@@ -139,18 +139,34 @@ void execute_tests(void) {
 		printf("Generated vector:\n");
 		binary_vector_print((uint8_t*)&result, 10);
 
-		BinaryMatrix* hamming_generator = binary_matrix_allocate(7, 4);
-		binary_matrix_make_hamming_7_4(hamming_generator);
+		LinearCode hamming_code = make_hamming_code(4);
+		printf("Hamming code parity matrix:\n");
+		binary_matrix_print(hamming_code.parity_check);
 
-		printf("Hamming code generator matrix\n");
-		binary_matrix_print(hamming_generator);
+		printf("and generator matrix:\n");
+		binary_matrix_print(hamming_code.generator);
 
-		uint8_t value = 11;
-		uint16_t encoded_value;
-		binary_matrix_vector_multiply((uint8_t*)&value, hamming_generator, (uint8_t*)&encoded_value);
+		uint8_t value = 14;
+		uint16_t encoded;
 
-		printf("%d encoded is ", value);
-		binary_vector_print((uint8_t*)&encoded_value, 7);
+		binary_matrix_vector_multiply(&value, hamming_code.generator, (uint8_t*)&encoded);
+
+		printf("%d encoded is\n", value);
+		binary_vector_print((uint8_t*)&encoded, 15);
+
+		uint8_t error;
+		binary_matrix_vector_multiply((uint8_t*)&encoded, hamming_code.parity_check, &error);
+
+		printf("And the error is in position %d!\n", error);
+
+		uint8_t a = 0;
+		uint8_t b = 9;
+
+		printf("w(%d) = %lu\n", a, binary_vector_hamming_weight(&a, 5));
+		printf("w(%d) = %lu\n", b, binary_vector_hamming_weight(&b, 5));
+
+		printf("The distance between %d and %d is %lu!\n", a, b,
+			   binary_vector_hamming_distance(&a, &b, 5));
 	}
 
 	{

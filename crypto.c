@@ -595,24 +595,113 @@ void binary_vector_print(uint8_t* vector, uint64_t vector_size) {
 	printf("\n");
 }
 
-void binary_matrix_make_hamming_7_4(BinaryMatrix* matrix) {
-	assert(matrix->width == 7);
-	assert(matrix->height == 4);
+uint popcnt8(uint8_t x) {
+    x = (x & 0x55) + (x >> 1 & 0x55);
+    x = (x & 0x33) + (x >> 2 & 0x33);
+    x = (x & 0x0f) + (x >> 4 & 0x0f);
 
-	for (uint i = 0; i < 4; i++) {
-		binary_matrix_set(matrix, i, i, 1);
+    return x;
+}
+
+uint64_t binary_vector_hamming_weight(uint8_t* vector, uint64_t size) {
+	uint bytes_size = size / 8 + 1;
+	uint64_t count = 0;
+
+	for (uint i = 0; i < bytes_size; i++) {
+		uint8_t a = vector[i];
+		count += popcnt8(a);
 	}
 
-	binary_matrix_set(matrix, 4, 0, 1);
-	binary_matrix_set(matrix, 5, 0, 1);
+	return count;
+}
 
-	binary_matrix_set(matrix, 4, 1, 1);
-	binary_matrix_set(matrix, 6, 1, 1);
+uint64_t binary_vector_hamming_distance(uint8_t* vec1, uint8_t* vec2, uint64_t size) {
+	uint bytes_size = size / 8 + 1;
 
-	binary_matrix_set(matrix, 5, 2, 1);
-	binary_matrix_set(matrix, 6, 2, 1);
+	uint64_t count = 0;
+	for (uint i = 0; i < bytes_size; i++) {
+		uint8_t xored = vec1[i] ^ vec2[i];
+		count += binary_vector_hamming_weight(&xored, 8);
+	}
 
-	binary_matrix_set(matrix, 4, 3, 1);
-	binary_matrix_set(matrix, 5, 3, 1);
-	binary_matrix_set(matrix, 6, 3, 1);
+	return count;
+}
+
+void binary_matrix_copy_col(BinaryMatrix* matrix, uint64_t col, uint8_t* out) {
+	m_bzero(out, matrix->height / 8 + 1);
+
+	for (uint y = 0; y < matrix->height; y++) {
+		out[y / 8] |= binary_matrix_get(matrix, col, y) << (y % 8);
+	}
+}
+
+BinaryMatrix* binary_matrix_transpose(BinaryMatrix* matrix) {
+	BinaryMatrix* new_matrix = binary_matrix_allocate(matrix->height, matrix->width);
+
+	for (uint y = 0; y < matrix->height; y++) {
+		for (uint x = 0; x < matrix->width; x++) {
+			binary_matrix_set(new_matrix, y, x, binary_matrix_get(matrix, x, y));
+		}
+	}
+
+	return new_matrix;
+}
+
+LinearCode make_hamming_code(uint64_t check_bits_count) {
+	uint64_t width = (1 << check_bits_count) - 1;
+	BinaryMatrix* generator = binary_matrix_allocate(width, width - check_bits_count);
+	BinaryMatrix* parity_check = binary_matrix_allocate(width, check_bits_count);
+
+	uint i = 0;
+	for (uint x = 0; x < generator->width; x++) {
+		if ((popcnt8(x + 1) == 1) != 1) {
+			binary_matrix_set(generator, x, i++, 1);
+		}
+	}
+
+	for (uint y = 0; y < parity_check->height; y++) {
+		uint8_t bit = 0;
+
+		for (uint x = 0; x < parity_check->width; x++) {
+			if (x % (1 << y) == 0)
+				bit = ~bit;
+
+			binary_matrix_set(parity_check, x, y, bit);
+		}
+	}
+
+	uint generator_index = 0;
+
+	uint8_t* col = malloc(parity_check->height / 8 + 1);
+	for (int x = parity_check->width - 1; x >= 0; x--) {
+		binary_matrix_copy_col(parity_check, x, col);
+
+		uint64_t count = binary_vector_hamming_weight(col, parity_check->height);
+
+		if (count != 1) {
+			for (uint i = 0; i < parity_check->height; i++) {
+				binary_matrix_set(generator, (1 << i) - 1, generator_index,
+								  BIT(col[i / 8], i % 8));
+			}
+
+			generator_index++;
+		}
+	}
+
+	free(col);
+
+	for (uint y = 0; y < parity_check->height; y++) {
+		for (uint x = 0; x < parity_check->width / 2; x++) {
+			uint8_t temp = binary_matrix_get(parity_check, x, y);
+			binary_matrix_set(parity_check, x, y,
+							  binary_matrix_get(parity_check, parity_check->width - 1 - x, y));
+
+			binary_matrix_set(parity_check, parity_check->width - 1 - x, y, temp);
+		}
+	}
+
+	LinearCode code = { .generator = generator, .parity_check = binary_matrix_transpose(parity_check) };
+	free(parity_check);
+
+	return code;
 }
