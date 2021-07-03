@@ -125,6 +125,33 @@ void execute_tests(void) {
 	}
 
 	{
+		uint8_t message = 9;
+		uint8_t encoded;
+
+		hamming_7_4_encode(message, &encoded);
+		encoded |= (1 << 4);
+		printf("Modified to ");
+		binary_print(encoded);
+
+		int error_pos = hamming_7_4_decode(encoded);
+		binary_print(error_pos);
+
+		BinaryMatrix* matrix = binary_matrix_allocate(10, 10);
+		for (uint i = 0; i < 10; i++)
+			binary_matrix_set(matrix, i, i, 1);
+
+		printf("Generator matrix:\n");
+		binary_matrix_print(matrix);
+
+		uint16_t vec = 854;
+		uint16_t result;
+		binary_matrix_vector_multiply((uint8_t*)&vec, matrix, (uint8_t*)&result);
+
+		printf("Generated vector:\n");
+		binary_vector_print((uint8_t*)&result, 10);
+	}
+
+	{
 		Vector2 A1 = { { 0, -10 } }, A2 = { { 100, -10 } };
 		Vector2 B1 = { { 110, 0 } }, B2 = { { 110, 100 } };
 		Vector2 test = vector2_line_intersection(A1, A2, B1, B2);
@@ -190,4 +217,6 @@ void execute_tests(void) {
 		}
 */
 	}
+
+	exit(0);
 }
