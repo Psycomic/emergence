@@ -350,15 +350,15 @@ int main() {
 	PsWidget* hbox = ps_box_create(PS_DIRECTION_HORIZONTAL, 5);
 	ps_container_add(vbox, hbox);
 
-	lisp_input = ps_input_create("", 16);
 	eval_button = ps_button_create("Eval", 15);
 	result_label = ps_label_create("Results will be here", 16);
+	lisp_input = ps_input_create("", 16);
 
 	PsWidget* button = ps_button_create("New button", 16);
 
-	ps_container_add(hbox, lisp_input);
 	ps_container_add(hbox, eval_button);
 	ps_container_add(hbox, button);
+	ps_container_add(hbox, lisp_input);
 	ps_container_add(hbox, result_label);
 
 	window_mainloop();

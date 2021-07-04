@@ -63,6 +63,8 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 		return -1;
 	}
 
+	glfwSwapInterval(0);
+
 	// OpenGL settings
 	glEnable(GL_BLEND);			// Enable blend
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
@@ -243,11 +245,9 @@ void window_update() {
 void window_mainloop() {
 	uint64_t count = 0;
 
-	DynamicArray frames;
-	DYNAMIC_ARRAY_CREATE(&frames, clock_t);
+	double start = glfwGetTime();
 
-	clock_t start = clock();
-	clock_t spf = (1.0 / 60.0) * (double)CLOCKS_PER_SEC;
+	double spf = 1.0 / 60.0;
 
 	while (!g_window.should_close) {
 		window_update();
@@ -256,30 +256,21 @@ void window_mainloop() {
 		glfwSwapBuffers(g_window.w);
 		glfwPollEvents();
 
-		clock_t end = clock();
-		clock_t* delta = dynamic_array_push_back(&frames, 1);
-		*delta = end - start;
+		double end = glfwGetTime();
 
-		global_time += ((float)*delta) / CLOCKS_PER_SEC;
+		double delta = end - start;
+		global_time += delta;
 
-		if (count++ % 10 == 0)
-			g_window.fps = CLOCKS_PER_SEC / *delta;
+		if (count++ % 10 == 0) {
+			g_window.fps = (clock_t)(1.0 / delta);
+			g_window.delta = delta;
+		}
 
-		clock_t wait_time = max(spf - *delta, 0);
-		usleep(wait_time);
+		/* clock_t wait_time = max((spf - delta) * CLOCKS_PER_SEC, 0); */
+		/* usleep(wait_time); */
 
-		start = clock();
+		start = glfwGetTime();
 	}
-
-	clock_t average_frame = 0;
-
-	for (uint i = 0; i < frames.size; i++)
-		average_frame += *((clock_t*)dynamic_array_at(&frames, i));
-
-	float average_frame_duration = average_frame / frames.size,
-		average_fps =  CLOCKS_PER_SEC / average_frame_duration;
-
-	printf("Average frame time: %f\nAverage FPS: %f\n", average_frame_duration, average_fps);
 
 	glfwTerminate();
 }

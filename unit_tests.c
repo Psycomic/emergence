@@ -235,6 +235,4 @@ void execute_tests(void) {
 		}
 */
 	}
-
-	exit(0);
 }

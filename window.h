@@ -38,6 +38,7 @@ typedef struct {
 	int mouse_button_right_state;
 
 	clock_t fps;
+	double delta;
 
 	void (*update)();
 
