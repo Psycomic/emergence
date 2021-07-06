@@ -41,3 +41,5 @@ vgcore.42716
 
 images/kotlet-paradize.png
 notes.txt
+
+callgrind.out.*

@@ -84,11 +84,13 @@ struct PsWidget;
 
 // Takes the anchor and the minimum size of the widget
 // and returns the actual size that was drawn
-typedef Vector2 (*PsDrawFunction)(struct PsWidget*, Vector2 anchor, Vector2 size);
+typedef void (*PsDrawFunction)(struct PsWidget*, Vector2 anchor, Vector2 size);
+typedef Vector2 (*PsMinSizeFunction)(struct PsWidget*);
 
 typedef struct PsWidget {
 	struct PsWidget* parent;
 	PsDrawFunction draw;
+	PsMinSizeFunction min_size;
 
 	uint32_t flags;
 } PsWidget;
@@ -103,7 +105,6 @@ typedef struct {
 typedef struct PsWindow {
 	Vector2 size;
 	Vector2 position;
-	Vector2 last_widget_min_size;
 
 	char* title;
 
@@ -774,17 +775,16 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 
 			float width = i * size_width + size_width;
 
-			Vector2 vertex_up_left = { { i * size_width, -size_height + y_stride * size_height } };
-			Vector2 vertex_up_right = { { width, -size_height + y_stride * size_height } };
-			Vector2 vertex_down_left = { { i * size_width, y_stride * size_height } };
-			Vector2 vertex_down_right = { { width, y_stride * size_height } };
+			Vector2 vertex_up_left = { { position.x + i * size_width,
+										 position.y + (-size_height + y_stride * size_height) } };
+			Vector2 vertex_up_right = { { position.x + width,
+										  position.y + (-size_height + y_stride * size_height) } };
+			Vector2 vertex_down_left = { { position.x + i * size_width,
+										   position.y + y_stride * size_height } };
+			Vector2 vertex_down_right = { { position.x + width,
+											position.y + y_stride * size_height } };
 
 			max_width = width > max_width ? width : max_width;
-
-			vector2_add(&vertex_up_left, vertex_up_left, position);
-			vector2_add(&vertex_down_left, vertex_down_left, position);
-			vector2_add(&vertex_up_right, vertex_up_right, position);
-			vector2_add(&vertex_down_right, vertex_down_right, position);
 
 #define VERTEX(x) text_vertices[element_index * 4 + x]
 #define INDEX(x)  text_indexes[element_index * 6 + x]
@@ -834,14 +834,15 @@ float ps_font_width(float size) {
 #define WINDOW_DEFAULT_WIDTH 400.f
 #define WINDOW_DEFAULT_HEIGHT 200.f
 
-void ps_widget_init(PsWidget* widget, PsDrawFunction draw) {
+void ps_widget_init(PsWidget* widget, PsDrawFunction draw, PsMinSizeFunction min_size) {
 	widget->parent = NULL;
 	widget->draw = draw;
+	widget->min_size = min_size;
 	widget->flags = 0;
 }
 
-void ps_container_init(PsContainer* container, PsDrawFunction draw, float spacing) {
-	ps_widget_init(PS_WIDGET(container), draw);
+void ps_container_init(PsContainer* container, PsDrawFunction draw, PsMinSizeFunction min_size, float spacing) {
+	ps_widget_init(PS_WIDGET(container), draw, min_size);
 	DYNAMIC_ARRAY_CREATE(&container->children, PsWidget*);
 
 	container->spacing = spacing;
@@ -864,14 +865,11 @@ PsWindow* ps_window_create(char* title) {
 	window->size.x = WINDOW_DEFAULT_WIDTH;
 	window->size.y = WINDOW_DEFAULT_HEIGHT;
 
-	window->last_widget_min_size.x = 0.f;
-	window->last_widget_min_size.y = 0.f;
-
 	float half_width = ps_ctx.display_size.x / 2,
 		half_height = ps_ctx.display_size.y / 2;
 
-	window->position.x = 0.f;// random_uniform(-half_width, half_width - window->size.x);
-	window->position.y = 0.f;// random_uniform(-half_height, half_height - window->size.y);
+	window->position.x = random_uniform(-half_width, half_width - window->size.x);
+	window->position.y = random_uniform(-half_height, half_height - window->size.y);
 
 	window->title = title;
 	window->flags = PS_WINDOW_RESIZABLE_BIT;
@@ -897,8 +895,12 @@ void ps_window_destroy(PsWindow* window) {
 	ps_windows[i] = ps_windows[--ps_windows_count];
 }
 
-Vector2 ps_widget_draw(PsWidget* widget, Vector2 anchor, Vector2 min_pos) {
-	return widget->draw(widget, anchor, min_pos);
+void ps_widget_draw(PsWidget* widget, Vector2 anchor, Vector2 min_pos) {
+	widget->draw(widget, anchor, min_pos);
+}
+
+Vector2 ps_widget_min_size(PsWidget* widget) {
+	return widget->min_size(widget);
 }
 
 Vector2 ps_window_anchor(PsWindow* window) {
@@ -929,12 +931,12 @@ BOOL ps_window_resize_triangle_inside(PsWindow* window, Vector2 point) {
 	return vector2_inside_triangle(point, a, b, c);
 }
 
-float ps_window_min_width(PsWindow* window) {
-	return window->last_widget_min_size.x + 10.f;
-}
+Vector2 ps_window_min_size(PsWindow* window) {
+	Vector2 root_min_size = ps_widget_min_size(window->root);
+	root_min_size.x += 10.f;
+	root_min_size.y += 10.f;
 
-float ps_window_min_height(PsWindow* window) {
-	return window->last_widget_min_size.y + 10.f;
+	return root_min_size;
 }
 
 float ps_text_width(const char* text, float size) {
@@ -1018,10 +1020,12 @@ void ps_window_draw(PsWindow* window) {
 	brighter_border_color.y += 0.5;
 	brighter_border_color.z += 0.5;
 
-	window->size.x = max(ps_window_min_width(window), window->size.x);
+	Vector2 min_window_size = ps_window_min_size(window);
+
+	window->size.x = max(min_window_size.x, window->size.x);
 
 	float old_size = window->size.y;
-	window->size.y = max(ps_window_min_height(window), window->size.y);
+	window->size.y = max(min_window_size.y, window->size.y);
 	window->position.y += old_size - window->size.y;
 
 	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, ps_window_background_color); /* Background */
@@ -1098,7 +1102,7 @@ void ps_window_draw(PsWindow* window) {
 			!(window->flags & PS_WINDOW_DRAGGING_BIT || window->flags & PS_WINDOW_RESIZE_BIT))
 			window->root->flags |= PS_WIDGET_SELECTED;
 
-		window->last_widget_min_size = ps_widget_draw(PS_WIDGET(window->root), ps_window_anchor(window), window->size);
+		ps_widget_draw(PS_WIDGET(window->root), ps_window_anchor(window), window->size);
 		window->root->flags &= ~PS_WIDGET_SELECTED;
 	}
 
@@ -1163,11 +1167,13 @@ void ps_window_handle_events(PsWindow* selected_window) {
 
 			selected_window->flags |= PS_WINDOW_RESIZE_BIT;
 
-			selected_window->size.x = max(ps_window_min_width(selected_window),
+			Vector2 window_min_size = ps_window_min_size(selected_window);
+
+			selected_window->size.x = max(window_min_size.x,
 										  pointer_position.x - selected_window->position.x);
 
 			float old_size = selected_window->size.y;
-			selected_window->size.y = max(ps_window_min_height(selected_window),
+			selected_window->size.y = max(window_min_size.y,
 										  (window_drag_anchor.y + window_original_size.y) - pointer_position.y);
 			selected_window->position.y += old_size - selected_window->size.y;
 		}
@@ -1193,24 +1199,19 @@ void ps_window_handle_events(PsWindow* selected_window) {
 	}
 }
 
-Vector2 ps_box_draw(PsWidget* box_widget, Vector2 anchor, Vector2 min_size) {
-	DynamicArray* children = &PS_CONTAINER(box_widget)->children;
+Vector2 ps_box_size(PsWidget* widget) {
+	DynamicArray* children = &PS_CONTAINER(widget)->children;
 
-	float max_min_size_x = 0.f;
-	float max_min_size_y = 0.f;
+	PsBox* box = (PsBox*)widget;
 
-	PsBox* box = (PsBox*)box_widget;
+	float max_min_size_x = 0.f,
+		max_min_size_y = 0.f;
 
-	if (box->direction == PS_DIRECTION_VERTICAL) {
-		for (uint i = 0; i < children->size; i++) {
-			PsWidget* widget = *(PsWidget**)dynamic_array_at(children, i);
+	for (uint i = 0; i < children->size; i++) {
+		PsWidget* widget = *(PsWidget**)dynamic_array_at(children, i);
 
-			if (box_widget->flags & PS_WIDGET_SELECTED)
-				widget->flags |= PS_WIDGET_SELECTED;
-
-			Vector2 size = widget->draw(widget, anchor, (Vector2) { { min_size.x, 0.f } });
-
-			widget->flags &= ~PS_WIDGET_SELECTED;
+		if (box->direction == PS_DIRECTION_VERTICAL) {
+			Vector2 size = ps_widget_min_size(widget);
 
 			float displacement_size;
 
@@ -1220,22 +1221,12 @@ Vector2 ps_box_draw(PsWidget* box_widget, Vector2 anchor, Vector2 min_size) {
 				displacement_size = size.y;
 
 			max_min_size_y += displacement_size;
-			anchor.y -= displacement_size;
 
 			if (size.x > max_min_size_x)
 				max_min_size_x = size.x;
 		}
-	}
-	else if (box->direction == PS_DIRECTION_HORIZONTAL) {
-		for (uint i = 0; i < children->size; i++) {
-			PsWidget* widget = *(PsWidget**)dynamic_array_at(children, i);
-
-			if (box_widget->flags & PS_WIDGET_SELECTED)
-				widget->flags |= PS_WIDGET_SELECTED;
-
-			Vector2 size = widget->draw(widget, anchor, (Vector2) { { 0.f, min_size.y } });
-
-			widget->flags &= ~PS_WIDGET_SELECTED;
+		else if (box->direction == PS_DIRECTION_HORIZONTAL) {
+			Vector2 size = ps_widget_min_size(widget);
 
 			float displacement_size;
 
@@ -1245,31 +1236,82 @@ Vector2 ps_box_draw(PsWidget* box_widget, Vector2 anchor, Vector2 min_size) {
 				displacement_size = size.x;
 
 			max_min_size_x += displacement_size;
-			anchor.x += displacement_size;
 
 			if (size.y > max_min_size_y)
 				max_min_size_y = size.y;
 		}
+
+		widget->flags &= ~PS_WIDGET_SELECTED;
 	}
 
 	return (Vector2) { { max_min_size_x, max_min_size_y } };
 }
 
+
+void ps_box_draw(PsWidget* box_widget, Vector2 anchor, Vector2 min_size) {
+	DynamicArray* children = &PS_CONTAINER(box_widget)->children;
+
+	PsBox* box = (PsBox*)box_widget;
+
+	Vector2 max_min_size = ps_box_size(box_widget);
+
+	for (uint i = 0; i < children->size; i++) {
+		PsWidget* widget = *(PsWidget**)dynamic_array_at(children, i);
+
+		if (box_widget->flags & PS_WIDGET_SELECTED)
+			widget->flags |= PS_WIDGET_SELECTED;
+
+		if (box->direction == PS_DIRECTION_VERTICAL) {
+			widget->draw(widget, anchor, (Vector2) { { max(min_size.x, max_min_size.x), 0.f } });
+			Vector2 size = ps_widget_min_size(widget);
+
+			float displacement_size;
+
+			if (i != children->size - 1)
+				displacement_size = size.y + PS_CONTAINER(box)->spacing;
+			else
+				displacement_size = size.y;
+
+			anchor.y -= displacement_size;
+		}
+		else if (box->direction == PS_DIRECTION_HORIZONTAL) {
+			widget->draw(widget, anchor, (Vector2) { { 0.f, max(min_size.y, max_min_size.y) } });
+			Vector2 size = ps_widget_min_size(widget);
+
+			float displacement_size;
+
+			if (i != children->size - 1)
+				displacement_size = size.x + PS_CONTAINER(box)->spacing;
+			else
+				displacement_size = size.x;
+
+			anchor.x += displacement_size;
+		}
+
+		widget->flags &= ~PS_WIDGET_SELECTED;
+	}
+}
+
 PsWidget* ps_box_create(PsDirection direction, float spacing) {
 	PsBox* box = malloc(sizeof(PsBox));
-	ps_container_init(PS_CONTAINER(box), ps_box_draw, spacing);
+	ps_container_init(PS_CONTAINER(box), ps_box_draw, ps_box_size, spacing);
 	box->direction = direction;
 
 	return PS_WIDGET(box);
 }
 
-Vector2 ps_label_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+Vector2 ps_label_min_size(PsWidget* widget) {
 	PsLabel* label = (PsLabel*)widget;
-	anchor.x += max(0.f, min_size.x / 2.f - label->size.x / 2.f);
-
-	ps_text(label->text, anchor, label->text_size, label->color);
 
 	return label->size;
+}
+
+void ps_label_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+	PsLabel* label = (PsLabel*)widget;
+	anchor.x += max(0.f, min_size.x / 2.f - label->size.x / 2.f);
+	anchor.y -= max(0.f, min_size.y / 2.f - label->size.y / 2.f);
+
+	ps_text(label->text, anchor, label->text_size, label->color);
 }
 
 char* ps_label_text(PsLabel* label) {
@@ -1293,7 +1335,7 @@ PsWidget* ps_label_create(char* text, float size) {
 	label->size.x = ps_text_width(text, size);
 	label->size.y = ps_text_height(text, size);
 
-	ps_widget_init(PS_WIDGET(label), ps_label_draw);
+	ps_widget_init(PS_WIDGET(label), ps_label_draw, ps_label_min_size);
 
 	return PS_WIDGET(label);
 }
@@ -1305,7 +1347,14 @@ static Vector4 button_background_color = { { 0.5f, 0.5f, 1.f, 1.f } },
 	button_text_color = { { 0.f, 0.f, 0.f, 1.f } },
 	button_border_color = { { 0.1f, 0.1f, 0.1f, 0.5f } };
 
-Vector2 ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+Vector2 ps_button_min_size(PsWidget* widget) {
+	PsButton* button = (PsButton*)widget;
+
+	return (Vector2) { { button->size.x + button_padding * 2,
+			   	button->size.y + button_padding * 2 } };
+}
+
+void ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsButton* button = (PsButton*)widget;
 
 	float button_width = fmax(button->size.x + button_padding * 2, min_size.x - button_padding * 2);
@@ -1363,8 +1412,6 @@ Vector2 ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	anchor.y -= button_height / 2 - text_height / 2;
 
 	ps_text(button->text, anchor, button->text_size, txt_color);
-	return (Vector2) { { button->size.x + button_padding * 2,
-			   	button->size.y + button_padding * 2 } };
 }
 
 uint8_t ps_button_state(PsButton* button) {
@@ -1380,7 +1427,7 @@ PsWidget* ps_button_create(char* text, float size) {
 	button->size.x = ps_text_width(text, size);
 	button->size.y = ps_text_height(text, size);
 
-	ps_widget_init(PS_WIDGET(button), ps_button_draw);
+	ps_widget_init(PS_WIDGET(button), ps_button_draw, ps_button_min_size);
 
 	return PS_WIDGET(button);
 }
@@ -1390,7 +1437,18 @@ static Vector4 slider_background_color = { { 0.1f, 0.1f, 0.1f, 1.f } },
 	slider_foreground_color = { { 0.5f, 0.1f, 1.f, 1.f } },
 	slider_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
-Vector2 ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+Vector2 ps_slider_min_size(PsWidget* widget) {
+	PsSlider* slider = (PsSlider*)widget;
+
+	char buffer[1024];
+	snprintf(buffer, sizeof(buffer), "%.2f\n", *slider->val);
+
+	return (Vector2) { { ps_text_width(buffer, slider->text_size),
+				ps_text_height(buffer, slider->text_size) } };
+
+}
+
+void ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsSlider* slider = (PsSlider*)widget;
 
 	float slider_width = max(slider->width, min_size.x - 10.f);
@@ -1446,9 +1504,6 @@ Vector2 ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 					anchor.y - slider_margin
 					} },
 		slider->text_size, slider_text_color);
-
-	return (Vector2) { { ps_text_width(buffer, slider->text_size),
-				ps_text_height(buffer, slider->text_size) } };
 }
 
 PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_size, void (*callback)()) {
@@ -1465,7 +1520,7 @@ PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_
 	slider->width = ps_text_width(buffer, text_size);
 	slider->callback = callback;
 
-	ps_widget_init(PS_WIDGET(slider), ps_slider_draw);
+	ps_widget_init(PS_WIDGET(slider), ps_slider_draw, ps_slider_min_size);
 	return PS_WIDGET(slider);
 }
 
@@ -1518,7 +1573,14 @@ uint ps_input_end_of_line(PsInput* input) {
 	return i;
 }
 
-Vector2 ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+Vector2 ps_input_min_size(PsWidget* widget) {
+	PsInput* input = (PsInput*)widget;
+
+	return (Vector2) { { input->width + input_border_size * 2,
+				ps_text_height(input->value, input->text_size) + input_border_size * 2 } };
+}
+
+void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsInput* input = (PsInput*)widget;
 
 	input->width = ps_text_width(input->value, input->text_size) + input_border_size;
@@ -1664,9 +1726,6 @@ Vector2 ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, input_cursor_color);
 
  	PS_WIDGET(input)->flags &= ~(PS_WIDGET_CLICKING | PS_WIDGET_HOVERED);
-
-	return (Vector2) { { input->width + input_border_size * 2,
-				ps_text_height(input->value, input->text_size) + input_border_size * 2 } };
 }
 
 char* ps_input_value(PsInput* input) {
@@ -1685,7 +1744,7 @@ PsWidget* ps_input_create(char* value, float text_size) {
 	input->lines_count = 0;
 	input->selected = GL_FALSE;
 
-	ps_widget_init(PS_WIDGET(input), ps_input_draw);
+	ps_widget_init(PS_WIDGET(input), ps_input_draw, ps_input_min_size);
 
 	ps_input_set_value(input, value);
 	return PS_WIDGET(input);

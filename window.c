@@ -63,8 +63,6 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 		return -1;
 	}
 
-	glfwSwapInterval(0);
-
 	// OpenGL settings
 	glEnable(GL_BLEND);			// Enable blend
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Set blend func
@@ -245,9 +243,10 @@ void window_update() {
 void window_mainloop() {
 	uint64_t count = 0;
 
-	double start = glfwGetTime();
+	double start = glfwGetTime(),
+		end = 0.0;
 
-	double spf = 1.0 / 60.0;
+	clock_t spf = (clock_t)((double)CLOCKS_PER_SEC / 60.0);
 
 	while (!g_window.should_close) {
 		window_update();
@@ -256,7 +255,7 @@ void window_mainloop() {
 		glfwSwapBuffers(g_window.w);
 		glfwPollEvents();
 
-		double end = glfwGetTime();
+		end = glfwGetTime();
 
 		double delta = end - start;
 		global_time += delta;
@@ -266,8 +265,9 @@ void window_mainloop() {
 			g_window.delta = delta;
 		}
 
-		/* clock_t wait_time = max((spf - delta) * CLOCKS_PER_SEC, 0); */
-		/* usleep(wait_time); */
+		if (count % 100 == 0) {
+			printf("FPS: %ld, delta %gms\n", g_window.fps, g_window.delta * 1000);
+		}
 
 		start = glfwGetTime();
 	}

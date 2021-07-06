@@ -134,8 +134,6 @@ void update() {
 	scene_draw(scene, background_color);
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
-		clock_t t1 = clock();
-
 		ULISP_TOPLEVEL {
 			ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
 		}
@@ -145,15 +143,7 @@ void update() {
 
 		LispObject* res = value_register;
 
-		clock_t t2 = clock();
-
-		char final_buffer[2048];
-
-		snprintf(final_buffer, sizeof(final_buffer),
-				 "%s\nCompiled and loaded in %.4g seconds",
-				 ulisp_debug_print(res), (double)(t2 - t1) / CLOCKS_PER_SEC);
-
-		ps_label_set_text(result_label, final_buffer);
+		ps_label_set_text(result_label, ulisp_debug_print(res));
 		ps_input_set_value(lisp_input, "");
 	}
 
