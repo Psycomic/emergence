@@ -603,7 +603,7 @@ LispObject* ulisp_nconc(LispObject* a, LispObject* b) {
 	if (a == nil)
 		return b;
 	if (b == nil)
-		return b;
+		return a;
 
 	LispObject* a_it;
 	for (a_it = a; CDR(a_it) != nil; a_it = CDR(a_it));
