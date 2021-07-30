@@ -389,6 +389,16 @@ int modi(int a, int b) {
     return r < 0 ? r + b : r;
 }
 
+void print_as_binary(uint64_t w) {
+	printf("0b");
+	for (int i = 63; i >= 0; i--) {
+		if (w & (1 << i))
+			putchar('1');
+		else
+			putchar('0');
+	}
+}
+
 #undef malloc
 #undef free
 

@@ -1,7 +1,7 @@
 #include "misc.h"
 #include "batch_renderer.h"
 #include "render.h"
-#include "ulisp.h"
+#include "yuki.h"
 #include "random.h"
 #include "workers.h"
 #include "crypto.h"
@@ -178,37 +178,25 @@ void execute_tests(void) {
 	}
 
 	{
-		clock_t t1 = clock();
+		yk_allocator_init();
 
-		LispObject* result;
+		int* a = yk_alloc(sizeof(int));
+		uint64_t* b = yk_alloc(sizeof(uint64_t));
+		uint256* c = yk_alloc(sizeof(uint256));
 
-		ULISP_TOPLEVEL {
-			result = ulisp_eval(ulisp_read("(dotimes i 10 (next))"));
-		}
-		ULISP_ABORT {
-			printf("Problemos...\n");
-			exit(0);
-		}
+		*b = 42;
+		*a = 69;
+		*c[0] = 54;
+		*c[1] = 0;
+		*c[2] = 0;
+		*c[3] = 0;
 
-		clock_t t2 = clock();
-
-		printf("Result found in %ld microseconds: ", t2 - t1);
-		ulisp_print(result, ulisp_standard_output);
-		printf("\n");
-	}
-
-	{
-		LispObject* sstream = ulisp_make_string_stream();
-
-		ulisp_stream_write("Hello, world!\n", sstream);
-		ulisp_stream_write("FUck you!\n", sstream);
-
-		int a = 87, b = 42;
-		float c = 5.1f, d = 6.3f;
-
-		ulisp_stream_format(sstream, "A: %d, B : %d\n", a, b);
-		ulisp_stream_format(sstream, "Fuck everybody!!!!\n");
-		ulisp_stream_format(sstream, "C: %f, D: %f\n", c, d);
+		print_as_binary((uint64_t)a);
+		putchar('\n');
+		print_as_binary((uint64_t)b);
+		putchar('\n');
+		print_as_binary((uint64_t)c);
+		putchar('\n');
 	}
 
 	{

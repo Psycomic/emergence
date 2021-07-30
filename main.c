@@ -19,7 +19,6 @@
 #include "random.h"
 #include "window.h"
 #include "workers.h"
-#include "ulisp.h"
 #include "protocol7.h"
 
 #define WORLD_STEP 0.1f
@@ -133,20 +132,6 @@ void update() {
 	p7_loop();
 	scene_draw(scene, background_color);
 
-	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
-		ULISP_TOPLEVEL {
-			ulisp_eval(ulisp_read(ps_input_value(lisp_input)));
-		}
-		ULISP_ABORT {
-			printf("Aborting on exception\n");
-		}
-
-		LispObject* res = value_register;
-
-		ps_label_set_text(result_label, ulisp_debug_print(res));
-		ps_input_set_value(lisp_input, "");
-	}
-
 	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {
 		random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
 		hopalong_a = clampf(gaussian_random(), -1.f, 1.f);
@@ -192,8 +177,6 @@ void setup() {
 
 int main() {
 	main_file_contents = read_file("lisp/core.ul");
-	ulisp_init();
-
 	execute_tests();			// Unit tests
 
 	Image lain_image;

@@ -127,4 +127,6 @@ int powi(int base, int exp);
 uint powu(uint base, uint exp);
 int modi(int a, int b);
 
+void print_as_binary(uint64_t w);
+
 #endif
