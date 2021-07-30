@@ -46,8 +46,8 @@ typedef struct {
 typedef P7PacketHeader P7PingPacket;
 typedef P7PacketHeader P7PongPacket;
 
-int p7_server_socket;
-uint256 p7_id;
+extern int p7_server_socket;
+extern uint256 p7_id;
 
 int p7_init();
 void p7_loop();

@@ -33,6 +33,14 @@ static Stack gc_stack;
 
 DynamicArray allocated_pointers;
 
+LispObject* ulisp_standard_output;
+LispObject* value_register;
+
+jmp_buf ulisp_top_level;
+jmp_buf ulisp_run_level_stack[MAX_ULISP_RUN_LEVEL];
+
+size_t ulisp_run_level_top;
+
 static LispObject* eval_stack;
 static LispObject* envt_register;
 static LispObject* current_continuation;

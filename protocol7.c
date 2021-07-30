@@ -9,10 +9,13 @@
 
 #define SECONDS(s) ((clock_t)(s * CLOCKS_PER_SEC))
 
-DynamicArray p7_outbound_nodes;
-HashTable* p7_inbound_nodes;
+int p7_server_socket;
+uint256 p7_id;
 
-clock_t p7_clock;
+static DynamicArray p7_outbound_nodes;
+static HashTable* p7_inbound_nodes;
+
+static clock_t p7_clock;
 
 uint p7_addr_hash(struct sockaddr* addr) {
 	uchar* as_bytes = (uchar*)addr;

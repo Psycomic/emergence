@@ -114,15 +114,15 @@ void ulisp_print(LispObject* obj, LispObject* stream);
 char* ulisp_debug_print(LispObject* obj);
 void ulisp_add_to_environnement(char* name, LispObject* closure);
 
-LispObject* ulisp_standard_output;
-LispObject* value_register;
+extern LispObject* ulisp_standard_output;
+extern LispObject* value_register;
 
 #define MAX_ULISP_RUN_LEVEL 10
 
-jmp_buf ulisp_top_level;
-jmp_buf ulisp_run_level_stack[MAX_ULISP_RUN_LEVEL];
+extern jmp_buf ulisp_top_level;
+extern jmp_buf ulisp_run_level_stack[MAX_ULISP_RUN_LEVEL];
 
-size_t ulisp_run_level_top;
+extern size_t ulisp_run_level_top;
 
 #define ULISP_TOPLEVEL if (setjmp(ulisp_top_level) == 0)
 #define ULISP_ABORT else
