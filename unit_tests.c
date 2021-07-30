@@ -26,11 +26,11 @@ int signal_test(WorkerData* data) {
 }
 
 void execute_tests(void) {
-	Worker* worker = worker_create(signal_test, NULL);
+/*	Worker* worker = worker_create(signal_test, NULL);
 
 	while (!worker_finished(worker))
 		worker_update(worker);
-
+*/
 	// string test
 
 	char dest[8];
@@ -178,20 +178,12 @@ void execute_tests(void) {
 	}
 
 	{
-		LispObject* definition = ulisp_read(
-			"(begin "
-			"  (def radians->degrees "
-			"     (n-lambda radians->degrees (rad)"
-			"        (* (/ rad pi) 180)))"
-			"  (def pi 3.1415))");
-
 		clock_t t1 = clock();
 
 		LispObject* result;
 
 		ULISP_TOPLEVEL {
-			ulisp_eval(definition);
-			result = ulisp_eval(ulisp_read("(radians->degrees 1.0)"));
+			result = ulisp_eval(ulisp_read("(dotimes i 10 (next))"));
 		}
 		ULISP_ABORT {
 			printf("Problemos...\n");

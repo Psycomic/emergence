@@ -21,28 +21,38 @@ enum ObjectType {
 	LISP_STRING_STREAM = 1 << 11,
 	LISP_TEMPLATE = 1 << 12,
 	LISP_ARRAY = 1 << 13,
-	GC_MARKED = 1 << 14
+	LISP_FRAME = 1 << 14,
+	GC_MARKED = 1 << 15
 };
 
-#define ULISP_BYTECODE_APPLY         0
-#define ULISP_BYTECODE_PUSH_CONT     1
-#define ULISP_BYTECODE_LOOKUP        2
-#define ULISP_BYTECODE_PUSH_EVAL     3
-#define ULISP_BYTECODE_END           4
-#define ULISP_BYTECODE_RESUME_CONT   5
-#define ULISP_BYTECODE_FETCH_LITERAL 6
-#define ULISP_BYTECODE_BIND          7
-#define ULISP_BYTECODE_LIST_BIND     8
-#define ULISP_BYTECODE_BRANCH_IF     9
-#define ULISP_BYTECODE_BRANCH_ELSE   10
-#define ULISP_BYTECODE_BRANCH		 11
-#define ULISP_BYTECODE_FETCH_CC      12
-#define ULISP_BYTECODE_SET			 13
+#define ULISP_BYTECODE_APPLY          0
+#define ULISP_BYTECODE_PUSH_CONT      1
+#define ULISP_BYTECODE_LOOKUP         2
+#define ULISP_BYTECODE_PUSH_EVAL      3
+#define ULISP_BYTECODE_END            4
+#define ULISP_BYTECODE_RESUME_CONT    5
+#define ULISP_BYTECODE_FETCH_LITERAL  6
+#define ULISP_BYTECODE_BIND           7
+#define ULISP_BYTECODE_BRANCH_IF      8
+#define ULISP_BYTECODE_BRANCH_ELSE    9
+#define ULISP_BYTECODE_BRANCH		  10
+#define ULISP_BYTECODE_FETCH_CC       11
+#define ULISP_BYTECODE_SET_LOCAL	  12
+#define ULISP_BYTECODE_SET_GLOBAL	  13
+#define ULISP_BYTECODE_BINDING_LOOKUP 14
+#define ULISP_BYTECODE_UNBIND		  15
+#define ULISP_BYTECODE_LIST_BIND	  16
 
 typedef struct {
 	enum ObjectType type;
 	char data[];
 } LispObject;
+
+typedef struct LispFrame {
+	LispObject* scope;
+	uint bindings_count;
+	LispObject* bindings[];
+} LispFrame;
 
 typedef struct {
 	LispObject *car, *cdr;
@@ -98,6 +108,7 @@ typedef struct {
 
 LispObject* ulisp_eval(LispObject* expression);
 LispObject* ulisp_read(const char* string);
+LispObject* ulisp_compile(LispObject* expression, LispObject* comptime_environnement);
 void ulisp_init(void);
 void ulisp_print(LispObject* obj, LispObject* stream);
 char* ulisp_debug_print(LispObject* obj);

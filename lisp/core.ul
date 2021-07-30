@@ -234,4 +234,47 @@
 
   (defmacro try (form . catched)
 	(list try-fn (list (quote lambda) nil form)
-		  (append (list (quote lambda) nil) catched))))
+		  (append (list (quote lambda) nil) catched)))
+
+  (defun make-lambda (args body env)
+	(list args body env))
+
+  (defun lambda-args (l)
+	(car l))
+
+  (defun lambda-body (l)
+	(car (cdr l)))
+
+  (defun lambda-env (l)
+	(car (cdr (cdr l))))
+
+  (defun assoc (s env)
+	(if (eq? s (car (car env)))
+		(cdr (car env))
+		(assoc s (cdr env))))
+
+  (defun extend-environnement (env bindings values)
+	(if (null? bindings)
+		env
+		(extend-environnement (cons (cons (car bindings)
+										  (car values))
+									env)
+							  (cdr bindings)
+							  (cdr values))))
+
+  (defun begins-with? (e s)
+	(eq? (car e) s))
+
+  (defun eval (e v)
+	(cond ((symbol? e) (assoc e v))
+		  ((begins-with? e (quote q))
+		   (car (cdr e)))
+		  ((begins-with? e (quote l))
+		   (make-lambda (car (cdr e))
+						(car (cdr (cdr e)))
+						v))
+		  (t (let ((forms (map eval e)))
+			   (eval (lambda-body (car forms))
+					 (extend-environnement (lambda-env (car forms))
+										   (lambda-args (car forms))
+										   (cdr forms))))))))

@@ -148,7 +148,7 @@ typedef struct {
 	void (*callback)();
 } PsSlider;
 
-#define INPUT_MAX_ENTERED_TEXT 256
+#define INPUT_MAX_ENTERED_TEXT 2048
 
 typedef struct {
 	PsWidget header;

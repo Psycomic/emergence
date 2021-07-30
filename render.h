@@ -41,6 +41,6 @@ void scene_draw(Scene* scene, Vector3 clear_color);
 void scene_handle_events(Scene* scene);
 void scene_set_size(Scene* scene, float width, float height);
 
-void scene_resize_callback(Scene* scene, int width, int height);
+void scene_resize_callback(void* scene, int width, int height);
 
 #endif // RENDER_HEADER

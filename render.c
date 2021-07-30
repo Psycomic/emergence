@@ -47,7 +47,7 @@ extern float global_time;
 void render_initialize(void);
 float random_float(void);
 
-void scene_resize_callback(Scene* scene, int width, int height) {
+void scene_resize_callback(void* scene, int width, int height) {
 	scene_set_size(scene, width, height);
 }
 
@@ -194,7 +194,7 @@ Drawable* scene_create_drawable(Scene* scene, uint* elements, uint elements_numb
 	return *drawable_pos;
 }
 
-// Handle every event happening in the scene. TODO: Cleanup
+// Handle every event happening in the scene.
 void scene_handle_events(Scene* scene) {
 	if (!(scene->flags & SCENE_GUI_MODE) &&	g_window.keys[GLFW_KEY_E])
 			scene->flags |= SCENE_GUI_MODE;
