@@ -392,11 +392,19 @@ int modi(int a, int b) {
 void print_as_binary(uint64_t w) {
 	printf("0b");
 	for (int i = 63; i >= 0; i--) {
-		if (w & (1 << i))
+		if (w & (1UL << i))
 			putchar('1');
 		else
 			putchar('0');
 	}
+}
+
+inline uint32_t float_as_binary(float f) {
+	return *(uint32_t*)&f;
+}
+
+inline float word_to_float(uint64_t w) {
+	return *(float*)&w;
 }
 
 #undef malloc

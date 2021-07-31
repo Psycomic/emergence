@@ -178,25 +178,12 @@ void execute_tests(void) {
 	}
 
 	{
-		yk_allocator_init();
+		yk_init();
 
-		int* a = yk_alloc(sizeof(int));
-		uint64_t* b = yk_alloc(sizeof(uint64_t));
-		uint256* c = yk_alloc(sizeof(uint256));
+		YkObject list = yk_read_list("45 65 (hello world 4.2) 45 (errr 778 errr)");
 
-		*b = 42;
-		*a = 69;
-		*c[0] = 54;
-		*c[1] = 0;
-		*c[2] = 0;
-		*c[3] = 0;
-
-		print_as_binary((uint64_t)a);
-		putchar('\n');
-		print_as_binary((uint64_t)b);
-		putchar('\n');
-		print_as_binary((uint64_t)c);
-		putchar('\n');
+		yk_print(list);
+		printf("\n");
 	}
 
 	{
@@ -215,4 +202,6 @@ void execute_tests(void) {
 		}
 */
 	}
+
+	exit(0);
 }

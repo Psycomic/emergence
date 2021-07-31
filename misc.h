@@ -8,7 +8,6 @@
 #define ARRAY_SIZE(A) sizeof(A) / (sizeof *A)
 #define DYNAMIC_ARRAY_CREATE(ARR, TYPE)	dynamic_array_create_fn(ARR, sizeof(TYPE))
 #define DYNAMIC_ARRAY_AT(ARR, INDEX, TYPE) ((TYPE*)dynamic_array_at(ARR, INDEX))
-#define CONS(A, B) cons(&A, sizeof(A), B)
 
 #define SUPER(INSTANCE) (&(INSTANCE)->header)
 
@@ -128,5 +127,8 @@ uint powu(uint base, uint exp);
 int modi(int a, int b);
 
 void print_as_binary(uint64_t w);
+
+uint32_t float_as_binary(float f);
+float word_to_float(uint64_t w);
 
 #endif
