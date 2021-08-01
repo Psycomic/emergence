@@ -179,11 +179,7 @@ void execute_tests(void) {
 
 	{
 		yk_init();
-
-		YkObject list = yk_read_list("45 65 (hello world 4.2) 45 (errr 778 errr)");
-
-		yk_print(list);
-		printf("\n");
+		yk_repl();
 	}
 
 	{

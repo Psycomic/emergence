@@ -120,9 +120,10 @@ union YkUnion {
 };
 
 void yk_init();
-YkObject yk_read_list(const char* string);
 YkObject yk_cons(YkObject car, YkObject cdr);
 void yk_print(YkObject o);
 YkObject yk_make_symbol(char* name);
+YkObject yk_read(const char* string);
+void yk_repl();
 
 #endif

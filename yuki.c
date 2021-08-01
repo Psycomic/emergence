@@ -181,38 +181,64 @@ YkObject yk_read_list(const char* string) {
 	return list;
 }
 
+YkObject yk_read(const char* string) {
+	return YK_CAR(yk_read_list(string));
+}
+
 void yk_print(YkObject o) {
-	if (YK_NULL(o)) {
-		printf("nil");
-	}
-	else if (YK_CONSP(o)) {
-		YkObject c;
-		printf("(");
+	switch (YK_TYPEOF(o)) {
+	case yk_t_list:
+		if (YK_NULL(o)) {
+			printf("nil");
+		} else {
+			YkObject c;
+			printf("(");
 
-		for (c = o; YK_CONSP(c); c = YK_CDR(c)) {
-			yk_print(YK_CAR(c));
+			for (c = o; YK_CONSP(c); c = YK_CDR(c)) {
+				yk_print(YK_CAR(c));
 
-			if (YK_CONSP(YK_CDR(c)))
-				printf(" ");
+				if (YK_CONSP(YK_CDR(c)))
+					printf(" ");
+			}
+
+			if (!YK_NULL(c)) {
+				printf(" . ");
+				yk_print(c);
+			}
+
+			printf(")");
 		}
-
-		if (!YK_NULL(c)) {
-			printf(" . ");
-			yk_print(YK_CDR(c));
-		}
-
-		printf(")");
-	}
-	else if (YK_INTP(o)) {
+		break;
+	case yk_t_int:
 		printf("%ld", YK_INT(o));
-	}
-	else if (YK_FLOATP(o)) {
+		break;
+	case yk_t_float:
 		printf("%f", YK_FLOAT(o));
-	}
-	else if (YK_SYMBOLP(o)) {
+		break;
+	case yk_t_symbol:
 		printf("%s", YK_PTR(o)->symbol.name);
+		break;
+	case yk_t_bytecode:
+		printf("<bytecode at %p>", YK_PTR(o));
+		break;
+	case yk_t_closure:
+		printf("<closure at %p>", YK_PTR(o));
+		break;
+	case yk_t_c_proc:
+		printf("<compiled-function at %p>", YK_PTR(o));
+		break;
+	default:
+		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
 	}
-	else {
-		printf("Unknown type %ld!\n", YK_TYPEOF(o));
+}
+
+void yk_repl() {
+	char buffer[2048];
+
+	while (1) {
+		printf("\n> ");
+		fgets(buffer, sizeof(buffer), stdin);
+
+		yk_print(yk_read(buffer));
 	}
 }
