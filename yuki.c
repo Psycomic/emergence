@@ -3,42 +3,103 @@
 #include <stdio.h>
 #include <string.h>
 
-#define YK_MARK(x) ((x) | 1)
-#define YK_MARKED(x) ((x) & 1)
+#define YK_MARK_BIT ((YkUint)1)
+#define YK_MARKED(x) (((YkUint)YK_CAR(x)) & YK_MARK_BIT)
 
+#define YK_WORKSPACE_SIZE 2048
+
+static union YkUnion* yk_workspace;
 static union YkUnion* yk_free_list;
-static YkUint yk_free_list_size;
+static YkUint yk_workspace_size;
 static YkUint yk_free_space;
 
 #define YK_SYMBOL_TABLE_SIZE 4096
 static YkObject *yk_symbol_table;
 
 static void yk_allocator_init() {
-	yk_free_list_size = 2048;
-	yk_free_list = malloc(sizeof(union YkUnion) * yk_free_list_size);
+	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
+    yk_workspace_size= YK_WORKSPACE_SIZE;
+	yk_free_list = yk_workspace;
 
-	if ((uint64_t)yk_free_list % 8 != 0) {
-		uint align_pad = 8 - (uint64_t)yk_free_list % 8;
+	if ((uint64_t)yk_free_list % 16 != 0) {
+		uint align_pad = 16 - (uint64_t)yk_free_list % 16;
 		yk_free_list = (union YkUnion*)((char*)yk_free_list + align_pad);
-		yk_free_list_size--;
+		yk_workspace_size--;
 	}
 
-	for (uint i = 0; i < yk_free_list_size; i++) {
-		if (i != yk_free_list_size - 1)
+	for (uint i = 0; i < yk_workspace_size; i++) {
+		if (i != yk_workspace_size - 1)
 			yk_free_list[i].cons.car = yk_free_list + i + 1;
 		else
 			yk_free_list[i].cons.car = YK_NIL;
 	}
 
-	yk_free_space = yk_free_list_size;
+	yk_free_space = yk_workspace_size;
 }
 
 static YkObject yk_alloc() {
+	assert(yk_free_space > 0);
+
 	YkObject first = yk_free_list;
 	yk_free_list = first->cons.car;
 	yk_free_space--;
 
 	return first;
+}
+
+static void yk_mark(YkObject o) {
+mark:
+	if (YK_FLOATP(o) || YK_INTP(o) ||
+		YK_PTR(o) < yk_workspace ||
+		YK_PTR(o) > yk_workspace + yk_workspace_size ||
+		YK_MARKED(o))
+		return;
+
+	if (YK_CONSP(o)) {
+		yk_mark(YK_CAR(o));
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+
+		o = YK_CDR(o);
+		goto mark;
+	}
+}
+
+static void yk_free(YkObject o) {
+	YK_PTR(o)->cons.car = yk_free_list;
+	yk_free_list = YK_PTR(o);
+
+	yk_free_space++;
+}
+
+static void yk_sweep() {
+	printf("before: %ld free space\n", yk_free_space);
+	yk_free_space = 0;
+
+	for (uint i = 0; i < yk_workspace_size; i++) {
+		YkObject o = yk_workspace + i;
+
+		if (!YK_MARKED(o))
+			yk_free(o);
+		else
+			YK_CAR(o) = (YkObject)((YkUint)YK_CAR(o) & ~YK_MARK_BIT);
+	}
+
+	printf("after: %ld free space\n", yk_free_space);
+}
+
+void yk_gc() {
+	void* dummy = (void*)0x69;
+
+	{
+		void** stack_start = &dummy;
+		size_t stack_size = stack_end - stack_start;
+
+		for (size_t i = 0; i < stack_size; i++) {
+			yk_mark(stack_start[i]);
+		}
+	}
+
+	yk_sweep();
 }
 
 static void yk_symbol_table_init() {
@@ -134,7 +195,9 @@ YkObject yk_read_list(const char* string) {
 				YK_ASSERT(parens_count >= 0);
 			} while(!(string[j--] == '(' && parens_count == 0));
 
-			list = yk_cons(yk_read_list(m_strndup(string + j + 2, count - 2)), list);
+			char* dupped = m_strndup(string + j + 2, count - 2);
+			list = yk_cons(yk_read_list(dupped), list);
+			free(dupped);
 			i -= count;
 		}
 		else {
@@ -182,7 +245,8 @@ YkObject yk_read_list(const char* string) {
 }
 
 YkObject yk_read(const char* string) {
-	return YK_CAR(yk_read_list(string));
+	YkObject r = yk_read_list(string);
+	return YK_CAR(r);
 }
 
 void yk_print(YkObject o) {
@@ -239,6 +303,11 @@ void yk_repl() {
 		printf("\n> ");
 		fgets(buffer, sizeof(buffer), stdin);
 
-		yk_print(yk_read(buffer));
+		YkObject forms = yk_read(buffer);
+
+		yk_gc();
+
+		yk_print(forms);
+		printf("\n");
 	}
 }

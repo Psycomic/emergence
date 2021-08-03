@@ -62,6 +62,8 @@ static float hopalong_a = 0.5f,
 
 static Vector3 hopalong_subsets[SUBSET_NUMBER];
 
+void** stack_end;
+
 void update_fractal() {
 	static const float scale = 4.f;
 
@@ -175,7 +177,7 @@ void setup() {
 	ps_init();
 }
 
-int main() {
+int do_main(int argc, char** argv) {
 	main_file_contents = read_file("lisp/core.ul");
 	execute_tests();			// Unit tests
 
@@ -339,4 +341,11 @@ int main() {
 error:
 	fprintf(stderr, "Something failed...\n");
 	return -1;
+}
+
+int main(int argc, char **argv) {
+	void* dummy;
+	stack_end = &dummy;
+
+	return do_main(argc, argv);
 }

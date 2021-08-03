@@ -404,7 +404,7 @@ inline uint32_t float_as_binary(float f) {
 }
 
 inline float word_to_float(uint64_t w) {
-	return *(float*)&w;
+	return ((float*)&w)[1];
 }
 
 #undef malloc
@@ -412,14 +412,13 @@ inline float word_to_float(uint64_t w) {
 
 inline void* debug_malloc(size_t size, const char* file, const uint line) {
 	void* return_value = malloc(size);
-
-	/* printf("Malloc %p, 0x%lx bytes at %s:%d\n", return_value, size, file, line); */
+	printf("Malloc %p, 0x%lx bytes at %s:%d\n", return_value, size, file, line);
 
 	return return_value;
 }
 
 inline void debug_free(void* ptr, const char* file, const uint line) {
-	/* printf("Free %p at %s:%d\n", ptr, file, line); */
+	printf("Free %p at %s:%d\n", ptr, file, line);
 
 	free(ptr);
 }
