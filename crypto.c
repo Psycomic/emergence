@@ -481,29 +481,30 @@ void keccak_f(uint64_t S[25]) {
 	}
 }
 
-void keccak_pad(uint8_t* message, uint64_t message_size, uint8_t* output) {
-	uint32_t pad_size = message_size % 200;
+void keccak_hash(uint8_t* message, uint64_t message_size, uint8_t* hash, uint64_t hash_size) {
+	uint32_t pad = message_size % 200;
 
-	memcpy(output, message, message_size);
-	memset(output + message_size, 0, pad_size);
-}
+	uint32_t n = message_size / 200 + (pad != 0);
+	const uint32_t r = 64;
 
-void keccak_hash_256(uint8_t* message, uint64_t message_size, uint8_t* hash, uint64_t hash_size) {
-	uint8_t* padded_message = malloc(200 * (message_size / 200 + 1));
-	keccak_pad(message, message_size, padded_message);
-
-	uint32_t n = message_size / 200 + (message_size % 200 == 0 ? 0 : 1);
-	uint32_t r = 64;
-
-	uint64_t S[25];
+	uint64_t S[25];				/* 8 * 25 = 200 */
 	m_bzero(S, sizeof(S));
 
 	uint64_t hash_count = 0;
 
 compute_hash:
 	for (uint32_t i = 0; i < n; i++)  {
-		for (uint32_t j = 0; j < r / sizeof(uint64_t); j++)
-			S[j] ^= ((uint64_t*)padded_message)[j];
+		if (pad != 0 && i == n - 1) {
+			uint8_t* small_S = (uint8_t*)S;
+
+			for (uint32_t k = 0; k < 200 - pad; k++) {
+				small_S[k] ^= message[k];
+			}
+		}
+		else {
+			for (uint32_t j = 0; j < r / sizeof(uint64_t); j++)
+				S[j] ^= ((uint64_t*)message)[j];
+		}
 
 		keccak_f(S);
 	}
@@ -513,9 +514,12 @@ compute_hash:
 
 	if (hash_count < hash_size)
 		goto compute_hash;
-
-	free(padded_message);
 }
+
+void keccak_hash_256(uint8_t* message, uint64_t message_size, uint8_t* hash) {
+	keccak_hash(message, message_size, hash, 32);
+}
+
 
 #define BIT(a, n) ((a & (1 << (n))) != 0)
 

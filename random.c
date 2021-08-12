@@ -89,7 +89,7 @@ void random_update_entropy() {
 	memcpy(&csprng_entropy.cursor_position, &g_window.cursor_position, sizeof(uint64_t));
 	memcpy(&csprng_entropy.window_size, &g_window.size, sizeof(uint64_t));
 
-	keccak_hash_256((uint8_t*)&csprng_last_entropy, sizeof(entropy_t), csprng_entropy.last_state, 32);
+	keccak_hash_256((uint8_t*)&csprng_last_entropy, sizeof(entropy_t), csprng_entropy.last_state);
 
 	csprng_last_entropy = csprng_entropy;
 }
@@ -99,8 +99,8 @@ void random_csprng_bytes(uint8_t* dest, uint64_t size) {
 		if (csprng_generated % (1 << 8) == 0) {
 			random_update_entropy();
 
-			keccak_hash_256((uint8_t*)&csprng_entropy, sizeof(entropy_t), csprng_key, 32);
-			keccak_hash_256(csprng_key, sizeof(csprng_key), csprng_key, 32);
+			keccak_hash_256((uint8_t*)&csprng_entropy, sizeof(entropy_t), csprng_key);
+			keccak_hash_256(csprng_key, sizeof(csprng_key), csprng_key);
 		}
 
 		if (csprng_generated % 16 == 0) {

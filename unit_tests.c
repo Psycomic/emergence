@@ -103,7 +103,7 @@ void execute_tests(void) {
 		printf("Message is %s\n", message);
 
 		uint8_t hash[32];
-		keccak_hash_256((uint8_t*)message, strlen(message), hash, sizeof(hash));
+		keccak_hash_256((uint8_t*)message, strlen(message), hash);
 
 		uint64_t first_count = bits_count((uint8_t*)hash, (sizeof(uint64_t) * 32) / 2);
 		uint64_t second_count = bits_count((uint8_t*)hash + 32 / 2, (sizeof(uint64_t) * 32) / 2);
@@ -198,6 +198,4 @@ void execute_tests(void) {
 		}
 */
 	}
-
-	exit(0);
 }

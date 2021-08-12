@@ -299,7 +299,7 @@ void yk_print(YkObject o) {
 void yk_repl() {
 	char buffer[2048];
 
-	while (1) {
+	do {
 		printf("\n> ");
 		fgets(buffer, sizeof(buffer), stdin);
 
@@ -309,5 +309,5 @@ void yk_repl() {
 
 		yk_print(forms);
 		printf("\n");
-	}
+	} while (strcmp(buffer, "bye\n") != 0);
 }
