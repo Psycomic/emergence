@@ -135,13 +135,18 @@ void scene_set_size(Scene* scene, float width, float height) {
 	scene_update_framebuffer(scene, width, height);
 }
 
+void scene_toggle_wireframe(Scene* scene) {
+	scene->flags ^= SCENE_WIREFRAME;
+}
+
 void scene_draw(Scene* scene, Vector3 clear_color) {
 	glBindFramebuffer(GL_FRAMEBUFFER, scene->fbo);
 
 	glClearColor(clear_color.x, clear_color.y, clear_color.z, 0.01f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	if (scene->flags & SCENE_WIREFRAME)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	Mat4 camera_final_matrix;
 	camera_get_final_matrix(&scene->camera, camera_final_matrix);
@@ -168,7 +173,8 @@ void scene_draw(Scene* scene, Vector3 clear_color) {
 		}
 	}
 
-	// glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	if (scene->flags & SCENE_WIREFRAME)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

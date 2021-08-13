@@ -12,6 +12,7 @@
 
 #define SCENE_EVENT_QUIT	(1 << 0)
 #define SCENE_GUI_MODE		(1 << 1)
+#define SCENE_WIREFRAME		(1 << 2)
 
 // What you see on the screen. It is basically the container of every
 // graphical aspect of the game : the 3D view and the 2D UI.
@@ -40,6 +41,7 @@ Drawable* scene_create_drawable(Scene* scene, uint* elements, uint elements_numb
 void scene_draw(Scene* scene, Vector3 clear_color);
 void scene_handle_events(Scene* scene);
 void scene_set_size(Scene* scene, float width, float height);
+void scene_toggle_wireframe(Scene* scene);
 
 void scene_resize_callback(void* scene, int width, int height);
 

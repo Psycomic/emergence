@@ -128,6 +128,7 @@ static PsWidget* regenerate_button;
 static PsWidget* eval_button;
 static PsWidget* lisp_input;
 static PsWidget* result_label;
+static PsWidget* wireframe_button;
 static Worker* terrain_worker = NULL;
 
 void update() {
@@ -141,6 +142,10 @@ void update() {
 		hopalong_c = clampf(gaussian_random(), -1.f, 1.f);
 
 		update_fractal();
+	}
+
+	if (ps_button_state(wireframe_button) & PS_WIDGET_CLICKED) {
+		scene_toggle_wireframe(scene);
 	}
 
 	if (terrain_worker != NULL && worker_finished(terrain_worker)) {
@@ -320,9 +325,11 @@ int do_main(int argc, char** argv) {
 	ps_container_add(vbox, slider);
 
 	regenerate_button = ps_button_create("Re-generate terrain", 16);
+	wireframe_button = ps_button_create("Toggle Wireframe", 16);
 	lisp_input = ps_input_create("(+ 4 4)", 16);
 
 	ps_container_add(vbox, regenerate_button);
+	ps_container_add(vbox, wireframe_button);
 	ps_container_add(vbox, lisp_input);
 
 	PsWidget* hbox = ps_box_create(PS_DIRECTION_HORIZONTAL, 5);
@@ -330,6 +337,7 @@ int do_main(int argc, char** argv) {
 
 	eval_button = ps_button_create("Eval", 15);
 	result_label = ps_label_create("Results will be here", 16);
+
 
 	ps_container_add(hbox, eval_button);
 	ps_container_add(hbox, result_label);
