@@ -1,0 +1,34 @@
+* The Yuki virtual machine
+** Stacks
+   Several stacks are needed for the Yuki virtual machine to work
+   correctly:
+
+   - The Garbage Collector stack, on which are stored pointers to the
+     Yuki values used in native procedures.
+   - The arguments stack, to pass arguments to procedures
+   - The return stack, to save the return address of the called procedure.
+
+** Registers
+   There are 3 registers:
+   - The values register, where the return value of a function is when
+     it finished its execution
+   - The program counter, points to the current instruction
+   - The environment register, points to the current lexical
+     environment.
+
+** Environments
+*** Global environment
+	The global environment is implemented by putting a value field
+	directly inside of a symbol.
+	Dynamic binding is optional, and can be enabled using
+	'dynamic-let'.
+
+*** Lexical environments
+	Lexical environments are more complex. They are created when
+	bindings arguments to a function or inside a 'let' form. Closures
+	can capture lexical environments, and it is stored within the
+	closure. The environment register points to the current lexical
+	environment.
+
+**** Lexical environment lookup
+	 Lexical environments are, at the lowest level,

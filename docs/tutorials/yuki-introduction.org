@@ -1,0 +1,31 @@
+* Le langage de programmation Yuki
+** Introduction
+   Yuki est le langage de programmation d'Emergence. C'est un langage
+   de programmation dynamique, orienté objet, et il supporte la
+   métaprogrammation.
+
+   Yuki est un membre de la famille LISP, qui se caractérise par un
+   syntaxe qui peut paraître étrange aux débutants, mais qui est très
+   élégante et permet de faire des choses que la plupart des langages
+   de programmation sont incapables de faire.
+
+   Si vous avez déjà programmé en Python, Perl, ou Ruby, le langage
+   vous sera sans doute familier.
+
+** Syntaxe
+   En Yuki, tout est une expression. Une expression peut être soit une
+   liste, entre parenthèses, soit un atome, qui peut être plusieurs
+   choses: un symbole, un nombre, un tableau.
+
+   Voici des exemples d'expressions, suivis par le résultat qu'elles
+   produisent, indiqué par la flèche _=>_
+
+#+begin_src lisp
+(+ 5 6) => 11
+(* (+ 9 5) 8) => 112
+65 => 65
+#+end_src
+
+   Le premier élément d'une expression est la fonction à
+   appliquer. Dans cette exemple, nous voyons l'application de la
+   fonction +, ainsi que la fonction *.
