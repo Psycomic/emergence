@@ -39,6 +39,12 @@ static YkUint yk_ctrl_stack_size;
 #define YK_GC_PROTECT1(x) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
 		yk_gc_stack[yk_gc_stack_size++] = &(x)
 
+#define YK_GC_PROTECT2(x, y) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(y);
+
+static void yk_gc();
+
 static void yk_allocator_init() {
 	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
     yk_workspace_size= YK_WORKSPACE_SIZE;
@@ -60,7 +66,12 @@ static void yk_allocator_init() {
 	yk_free_space = yk_workspace_size;
 }
 
+#define YK_GC_STRESS 1
+
 static YkObject yk_alloc() {
+	if (YK_GC_STRESS || yk_free_space < 20)
+		yk_gc();
+
 	assert(yk_free_space > 0);
 
 	YkObject first = yk_free_list;
@@ -113,12 +124,14 @@ static void yk_sweep() {
 	printf("after: %ld free space\n", yk_free_space);
 }
 
-void yk_gc() {
-	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++)
+static void yk_gc() {
+	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++) {
 		yk_mark(yk_symbol_table[i]);
+	}
 
-	for (size_t i = 0; i < yk_gc_stack_size; i++)
+	for (size_t i = 0; i < yk_gc_stack_size; i++) {
 		yk_mark(*yk_gc_stack[i]);
+	}
 
 	yk_sweep();
 }
@@ -184,9 +197,13 @@ YkObject yk_make_symbol(char* name) {
 }
 
 YkObject yk_cons(YkObject car, YkObject cdr) {
+	YK_GC_PROTECT2(car, cdr);
+
 	YkObject o = yk_alloc();
 	o->cons.car = car;
 	o->cons.cdr = cdr;
+
+	YK_GC_UNPROTECT;
 	return YK_TAG_LIST(o);
 }
 
@@ -308,8 +325,7 @@ void yk_print(YkObject o) {
 		printf("%f", YK_FLOAT(o));
 		break;
 	case yk_t_symbol:
-		printf("<%s (value %p)>", YK_PTR(o)->symbol.name,
-			   YK_PTR(o)->symbol.value);
+		printf("%s", YK_PTR(o)->symbol.name);
 		break;
 	case yk_t_bytecode:
 		printf("<bytecode at %p>", YK_PTR(o));
@@ -327,7 +343,7 @@ void yk_print(YkObject o) {
 
 void yk_repl() {
 	char buffer[2048];
-	YkObject forms;
+	YkObject forms = YK_NIL;
 
 	YK_GC_PROTECT1(forms);
 
@@ -336,8 +352,6 @@ void yk_repl() {
 		fgets(buffer, sizeof(buffer), stdin);
 
 		forms = yk_read(buffer);
-
-		yk_gc();
 
 		yk_print(forms);
 		printf("\n");

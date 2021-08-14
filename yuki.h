@@ -103,6 +103,12 @@ typedef struct {
 } YkCProc;
 
 typedef struct {
+	uint8_t opcode;
+	uint16_t modifier;
+	uint64_t ptr;
+} YkInstruction;
+
+typedef struct {
 	YkObject name;
 	YkObject docstring;
 	uchar* code;

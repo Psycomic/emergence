@@ -4,7 +4,8 @@
    correctly:
 
    - The arguments stack, to pass arguments to procedures
-   - The control stack, to save the return address of the called procedure.
+   - The control stack, to save the return address of the called
+     procedure.
 
 ** Registers
    There are 3 registers:
@@ -13,6 +14,10 @@
    - The program counter, points to the current instruction
    - The environment register, points to the current lexical
      environment.
+
+** Instructions and opcodes
+   An instruction is represented on 88 bits, and has 3 parts: the
+   opcode, the modifier and the pointer.
 
 ** Environments
 *** Global environment
