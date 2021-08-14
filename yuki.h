@@ -103,15 +103,16 @@ typedef struct {
 } YkCProc;
 
 typedef struct {
-	YkObject bytecode;
-	YkObject lexical_env;
-} YkClosure;
-
-typedef struct {
 	YkObject name;
+	YkObject docstring;
 	uchar* code;
 	YkUint code_size;
 } YkBytecode;
+
+typedef struct {
+	YkObject bytecode;
+	YkObject lexical_env;
+} YkClosure;
 
 union YkUnion {
 	YkType t;

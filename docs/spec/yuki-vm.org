@@ -3,10 +3,8 @@
    Several stacks are needed for the Yuki virtual machine to work
    correctly:
 
-   - The Garbage Collector stack, on which are stored pointers to the
-     Yuki values used in native procedures.
    - The arguments stack, to pass arguments to procedures
-   - The return stack, to save the return address of the called procedure.
+   - The control stack, to save the return address of the called procedure.
 
 ** Registers
    There are 3 registers:
@@ -19,16 +17,32 @@
 ** Environments
 *** Global environment
 	The global environment is implemented by putting a value field
-	directly inside of a symbol.
-	Dynamic binding is optional, and can be enabled using
-	'dynamic-let'.
+	directly inside of a symbol.  Dynamic binding is optional, and can
+	be enabled using =dynamic-let=.  This allows for dynamic symbol
+	binding: the expression =(set 'hello "world")= evaluates its second
+	argument at run-time, and sets the given symbol (in this case
+	=hello=) to the given value.
 
 *** Lexical environments
 	Lexical environments are more complex. They are created when
-	bindings arguments to a function or inside a 'let' form. Closures
+	bindings arguments to a function or inside a =let= form. Closures
 	can capture lexical environments, and it is stored within the
 	closure. The environment register points to the current lexical
-	environment.
+	environment, and changes every time a closure is called.
 
 **** Lexical environment lookup
-	 Lexical environments are, at the lowest level,
+	 A lexical environment is, at the lowest level, an array that with
+	 a pointer to its parent environment. Because of the nature of
+	 lexical binding, the bound symbols are eliminated at
+	 compile-time, and lookup can be fast.
+
+#+begin_src lisp
+(let ((a 45) (b 98))
+  (let ((x 0) (y 56))
+	(+ (* x a) (* y b) z)))
+#+end_src
+
+	 In the code snippet above, we don't have to search the lexical
+	 environment for =x=, =y=, =a= and =b=, because their position is known at
+	 compile time. As for =z=, it is not in the lexical environment, and
+	 is known to be a global variable at compile time.

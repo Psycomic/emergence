@@ -13,8 +13,31 @@ static union YkUnion* yk_free_list;
 static YkUint yk_workspace_size;
 static YkUint yk_free_space;
 
+/* Registers */
+static YkObject yk_value_register;
+static YkUint yk_program_counter;
+static YkObject yk_environment_register;
+
+/* Stacks */
 #define YK_SYMBOL_TABLE_SIZE 4096
 static YkObject *yk_symbol_table;
+
+#define YK_GC_STACK_MAX_SIZE 1024
+static YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
+static YkUint yk_gc_stack_size;
+
+#define YK_ARGS_STACK_MAX_SIZE 1024
+static YkObject yk_args_stack[YK_ARGS_STACK_MAX_SIZE];
+static YkUint yk_args_stack_size;
+
+#define YK_CTRL_STACK_MAX_SIZE 1024
+static YkUint yk_ctrl_stack[YK_CTRL_STACK_MAX_SIZE];
+static YkUint yk_ctrl_stack_size;
+
+#define YK_GC_UNPROTECT yk_gc_stack_size = _yk_local_stack_ptr
+
+#define YK_GC_PROTECT1(x) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+		yk_gc_stack[yk_gc_stack_size++] = &(x)
 
 static void yk_allocator_init() {
 	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
@@ -62,11 +85,14 @@ mark:
 		o = YK_CDR(o);
 		goto mark;
 	}
+	else {
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+	}
 }
 
 static void yk_free(YkObject o) {
-	YK_PTR(o)->cons.car = yk_free_list;
-	yk_free_list = YK_PTR(o);
+	o->cons.car = yk_free_list;
+	yk_free_list = o;
 
 	yk_free_space++;
 }
@@ -88,16 +114,11 @@ static void yk_sweep() {
 }
 
 void yk_gc() {
-	void* dummy = (void*)0x69;
+	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++)
+		yk_mark(yk_symbol_table[i]);
 
-	{
-		void** stack_start = &dummy;
-		size_t stack_size = stack_end - stack_start;
-
-		for (size_t i = 0; i < stack_size; i++) {
-			yk_mark(stack_start[i]);
-		}
-	}
+	for (size_t i = 0; i < yk_gc_stack_size; i++)
+		yk_mark(*yk_gc_stack[i]);
 
 	yk_sweep();
 }
@@ -111,6 +132,10 @@ static void yk_symbol_table_init() {
 }
 
 void yk_init() {
+	yk_gc_stack_size = 0;
+	yk_args_stack_size = 0;
+	yk_ctrl_stack_size = 0;
+
 	yk_allocator_init();
 	yk_symbol_table_init();
 }
@@ -169,6 +194,8 @@ YkObject yk_cons(YkObject car, YkObject cdr) {
 
 YkObject yk_read_list(const char* string) {
 	YkObject list = YK_NIL;
+	YK_GC_PROTECT1(list);
+
 	size_t string_size = strlen(string);
 
 	int i = string_size - 1;
@@ -241,6 +268,7 @@ YkObject yk_read_list(const char* string) {
 		}
 	}
 
+	YK_GC_UNPROTECT;
 	return list;
 }
 
@@ -280,7 +308,8 @@ void yk_print(YkObject o) {
 		printf("%f", YK_FLOAT(o));
 		break;
 	case yk_t_symbol:
-		printf("%s", YK_PTR(o)->symbol.name);
+		printf("<%s (value %p)>", YK_PTR(o)->symbol.name,
+			   YK_PTR(o)->symbol.value);
 		break;
 	case yk_t_bytecode:
 		printf("<bytecode at %p>", YK_PTR(o));
@@ -298,16 +327,21 @@ void yk_print(YkObject o) {
 
 void yk_repl() {
 	char buffer[2048];
+	YkObject forms;
+
+	YK_GC_PROTECT1(forms);
 
 	do {
 		printf("\n> ");
 		fgets(buffer, sizeof(buffer), stdin);
 
-		YkObject forms = yk_read(buffer);
+		forms = yk_read(buffer);
 
 		yk_gc();
 
 		yk_print(forms);
 		printf("\n");
 	} while (strcmp(buffer, "bye\n") != 0);
+
+	YK_GC_UNPROTECT;
 }
