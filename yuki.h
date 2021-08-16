@@ -72,12 +72,20 @@ typedef union YkUnion *YkObject;
 /* Error handling */
 #define YK_ASSERT(cond) assert(cond)
 
-/* Stack operations */
-#define YK_PUSH(x) *(yk_top++) = (x)
-#define YK_POP(x) x = *(yk_top--);
+/* Opcodes */
+typedef enum {
+	YK_OP_FETCH_LITERAL = 0,
+	YK_OP_FETCH_GLOBAL,
+	YK_OP_LEXICAL_VAR,
+	YK_OP_PUSH,
+	YK_OP_UNBIND,
+	YK_OP_CALL,
+	YK_OP_RET,
+	YK_OP_END
+} YkOpcode;
 
 /* Yuki types */
-typedef YkObject (*YkCfun)(YkUint nargs, YkObject* args);
+typedef YkObject (*YkCfun)(YkUint nargs);
 
 typedef struct {
 	YkObject car;
@@ -94,6 +102,7 @@ typedef struct {
 	} type;
 	uint32_t hash;
 	char* name;
+	uint8_t declared;
 } YkSymbol;
 
 typedef struct {
@@ -103,16 +112,15 @@ typedef struct {
 } YkCProc;
 
 typedef struct {
-	uint8_t opcode;
+	YkObject ptr;
 	uint16_t modifier;
-	uint64_t ptr;
+	YkOpcode opcode;
 } YkInstruction;
 
 typedef struct {
 	YkObject name;
 	YkObject docstring;
-	uchar* code;
-	YkUint code_size;
+	YkInstruction* code;
 } YkBytecode;
 
 typedef struct {
@@ -132,14 +140,12 @@ union YkUnion {
 
 ct_assert(sizeof(union YkUnion) > 16);
 
-extern YkObject yk_stack[8192];
-extern YkObject* yk_stack_top;
-
 void yk_init();
 YkObject yk_cons(YkObject car, YkObject cdr);
 void yk_print(YkObject o);
 YkObject yk_make_symbol(char* name);
 YkObject yk_read(const char* string);
+YkObject yk_run(YkObject bytecode);
 void yk_repl();
 
 #endif

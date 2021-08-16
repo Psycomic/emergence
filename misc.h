@@ -20,6 +20,8 @@
 #define ASSERT_CONCAT(a, b) ASSERT_CONCAT_(a, b)
 #define ct_assert(e) enum { ASSERT_CONCAT(assert_line_, __LINE__) = 1/(!!(e)) }
 
+#define panic(str) do { printf(str"\n"); assert(0); } while (0)
+
 #ifdef _DEBUG
 
 #define malloc(size) debug_malloc(size, __FILE__, __LINE__)

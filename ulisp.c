@@ -10,7 +10,6 @@
 #define DEBUG(m,e) printf("%s:%d: %s:",__FILE__,__LINE__,m); ulisp_print(e, ulisp_standard_output); puts("");
 #define CAR(o) ((ConsCell*)(o)->data)->car
 #define CDR(o) ((ConsCell*)(o)->data)->cdr
-#define panic(str) do { printf(str"\n"); assert(0); } while (0)
 #define AS(o, t) ((t *)(o)->data)
 #define ASSERT(v) if (!(v)) { ulisp_throw(ulisp_make_symbol("assertion: "#v" in " __FILE__)); }
 #define S_OFFSET(s, slot) (size_t)(&((s*)NULL)->slot)

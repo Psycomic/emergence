@@ -3,21 +3,57 @@
    Several stacks are needed for the Yuki virtual machine to work
    correctly:
 
-   - The arguments stack, to pass arguments to procedures
+   - The Yuki stack, contains the current lexical binding environment.
    - The control stack, to save the return address of the called
      procedure.
 
 ** Registers
-   There are 3 registers:
-   - The values register, where the return value of a function is when
+   There are 2 registers:
+   - The =values_register=, where the return value of a function is when
      it finished its execution
-   - The program counter, points to the current instruction
-   - The environment register, points to the current lexical
-     environment.
+   - The =program_counter=, points to the current instruction
 
 ** Instructions and opcodes
    An instruction is represented on 88 bits, and has 3 parts: the
    opcode, the modifier and the pointer.
+
+   Below is a table showing the instructions with their arguments
+   supported by the Yuki virtual machine
+
+   | *Pointer*            | *Modifier*             | *Opcode*        |
+   |--------------------+----------------------+---------------|
+   | 64 bits            | 16 bits              | 8 bits        |
+   |--------------------+----------------------+---------------|
+   | Pointer to literal | X                    | =FETCH_LITERAL= |
+   | Pointer to symbol  | X                    | =FETCH_GLOBAL=  |
+   | X                  | Lexical index        | =LEXICAL_VAR=   |
+   | X                  | X                    | =PUSH=          |
+   | X                  | Lexical binding size | =UNBIND=        |
+   | X                  | Number of arguments  | =CALL=          |
+   | X                  | X                    | =RET=           |
+   | X                  | X                    | =END=           |
+   |--------------------+----------------------+---------------|
+
+*** Description of the instructions
+	- =FETCH_LITERAL=: Puts the pointer of the instruction in
+      =value_register=.
+	- =FETCH_GLOBAL=: Gets the global Deep-bound value stored inside the
+      symbol passed as argument, and puts it in =value_register=
+	- =LEXICAL_VAR=: Gets the -nth value pushed onto the Yuki stack and
+      stores it in =value_register=.
+	- =PUSH=: Pushes =value_register= onto the Yuki stack, to be accessed
+      later with =LEXICAL_VAR=.
+	- =UNBIND=: Subtracts *Modifier* from the Yuki stack pointer,
+      unbinding previously =PUSHed= values.
+	- =CALL=: If =value_register= is a compiled function, just call it
+      with *Modifier* as argument, indicating the number of arguments
+      passed to the function. If it is a byte compiled function, save
+      the next instruction on the return stack, push *Modifier* on the
+      Yuki stack, and put the pointer to the code of the function into
+      =program_counter=.
+	- =RET=: Unbinds the stack frame of the function by subtracting the
+      arguments count from the stack pointer, and jumps back to the
+      caller by popping the top of the return stack into =program_counter=
 
 ** Environments
 *** Global environment
