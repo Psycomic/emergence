@@ -264,11 +264,11 @@ void window_mainloop() {
 			g_window.fps = (clock_t)(1.0 / delta);
 			g_window.delta = delta;
 		}
-
+/*
 		if (count % 100 == 0) {
 			printf("FPS: %ld, delta %gms\n", g_window.fps, g_window.delta * 1000);
 		}
-
+*/
 		start = glfwGetTime();
 	}
 

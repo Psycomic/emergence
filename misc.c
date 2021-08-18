@@ -409,6 +409,7 @@ inline float word_to_float(uint64_t w) {
 
 #undef malloc
 #undef free
+#undef realloc
 
 inline void* debug_malloc(size_t size, const char* file, const uint line) {
 	void* return_value = malloc(size);
@@ -421,4 +422,10 @@ inline void debug_free(void* ptr, const char* file, const uint line) {
 	printf("Free %p at %s:%d\n", ptr, file, line);
 
 	free(ptr);
+}
+
+inline void* debug_realloc(void* ptr, size_t size, const char* file, const uint line) {
+	printf("Realloc %p at %s:%d\n", ptr, file, line);
+
+	return realloc(ptr, size);
 }

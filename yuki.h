@@ -72,6 +72,21 @@ typedef union YkUnion *YkObject;
 /* Error handling */
 #define YK_ASSERT(cond) assert(cond)
 
+/* GC protection */
+#define YK_GC_STACK_MAX_SIZE 1024
+extern YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
+extern YkUint yk_gc_stack_size;
+
+#define YK_GC_UNPROTECT yk_gc_stack_size = _yk_local_stack_ptr
+
+#define YK_GC_PROTECT1(x) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+		yk_gc_stack[yk_gc_stack_size++] = &(x)
+
+#define YK_GC_PROTECT2(x, y) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(y);
+
+
 /* Opcodes */
 typedef enum {
 	YK_OP_FETCH_LITERAL = 0,
@@ -107,7 +122,8 @@ typedef struct {
 
 typedef struct {
 	YkObject name;
-	YkUint nargs;
+	YkObject docstring;
+	YkInt nargs;
 	YkCfun cfun;
 } YkCProc;
 
@@ -121,6 +137,9 @@ typedef struct {
 	YkObject name;
 	YkObject docstring;
 	YkInstruction* code;
+	YkUint code_size;
+	YkUint code_capacity;
+	uint64_t dummy;			/* Needed for alignment */
 } YkBytecode;
 
 typedef struct {
@@ -138,12 +157,14 @@ union YkUnion {
 	YkBytecode bytecode;
 };
 
-ct_assert(sizeof(union YkUnion) > 16);
+ct_assert(sizeof(union YkUnion) % 16 == 0);
 
 void yk_init();
 YkObject yk_cons(YkObject car, YkObject cdr);
 void yk_print(YkObject o);
 YkObject yk_make_symbol(char* name);
+YkObject yk_make_bytecode_begin(YkObject name);
+void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 YkObject yk_read(const char* string);
 YkObject yk_run(YkObject bytecode);
 void yk_repl();

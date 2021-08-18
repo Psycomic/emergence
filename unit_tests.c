@@ -179,7 +179,28 @@ void execute_tests(void) {
 
 	{
 		yk_init();
-		yk_repl();
+
+		YkObject bytecode = YK_NIL;
+		YK_GC_PROTECT1(bytecode);
+
+		bytecode = yk_make_bytecode_begin(yk_make_symbol("test-fn"));
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(45));
+		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(56));
+		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_LEXICAL_VAR, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_LEXICAL_VAR, 2, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("+"));
+		yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_UNBIND, 2, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
+
+		yk_print(yk_run(bytecode));
+		printf("\n");
+
+		YK_GC_UNPROTECT;
 	}
 
 	{
@@ -198,4 +219,6 @@ void execute_tests(void) {
 		}
 */
 	}
+
+	exit(0);
 }

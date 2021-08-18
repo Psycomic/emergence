@@ -25,6 +25,7 @@
 #ifdef _DEBUG
 
 #define malloc(size) debug_malloc(size, __FILE__, __LINE__)
+#define realloc(thing, size) debug_realloc(thing, size, __FILE__, __LINE__)
 #define free(ptr) debug_free(ptr, __FILE__, __LINE__)
 
 extern void exit(int status);
@@ -117,6 +118,7 @@ uint hash_string(uchar *str);
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);
+void* debug_realloc(void* ptr, size_t size, const char* file, const uint line);
 
 HashTable* hash_table_create(uint size, uint (*hash)(void*));
 int hash_table_set(HashTable* table, void* key, void* value, uint value_size);

@@ -53,7 +53,8 @@
       =program_counter=.
 	- =RET=: Unbinds the stack frame of the function by subtracting the
       arguments count from the stack pointer, and jumps back to the
-      caller by popping the top of the return stack into =program_counter=
+      caller by popping the top of the return stack into
+      =program_counter=
 
 ** Environments
 *** Global environment
@@ -87,3 +88,37 @@
 	 environment for =x=, =y=, =a= and =b=, because their position is known at
 	 compile time. As for =z=, it is not in the lexical environment, and
 	 is known to be a global variable at compile time.
+
+	 The generated code for the code snippet above would look like
+	 this:
+
+#+begin_src asm
+fetch_literal 45
+push
+fetch_literal 98
+push
+fetch_literal 0
+push
+fetch_literal 56
+push
+lexical_var 1
+push
+lexical_var 4
+push
+fetch_global '*
+call 2
+push
+lexical_var 1
+push
+lexical_var 4
+push
+fetch_global '*
+call 2
+push
+fetch_global 'z
+push
+fetch_global '+
+call 3
+unbind 2
+unbind 2
+#+end_src

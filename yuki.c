@@ -21,27 +21,19 @@ static YkObject yk_value_register;
 static YkInstruction* yk_program_counter;
 
 /* Stacks */
-#define YK_GC_STACK_MAX_SIZE 1024
-static YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
-static YkUint yk_gc_stack_size;
+YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
+YkUint yk_gc_stack_size;
 
 #define YK_LISP_STACK_MAX_SIZE 1024
 static YkObject yk_lisp_stack[YK_LISP_STACK_MAX_SIZE];
 static YkObject* yk_lisp_stack_top;
 
+#define YK_STACK_PUSH(x) *(--yk_lisp_stack_top) = x
+#define YK_STACK_POP(x) x = *(++yk_lisp_stack_top)
+
 #define YK_LISP_STACK_MAX_SIZE 1024
 static YkInstruction* yk_return_stack[YK_LISP_STACK_MAX_SIZE];
 static YkInstruction** yk_return_stack_top;
-
-/* Stack operations */
-#define YK_GC_UNPROTECT yk_gc_stack_size = _yk_local_stack_ptr
-
-#define YK_GC_PROTECT1(x) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
-		yk_gc_stack[yk_gc_stack_size++] = &(x)
-
-#define YK_GC_PROTECT2(x, y) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
-	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
-	yk_gc_stack[yk_gc_stack_size++] = &(y);
 
 static void yk_gc();
 
@@ -96,6 +88,26 @@ mark:
 		o = YK_CDR(o);
 		goto mark;
 	}
+	else if (YK_SYMBOLP(o)) {
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+
+		o = YK_PTR(o)->symbol.value;
+		goto mark;
+	}
+	else if (YK_CPROCP(o)) {
+		YkObject docstring = YK_PTR(o)->c_proc.docstring;
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+
+		o = docstring;
+		goto mark;
+	}
+	else if (YK_BYTECODEP(o)) {
+		YkObject docstring = YK_PTR(o)->bytecode.docstring;
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+
+		o = docstring;
+		goto mark;
+	}
 	else {
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
@@ -125,13 +137,14 @@ static void yk_sweep() {
 }
 
 static void yk_gc() {
-	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++) {
+	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++)
 		yk_mark(yk_symbol_table[i]);
-	}
 
-	for (size_t i = 0; i < yk_gc_stack_size; i++) {
+	for (size_t i = 0; i < yk_gc_stack_size; i++)
 		yk_mark(*yk_gc_stack[i]);
-	}
+
+	/* for (YkObject* ptr = yk_lisp_stack_top; ptr != yk_lisp_stack; ptr--) */
+	/* 	yk_mark(*ptr); */
 
 	yk_sweep();
 }
@@ -144,13 +157,46 @@ static void yk_symbol_table_init() {
 	}
 }
 
+void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
+	YkObject proc = YK_NIL, sym = YK_NIL;
+	YK_GC_PROTECT2(proc, sym);
+
+	sym = yk_make_symbol(name);
+
+	proc = yk_alloc();
+	proc->c_proc.name = sym;
+	proc->c_proc.nargs = nargs;
+	proc->c_proc.cfun = fn;
+
+	YK_PTR(sym)->symbol.value = YK_TAG(proc, yk_t_c_proc);
+
+	YK_GC_UNPROTECT;
+}
+
+YkObject yk_builtin_add(YkUint nargs) {
+	YkInt result = 0;
+
+	for (YkUint i = 0; i < nargs; i++) {
+		YkObject o = yk_lisp_stack_top[i];
+		YK_ASSERT(YK_INTP(o));
+		result += YK_INT(o);
+	}
+
+	return YK_MAKE_INT(result);
+}
+
 void yk_init() {
 	yk_gc_stack_size = 0;
-	yk_lisp_stack_top = yk_lisp_stack;
+	yk_lisp_stack_top = yk_lisp_stack + YK_LISP_STACK_MAX_SIZE;
 	yk_return_stack_top = yk_return_stack;
+	yk_value_register = YK_NIL;
+	yk_program_counter = NULL;
 
 	yk_allocator_init();
 	yk_symbol_table_init();
+
+	/* Builtin functions */
+	yk_make_builtin("+", -1, yk_builtin_add);
 }
 
 YkObject yk_make_symbol(char* name) {
@@ -158,19 +204,19 @@ YkObject yk_make_symbol(char* name) {
 	YkObject sym;
 
 	if (yk_symbol_table[hash] == NULL) {
-			sym = yk_alloc();
+		sym = yk_alloc();
 
-			sym->symbol.name = name;
-			sym->symbol.hash = hash;
-			sym->symbol.value = NULL;
-			sym->symbol.next_sym = NULL;
-			sym->symbol.type = yk_s_normal;
-			sym->symbol.declared = 0;
+		sym->symbol.name = name;
+		sym->symbol.hash = hash;
+		sym->symbol.value = NULL;
+		sym->symbol.next_sym = NULL;
+		sym->symbol.type = yk_s_normal;
+		sym->symbol.declared = 0;
 
-			sym = YK_TAG_SYMBOL(sym);
-			yk_symbol_table[hash] = sym;
+		sym = YK_TAG_SYMBOL(sym);
+		yk_symbol_table[hash] = sym;
 
-			return sym;
+		return sym;
 	} else {
 		YkObject s;
 		for (s = yk_symbol_table[hash];
@@ -207,6 +253,38 @@ YkObject yk_cons(YkObject car, YkObject cdr) {
 
 	YK_GC_UNPROTECT;
 	return YK_TAG_LIST(o);
+}
+
+#define BYTECODE_DEFAULT_SIZE 8
+
+YkObject yk_make_bytecode_begin(YkObject name) {
+	YK_GC_PROTECT1(name);		/* This function can GC */
+
+	YkObject bytecode = yk_alloc();
+	bytecode->bytecode.name = name;
+	bytecode->bytecode.docstring = YK_NIL;
+	bytecode->bytecode.code = malloc(8 * sizeof(YkInstruction));
+	bytecode->bytecode.code_size = 0;
+	bytecode->bytecode.code_capacity = 8;
+
+	YK_GC_UNPROTECT;
+	return YK_TAG(bytecode, yk_t_bytecode);
+}
+
+void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr) {
+	YkObject bytecode_ptr = YK_PTR(bytecode);
+
+	if (bytecode_ptr->bytecode.code_size >= bytecode_ptr->bytecode.code_capacity) {
+		bytecode_ptr->bytecode.code_capacity += 8;
+		bytecode_ptr->bytecode.code =
+			realloc(bytecode_ptr->bytecode.code,
+					sizeof(YkInstruction) *	bytecode_ptr->bytecode.code_capacity);
+	}
+
+	YkInstruction* last_i = bytecode_ptr->bytecode.code + bytecode_ptr->bytecode.code_size++;
+	last_i->ptr = ptr;
+	last_i->modifier = modifier;
+	last_i->opcode = op;
 }
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
@@ -346,7 +424,7 @@ void yk_print(YkObject o) {
 YkObject yk_run(YkObject bytecode) {
 	YK_ASSERT(YK_BYTECODEP(bytecode));
 
-	yk_program_counter = bytecode->bytecode.code;
+	yk_program_counter = YK_PTR(bytecode)->bytecode.code;
 
 start:
 	switch (yk_program_counter->opcode) {
@@ -355,19 +433,23 @@ start:
 		yk_program_counter++;
 		break;
 	case YK_OP_FETCH_GLOBAL:
-		yk_value_register = yk_program_counter->ptr->symbol.value;
+	{
+		YkObject val = YK_PTR(yk_program_counter->ptr)->symbol.value;
+		YK_ASSERT(val != NULL);	/* Unbound variable */
+		yk_value_register = val;
 		yk_program_counter++;
+	}
 		break;
 	case YK_OP_LEXICAL_VAR:
-		yk_value_register = *(yk_lisp_stack_top - 1 - yk_program_counter->modifier);
+		yk_value_register = yk_lisp_stack_top[yk_program_counter->modifier];
 		yk_program_counter++;
 		break;
 	case YK_OP_PUSH:
-		*(yk_lisp_stack_top++) = yk_value_register;
+		YK_STACK_PUSH(yk_value_register);
 		yk_program_counter++;
 		break;
 	case YK_OP_UNBIND:
-		yk_lisp_stack_top -= yk_program_counter->modifier;
+		yk_lisp_stack_top += yk_program_counter->modifier;
 		yk_program_counter++;
 		break;
 	case YK_OP_CALL:
@@ -375,19 +457,33 @@ start:
 			panic("Not implemented!\n");
 		}
 		else if (YK_BYTECODEP(yk_value_register)) {
-			*(yk_lisp_stack_top++) = YK_MAKE_INT(yk_program_counter->modifier);
+			YK_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
 			*(yk_return_stack_top++) = yk_program_counter + 1;
-			yk_program_counter = yk_value_register->bytecode.code;
+			yk_program_counter = YK_PTR(yk_value_register)->bytecode.code;
 		}
 		else if (YK_CPROCP(yk_value_register)) {
-			yk_value_register = yk_value_register->c_proc.cfun(yk_program_counter->modifier);
+			YkObject proc = YK_PTR(yk_value_register);
+			YkInt nargs = proc->c_proc.nargs;
+			if (nargs >= 0) {
+				YK_ASSERT(yk_program_counter->modifier == nargs);
+			}
+			else {
+				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
+			}
+
+			yk_value_register = proc->c_proc.cfun(yk_program_counter->modifier);
+			yk_lisp_stack_top += yk_program_counter->modifier;
 			yk_program_counter++;
+		}
+		else {
+			panic("Not a function!\n");
 		}
 		break;
 	case YK_OP_RET:
 	{
-		YkObject nargs = *(yk_lisp_stack_top--);
-		yk_lisp_stack_top -= YK_INT(nargs);
+		YkObject nargs;
+		YK_STACK_POP(nargs);
+		yk_lisp_stack_top += YK_INT(nargs);
 		yk_program_counter = *(yk_return_stack_top--);
 	}
 		break;
@@ -395,6 +491,26 @@ start:
 		goto end;
 		break;
 	}
+
+	if (yk_lisp_stack_top - yk_lisp_stack < YK_LISP_STACK_MAX_SIZE) {
+		printf(" ______STACK_____\n");
+
+		for (YkObject* ptr = yk_lisp_stack_top; ptr < yk_lisp_stack + YK_LISP_STACK_MAX_SIZE; ptr++) {
+			if (*ptr != NULL) {
+				printf(" | ");
+				yk_print(*ptr);
+				printf("\t\t|\n");
+			} else {
+				printf(" | NULL\t\t|\n");
+			}
+		}
+
+		printf(" ----------------\n");
+	}
+
+	printf("VALUE: ");
+	yk_print(yk_value_register);
+	printf("\n");
 
 	goto start;
 
