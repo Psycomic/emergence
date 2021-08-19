@@ -10,8 +10,3 @@ debug:
 
 release:
 	${CC} *.c -o ${TARGET_RELEASE} -O3 -DNDEBUG ${CFLAGS} ${LFLAGS}
-
-assembly:
-	nasm -f elf64 stack.asm -o stack.o
-	gcc stack.o -o stack
-	rm stack.o
