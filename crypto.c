@@ -497,7 +497,7 @@ compute_hash:
 		if (pad != 0 && i == n - 1) {
 			uint8_t* small_S = (uint8_t*)S;
 
-			for (uint32_t k = 0; k < 200 - pad; k++) {
+			for (uint32_t k = 0; k < pad; k++) {
 				small_S[k] ^= message[k];
 			}
 		}
