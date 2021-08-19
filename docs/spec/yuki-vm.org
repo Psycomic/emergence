@@ -8,10 +8,12 @@
      procedure.
 
 ** Registers
-   There are 2 registers:
+   There are 3 registers:
    - The =values_register=, where the return value of a function is when
      it finished its execution
    - The =program_counter=, points to the current instruction
+   - The =bytecode_register=, points to the current byte code object
+     being executed.
 
 ** Instructions and opcodes
    An instruction is represented on 88 bits, and has 3 parts: the
@@ -31,6 +33,8 @@
    | X                  | Lexical binding size | =UNBIND=        |
    | X                  | Number of arguments  | =CALL=          |
    | X                  | X                    | =RET=           |
+   | X                  | Byte code index      | =JMP=           |
+   | X                  | Byte code index      | =JNIL=          |
    | X                  | X                    | =END=           |
    |--------------------+----------------------+---------------|
 
@@ -48,13 +52,18 @@
 	- =CALL=: If =value_register= is a compiled function, just call it
       with *Modifier* as argument, indicating the number of arguments
       passed to the function. If it is a byte compiled function, save
-      the next instruction on the return stack, push *Modifier* on the
-      Yuki stack, and put the pointer to the code of the function into
-      =program_counter=.
+      the next instruction on the return stack as well as the
+      =bytecode_register=, push *Modifier* on the Yuki stack, and put the
+      pointer to the code of the function into =program_counter=.
 	- =RET=: Unbinds the stack frame of the function by subtracting the
       arguments count from the stack pointer, and jumps back to the
       caller by popping the top of the return stack into
-      =program_counter=
+      =program_counter=, and popping the byte code object into
+      =bytecode_register=
+	- =JMP=: Unconditional jump. Jumps to the code of =bytecode_register=
+      indexed by *Modifier*.
+	- =JNIL=: Conditional jump. Jumps to the code of =bytecode_register=
+      indexed by *Modifier* only if =value_register= is NIL.
 
 ** Environments
 *** Global environment
@@ -122,3 +131,6 @@ call 3
 unbind 2
 unbind 2
 #+end_src
+
+	 Lexical variables and function arguments are pushed on the stack,
+	 and can be accessed in /O(n)/ time.

@@ -180,25 +180,48 @@ void execute_tests(void) {
 	{
 		yk_init();
 
-		YkObject bytecode = YK_NIL;
-		YK_GC_PROTECT1(bytecode);
+		YkObject fact = YK_NIL, bytecode = YK_NIL;
+		YK_GC_PROTECT2(fact, bytecode);
 
-		bytecode = yk_make_bytecode_begin(yk_make_symbol("test-fn"));
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(45));
+   		fact = yk_make_bytecode_begin(yk_make_symbol("fact"), 1);
+		yk_bytecode_emit(fact, YK_OP_LEXICAL_VAR, 1, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(0));
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("="));
+		yk_bytecode_emit(fact, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_JNIL, 9, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(1));
+		yk_bytecode_emit(fact, YK_OP_JMP, 23, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(1));
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_LEXICAL_VAR, 2, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("-"));
+		yk_bytecode_emit(fact, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, fact);
+		yk_bytecode_emit(fact, YK_OP_CALL, 1, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_LEXICAL_VAR, 2, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*"));
+		yk_bytecode_emit(fact, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(fact, YK_OP_RET, 0, YK_NIL);
+
+		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(15));
 		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(56));
-		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_LEXICAL_VAR, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_LEXICAL_VAR, 2, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("+"));
-		yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_UNBIND, 2, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, fact);
+		yk_bytecode_emit(bytecode, YK_OP_CALL, 1, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
 
+		clock_t t1 = clock();
 		yk_print(yk_run(bytecode));
+		clock_t t2 = clock();
+
 		printf("\n");
+		printf("Done in %lu clock_t\n", t2 - t1);
 
 		YK_GC_UNPROTECT;
 	}

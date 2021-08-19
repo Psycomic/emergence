@@ -19,6 +19,10 @@ static YkObject *yk_symbol_table;
 /* Registers */
 static YkObject yk_value_register;
 static YkInstruction* yk_program_counter;
+static YkObject yk_bytecode_register;
+
+/* Symbols */
+YkObject yk_tee;
 
 /* Stacks */
 YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
@@ -29,11 +33,14 @@ static YkObject yk_lisp_stack[YK_LISP_STACK_MAX_SIZE];
 static YkObject* yk_lisp_stack_top;
 
 #define YK_STACK_PUSH(x) *(--yk_lisp_stack_top) = x
-#define YK_STACK_POP(x) x = *(++yk_lisp_stack_top)
+#define YK_STACK_POP(x) x = *(yk_lisp_stack_top++)
+
+#define YK_RET_PUSH(x) *(--yk_return_stack_top) = (void*)(x)
+#define YK_RET_POP(x) x = (void*)(*(yk_return_stack_top++))
 
 #define YK_LISP_STACK_MAX_SIZE 1024
-static YkInstruction* yk_return_stack[YK_LISP_STACK_MAX_SIZE];
-static YkInstruction** yk_return_stack_top;
+static YkObject yk_return_stack[YK_LISP_STACK_MAX_SIZE];
+static YkObject* yk_return_stack_top;
 
 static void yk_gc();
 
@@ -173,6 +180,13 @@ void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
 	YK_GC_UNPROTECT;
 }
 
+YkObject yk_builtin_neq(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]));
+
+	return yk_lisp_stack_top[0] == yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+}
+
 YkObject yk_builtin_add(YkUint nargs) {
 	YkInt result = 0;
 
@@ -185,18 +199,47 @@ YkObject yk_builtin_add(YkUint nargs) {
 	return YK_MAKE_INT(result);
 }
 
+YkObject yk_builtin_sub(YkUint nargs) {
+	if (nargs == 1) {
+		YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]));
+		return YK_MAKE_INT(-YK_INT(yk_lisp_stack_top[0]));
+	}
+
+	YkInt result = YK_INT(yk_lisp_stack_top[0]);
+	for (uint i = 1; i < nargs; i++)
+		result -= YK_INT(yk_lisp_stack_top[i]);
+
+	return YK_MAKE_INT(result);
+}
+
+YkObject yk_builtin_mul(YkUint nargs) {
+	YkInt result = 1;
+
+	for (uint i = 0; i < nargs; i++) {
+		result *= YK_INT(yk_lisp_stack_top[i]);
+	}
+
+	return YK_MAKE_INT(result);
+}
+
 void yk_init() {
 	yk_gc_stack_size = 0;
 	yk_lisp_stack_top = yk_lisp_stack + YK_LISP_STACK_MAX_SIZE;
-	yk_return_stack_top = yk_return_stack;
+	yk_return_stack_top = yk_return_stack + YK_LISP_STACK_MAX_SIZE;
 	yk_value_register = YK_NIL;
 	yk_program_counter = NULL;
 
 	yk_allocator_init();
 	yk_symbol_table_init();
 
+	/* Special symbols */
+	yk_tee = yk_make_symbol("t");
+
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
+	yk_make_builtin("*", -1, yk_builtin_mul);
+	yk_make_builtin("-", -2, yk_builtin_sub);
+	yk_make_builtin("=", 2, yk_builtin_neq);
 }
 
 YkObject yk_make_symbol(char* name) {
@@ -257,7 +300,7 @@ YkObject yk_cons(YkObject car, YkObject cdr) {
 
 #define BYTECODE_DEFAULT_SIZE 8
 
-YkObject yk_make_bytecode_begin(YkObject name) {
+YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs) {
 	YK_GC_PROTECT1(name);		/* This function can GC */
 
 	YkObject bytecode = yk_alloc();
@@ -266,6 +309,7 @@ YkObject yk_make_bytecode_begin(YkObject name) {
 	bytecode->bytecode.code = malloc(8 * sizeof(YkInstruction));
 	bytecode->bytecode.code_size = 0;
 	bytecode->bytecode.code_capacity = 8;
+	bytecode->bytecode.nargs = nargs;
 
 	YK_GC_UNPROTECT;
 	return YK_TAG(bytecode, yk_t_bytecode);
@@ -408,13 +452,17 @@ void yk_print(YkObject o) {
 		printf("%s", YK_PTR(o)->symbol.name);
 		break;
 	case yk_t_bytecode:
-		printf("<bytecode at %p>", YK_PTR(o));
+		printf("<bytecode %s at %p>",
+			   YK_PTR(YK_PTR(o)->bytecode.name)->symbol.name,
+			   YK_PTR(o));
 		break;
 	case yk_t_closure:
 		printf("<closure at %p>", YK_PTR(o));
 		break;
 	case yk_t_c_proc:
-		printf("<compiled-function at %p>", YK_PTR(o));
+		printf("<compiled-function %s at %p>",
+			   YK_PTR(YK_PTR(o)->c_proc.name)->symbol.name,
+			   YK_PTR(o));
 		break;
 	default:
 		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
@@ -425,6 +473,7 @@ YkObject yk_run(YkObject bytecode) {
 	YK_ASSERT(YK_BYTECODEP(bytecode));
 
 	yk_program_counter = YK_PTR(bytecode)->bytecode.code;
+	yk_bytecode_register = bytecode;
 
 start:
 	switch (yk_program_counter->opcode) {
@@ -445,6 +494,9 @@ start:
 		yk_program_counter++;
 		break;
 	case YK_OP_PUSH:
+		if (yk_lisp_stack_top <= yk_lisp_stack)
+			panic("Stack overflow!\n");
+
 		YK_STACK_PUSH(yk_value_register);
 		yk_program_counter++;
 		break;
@@ -458,8 +510,21 @@ start:
 		}
 		else if (YK_BYTECODEP(yk_value_register)) {
 			YK_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
-			*(yk_return_stack_top++) = yk_program_counter + 1;
-			yk_program_counter = YK_PTR(yk_value_register)->bytecode.code;
+
+			YK_RET_PUSH(yk_bytecode_register);
+			YK_RET_PUSH(yk_program_counter + 1);
+
+			YkObject code = YK_PTR(yk_value_register);
+			YkInt nargs = code->bytecode.nargs;
+			if (nargs >= 0) {
+				YK_ASSERT(yk_program_counter->modifier == nargs);
+			}
+			else {
+				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
+			}
+
+			yk_bytecode_register = code;
+			yk_program_counter = code->bytecode.code;
 		}
 		else if (YK_CPROCP(yk_value_register)) {
 			YkObject proc = YK_PTR(yk_value_register);
@@ -484,18 +549,35 @@ start:
 		YkObject nargs;
 		YK_STACK_POP(nargs);
 		yk_lisp_stack_top += YK_INT(nargs);
-		yk_program_counter = *(yk_return_stack_top--);
+		YK_RET_POP(yk_program_counter);
+		YK_RET_POP(yk_bytecode_register);
 	}
+		break;
+	case YK_OP_JMP:
+		yk_program_counter =
+			YK_PTR(yk_bytecode_register)->bytecode.code + yk_program_counter->modifier;
+		break;
+	case YK_OP_JNIL:
+		if (yk_value_register == YK_NIL) {
+			yk_program_counter =
+				YK_PTR(yk_bytecode_register)->bytecode.code + yk_program_counter->modifier;
+		}
+		else {
+			yk_program_counter++;
+		}
 		break;
 	case YK_OP_END:
 		goto end;
 		break;
 	}
 
-	if (yk_lisp_stack_top - yk_lisp_stack < YK_LISP_STACK_MAX_SIZE) {
-		printf(" ______STACK_____\n");
+#ifdef YK_RUN_DEBUG
 
-		for (YkObject* ptr = yk_lisp_stack_top; ptr < yk_lisp_stack + YK_LISP_STACK_MAX_SIZE; ptr++) {
+	printf("\n ______STACK_____\n");
+	if (yk_lisp_stack_top - yk_lisp_stack < YK_LISP_STACK_MAX_SIZE) {
+		for (YkObject* ptr = yk_lisp_stack_top;
+			 ptr < yk_lisp_stack + YK_LISP_STACK_MAX_SIZE; ptr++)
+		{
 			if (*ptr != NULL) {
 				printf(" | ");
 				yk_print(*ptr);
@@ -504,13 +586,17 @@ start:
 				printf(" | NULL\t\t|\n");
 			}
 		}
-
-		printf(" ----------------\n");
 	}
+	else {
+		printf(" | EMPTY\t|\n");
+	}
+	printf(" ----------------\n");
 
 	printf("VALUE: ");
 	yk_print(yk_value_register);
 	printf("\n");
+
+#endif
 
 	goto start;
 

@@ -86,7 +86,6 @@ extern YkUint yk_gc_stack_size;
 	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
 	yk_gc_stack[yk_gc_stack_size++] = &(y);
 
-
 /* Opcodes */
 typedef enum {
 	YK_OP_FETCH_LITERAL = 0,
@@ -96,6 +95,8 @@ typedef enum {
 	YK_OP_UNBIND,
 	YK_OP_CALL,
 	YK_OP_RET,
+	YK_OP_JMP,
+	YK_OP_JNIL,
 	YK_OP_END
 } YkOpcode;
 
@@ -136,10 +137,10 @@ typedef struct {
 typedef struct {
 	YkObject name;
 	YkObject docstring;
+	YkInt nargs;
 	YkInstruction* code;
 	YkUint code_size;
 	YkUint code_capacity;
-	uint64_t dummy;			/* Needed for alignment */
 } YkBytecode;
 
 typedef struct {
@@ -163,7 +164,7 @@ void yk_init();
 YkObject yk_cons(YkObject car, YkObject cdr);
 void yk_print(YkObject o);
 YkObject yk_make_symbol(char* name);
-YkObject yk_make_bytecode_begin(YkObject name);
+YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 YkObject yk_read(const char* string);
 YkObject yk_run(YkObject bytecode);
