@@ -186,8 +186,6 @@ void setup() {
 }
 
 int do_main(int argc, char** argv) {
-	setlocale(LC_CTYPE, "UTF-8");
-
 	main_file_contents = read_file("lisp/core.ul");
 	execute_tests();			// Unit tests
 

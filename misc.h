@@ -53,6 +53,10 @@ extern int usleep (unsigned int __useconds);
 #include <stddef.h>
 #include <GL/glew.h>
 
+/* For unicode support */
+#include <unicode/uchar.h>
+#include <unicode/utf.h>
+
 #include "linear_algebra.h"
 
 extern void** stack_end;
