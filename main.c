@@ -186,6 +186,10 @@ void setup() {
 }
 
 int do_main(int argc, char** argv) {
+	locale = setlocale(LC_ALL, "");
+
+	printf("Locale is %s\n", locale);
+
 	main_file_contents = read_file("lisp/core.ul");
 	execute_tests();			// Unit tests
 

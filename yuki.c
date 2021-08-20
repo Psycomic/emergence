@@ -109,8 +109,14 @@ mark:
 		goto mark;
 	}
 	else if (YK_BYTECODEP(o)) {
-		YkObject docstring = YK_PTR(o)->bytecode.docstring;
+		YkObject bytecode = YK_PTR(o);
+
+		YkObject docstring = bytecode->bytecode.docstring;
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+
+		for (uint i = 0; i < bytecode->bytecode.code_size; i++) {
+			yk_mark(bytecode->bytecode.code[i].ptr);
+		}
 
 		o = docstring;
 		goto mark;
@@ -150,8 +156,11 @@ static void yk_gc() {
 	for (size_t i = 0; i < yk_gc_stack_size; i++)
 		yk_mark(*yk_gc_stack[i]);
 
-	/* for (YkObject* ptr = yk_lisp_stack_top; ptr != yk_lisp_stack; ptr--) */
-	/* 	yk_mark(*ptr); */
+	for (long i = 0; i < yk_lisp_stack_top - yk_lisp_stack - YK_LISP_STACK_MAX_SIZE; i++)
+		yk_mark(yk_lisp_stack_top[i]);
+
+	for (long i = 0; i < yk_return_stack_top - yk_return_stack - YK_LISP_STACK_MAX_SIZE; i += 2)
+		yk_mark(yk_return_stack_top[i]);
 
 	yk_sweep();
 }
@@ -333,11 +342,9 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 
-YkObject yk_read_list(const char* string) {
+YkObject yk_read_list(const char* string, int string_size) {
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
-
-	size_t string_size = strlen(string);
 
 	int i = string_size - 1;
 
@@ -363,9 +370,7 @@ YkObject yk_read_list(const char* string) {
 				YK_ASSERT(parens_count >= 0);
 			} while(!(string[j--] == '(' && parens_count == 0));
 
-			char* dupped = m_strndup(string + j + 2, count - 2);
-			list = yk_cons(yk_read_list(dupped), list);
-			free(dupped);
+			list = yk_cons(yk_read_list(string + j + 2, count - 2), list);
 			i -= count;
 		}
 		else {
@@ -414,7 +419,7 @@ YkObject yk_read_list(const char* string) {
 }
 
 YkObject yk_read(const char* string) {
-	YkObject r = yk_read_list(string);
+	YkObject r = yk_read_list(string, strlen(string));
 	return YK_CAR(r);
 }
 

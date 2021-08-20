@@ -86,6 +86,25 @@ extern YkUint yk_gc_stack_size;
 	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
 	yk_gc_stack[yk_gc_stack_size++] = &(y);
 
+#define YK_GC_PROTECT3(x, y, z) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(y);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(z);
+
+#define YK_GC_PROTECT4(x, y, z, w) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(y);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(z);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(w);
+
+#define YK_GC_PROTECT5(x, y, z, w, k) YkUint _yk_local_stack_ptr = yk_gc_stack_size; \
+	yk_gc_stack[yk_gc_stack_size++] = &(x);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(y);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(z);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(w);								\
+	yk_gc_stack[yk_gc_stack_size++] = &(k);
+
+
 /* Opcodes */
 typedef enum {
 	YK_OP_FETCH_LITERAL = 0,
