@@ -9,6 +9,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <locale.h>
 
 #include "misc.h"
 #include "render.h"
@@ -34,6 +35,8 @@
 static float points[POINTS_COUNT * 2];
 static Octaves octaves;
 static BOOL octaves_initialized = GL_FALSE;
+
+char* locale;
 
 float global_time = 0.f;
 
@@ -183,6 +186,8 @@ void setup() {
 }
 
 int do_main(int argc, char** argv) {
+	setlocale(LC_CTYPE, "UTF-8");
+
 	main_file_contents = read_file("lisp/core.ul");
 	execute_tests();			// Unit tests
 

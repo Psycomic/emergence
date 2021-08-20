@@ -56,6 +56,7 @@ extern int usleep (unsigned int __useconds);
 #include "linear_algebra.h"
 
 extern void** stack_end;
+extern char* locale;
 
 typedef unsigned int uint;
 typedef unsigned char uchar;

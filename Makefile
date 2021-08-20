@@ -1,8 +1,8 @@
 TARGET_DEBUG = Emergence_Debug
 TARGET_RELEASE = Emergence_Release
 
-CFLAGS = -Wall -std=c99
-LFLAGS = -lglfw -lGL -lGLEW -ldl -lpthread -lX11 -lXrandr -lXinerama -lXi -lm
+CFLAGS = -Wall -std=c99 `pkg-config --cflags icu-uc icu-io`
+LFLAGS = -lglfw -lGL -lGLEW -ldl -lpthread -lX11 -lXrandr -lXinerama -lXi -lm `pkg-config --libs icu-uc icu-io`
 CC = gcc
 
 debug:
