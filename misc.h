@@ -37,6 +37,10 @@ extern void exit(int status);
 #endif // _DEBUG
 
 #ifdef _WIN32
+
+#define UNICODE
+#define _UNICODE
+
 #include <windows.h>
 
 typedef DWORD clock_t;
@@ -57,6 +61,7 @@ extern int usleep (unsigned int __useconds);
 
 extern void** stack_end;
 extern char* locale;
+extern char little_endian;
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
@@ -109,6 +114,7 @@ char* m_strndup(const char* str, size_t count);
 int m_scanf(const char* fmt, ...);
 void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n);
 size_t strcount(const char* str, char c);
+int u_codepoint_to_string(char* dst, uint code);
 
 // Returns 0 if integer, 1 if float, and -1 if error
 int parse_number(char* str, long* integer, double* floating);

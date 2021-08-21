@@ -763,7 +763,10 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 			i = 0;
 		}
 		else {
-			char index = str[j];
+			uchar index = str[j];
+
+			if (index > 0x7f)
+				index = '?';
 
 			float x_pos = ((index % divisor) * glyph_width) / width,
 				y_pos = (1.f - 1 / half_height) - ((index / divisor) * glyph_height) / height;
@@ -1685,7 +1688,11 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 				}
 			}
 			else if (psyche_last_key.modifiers == 0) {
-				char new_string[2] = {(char) psyche_last_key.code, 0};
+				char new_string[5];
+
+				u_codepoint_to_string(new_string, psyche_last_key.code);
+				printf("New string is %s\n", new_string);
+
 				ps_input_insert_at_point(input, new_string);
 			}
 			else {

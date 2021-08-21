@@ -36,6 +36,7 @@ static float points[POINTS_COUNT * 2];
 static Octaves octaves;
 static BOOL octaves_initialized = GL_FALSE;
 
+char little_endian;
 char* locale;
 
 float global_time = 0.f;
@@ -188,6 +189,14 @@ void setup() {
 int do_main(int argc, char** argv) {
 	locale = setlocale(LC_ALL, "");
 
+	ushort a = 0xeeff;
+	uchar* a_ptr = (uchar*)&a;
+	if (a_ptr[0] == 0xff)
+		little_endian = 1;
+	else
+		little_endian = 0;
+
+	printf("Endianess is %d\n", little_endian);
 	printf("Locale is %s\n", locale);
 
 	main_file_contents = read_file("lisp/core.ul");

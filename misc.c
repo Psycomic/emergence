@@ -361,6 +361,36 @@ size_t strcount(const char* str, char c) {
 	return count;
 }
 
+int u_codepoint_to_string(char* dst, uint code) {
+	m_bzero(dst, 5);
+
+	if (code <= 0x7f) {
+		dst[0] = (char)code;
+		return 0;
+	}
+	else if (code <= 0x07FF) {
+		dst[0] = (char) (((code >> 6) & 0x1F) | 0xC0);
+		dst[1] = (char) (((code >> 0) & 0x3F) | 0x80);
+		return 0;
+	}
+	else if (code <= 0xFFFF) {
+		dst[0] = (char) (((code >> 12) & 0x0F) | 0xE0);
+		dst[1] = (char) (((code >>  6) & 0x3F) | 0x80);
+		dst[2] = (char) (((code >>  0) & 0x3F) | 0x80);
+		return 0;
+	}
+	else if (code <= 0x10FFFF) {
+		dst[0] = (char) (((code >> 18) & 0x07) | 0xF0);
+		dst[1] = (char) (((code >> 12) & 0x3F) | 0x80);
+		dst[2] = (char) (((code >>  6) & 0x3F) | 0x80);
+		dst[3] = (char) (((code >>  0) & 0x3F) | 0x80);
+		return 0;
+	}
+	else {
+		return -1;
+	}
+}
+
 int powi(int base, int exp) {
     int result = 1;
     while (exp) {
