@@ -282,6 +282,7 @@ int m_scanf(const char* fmt, ...) {
 int parse_number(char* str, long* integer, double* floating) {
 	int str_len = strlen(str);
 	GLboolean is_floating = GL_FALSE;
+	GLboolean is_negative = GL_FALSE;
 
 	*integer = 0;
 
@@ -294,6 +295,7 @@ int parse_number(char* str, long* integer, double* floating) {
 			return -1;
 
 		base = -1;
+		is_negative = GL_TRUE;
 		str++;
 		str_len--;
 	}
@@ -317,8 +319,12 @@ int parse_number(char* str, long* integer, double* floating) {
 		base *= 10;
 	}
 
-	if (is_floating)
+	if (is_floating) {
+		if (is_negative)
+			*floating = -(*floating);
+
 		return 1;
+	}
 
 	return 0;
 }

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #define YK_MARK_BIT ((YkUint)1)
 #define YK_MARKED(x) (((YkUint)YK_CAR(x)) & YK_MARK_BIT)
@@ -176,7 +177,7 @@ static void yk_symbol_table_init() {
 	}
 }
 
-void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
+static void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
 	YkObject proc = YK_NIL, sym = YK_NIL;
 	YK_GC_PROTECT2(proc, sym);
 
@@ -192,50 +193,283 @@ void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
 	YK_GC_UNPROTECT;
 }
 
-YkObject yk_builtin_neq(YkUint nargs) {
-	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]));
-	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]));
+static YkInt yk_signed_fixnum_to_long(YkInt i) {
+	if (i & (1L << 59))
+		i |= 1L << 63 | 1L << 62 | 1L << 61 | 1L << 60;
+
+	return i;
+}
+
+static float yk_fixnum_to_float(YkObject fix) {
+	return (float)yk_signed_fixnum_to_long(YK_INT(fix));
+}
+
+static YkObject yk_builtin_neq(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
 
 	return yk_lisp_stack_top[0] == yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
 }
 
-YkObject yk_builtin_add(YkUint nargs) {
-	YkInt result = 0;
+static YkObject yk_builtin_add(YkUint nargs) {
+	YkInt i_result = 0;
+	float f_result = 0.f;
 
-	for (YkUint i = 0; i < nargs; i++) {
-		YkObject o = yk_lisp_stack_top[i];
-		YK_ASSERT(YK_INTP(o));
-		result += YK_INT(o);
-	}
-
-	return YK_MAKE_INT(result);
-}
-
-YkObject yk_builtin_sub(YkUint nargs) {
-	if (nargs == 1) {
-		YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]));
-		return YK_MAKE_INT(-YK_INT(yk_lisp_stack_top[0]));
-	}
-
-	YkInt result = YK_INT(yk_lisp_stack_top[0]);
-	for (uint i = 1; i < nargs; i++)
-		result -= YK_INT(yk_lisp_stack_top[i]);
-
-	return YK_MAKE_INT(result);
-}
-
-YkObject yk_builtin_mul(YkUint nargs) {
-	YkInt result = 1;
+	char isfloat = 0;
 
 	for (uint i = 0; i < nargs; i++) {
-		result *= YK_INT(yk_lisp_stack_top[i]);
+		if (isfloat) {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				f_result += yk_fixnum_to_float(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result += YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		} else {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				i_result += YK_INT(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result = (float)yk_signed_fixnum_to_long(i_result);
+				isfloat = 1;
+				f_result += YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		}
 	}
 
-	return YK_MAKE_INT(result);
+	if (isfloat)
+		return YK_MAKE_FLOAT(f_result);
+	else
+		return YK_MAKE_INT(i_result);
 }
 
-YkObject yk_builtin_cons(YkUint nargs) {
+static YkObject yk_builtin_sub(YkUint nargs) {
+	if (nargs == 1) {
+		YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+
+		if (YK_INTP(yk_lisp_stack_top[0]))
+			return YK_MAKE_INT(-YK_INT(yk_lisp_stack_top[0]));
+		else
+			return YK_MAKE_FLOAT(-YK_FLOAT(yk_lisp_stack_top[0]));
+	}
+
+	YkInt i_result;
+	float f_result;
+	char isfloat;
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		i_result = YK_INT(yk_lisp_stack_top[0]);
+		isfloat = 0;
+	} else {
+		f_result = YK_FLOAT(yk_lisp_stack_top[0]);
+		isfloat = 1;
+	}
+
+	for (uint i = 1; i < nargs; i++) {
+		if (isfloat) {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				f_result -= yk_signed_fixnum_to_long(YK_INT(yk_lisp_stack_top[i]));
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result -= YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		} else {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				i_result -= YK_INT(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result = (float)yk_signed_fixnum_to_long(i_result);
+				isfloat = 1;
+				f_result -= YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		}
+	}
+
+	if (isfloat)
+		return YK_MAKE_FLOAT(f_result);
+	else
+		return YK_MAKE_INT(i_result);
+}
+
+static YkObject yk_builtin_mul(YkUint nargs) {
+	YkInt i_result = 1;
+	float f_result = 1.f;
+
+	char isfloat = 0;
+
+	for (uint i = 0; i < nargs; i++) {
+		if (isfloat) {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				f_result *= yk_fixnum_to_float(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result *= YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		} else {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				i_result *= YK_INT(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result = (float)yk_signed_fixnum_to_long(i_result);
+				isfloat = 1;
+				f_result *= YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		}
+	}
+
+	if (isfloat)
+		return YK_MAKE_FLOAT(f_result);
+	else
+		return YK_MAKE_INT(i_result);
+}
+
+static YkObject yk_builtin_div(YkUint nargs) {
+	if (nargs == 1) {
+		YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+
+		if (YK_INTP(yk_lisp_stack_top[0]))
+			return YK_MAKE_FLOAT(1.f / yk_fixnum_to_float(yk_lisp_stack_top[0]));
+		else
+			return YK_MAKE_FLOAT(1.f / YK_FLOAT(yk_lisp_stack_top[0]));
+	}
+
+	YkInt i_result;
+	float f_result;
+	char isfloat;
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		i_result = YK_INT(yk_lisp_stack_top[0]);
+		isfloat = 0;
+	} else {
+		f_result = YK_FLOAT(yk_lisp_stack_top[0]);
+		isfloat = 1;
+	}
+
+	for (uint i = 1; i < nargs; i++) {
+		if (isfloat) {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				f_result /= yk_fixnum_to_float(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result /= YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		} else {
+			if (YK_INTP(yk_lisp_stack_top[i])) {
+				i_result /= YK_INT(yk_lisp_stack_top[i]);
+			} else if (YK_FLOATP(yk_lisp_stack_top[i])) {
+				f_result = (float)yk_signed_fixnum_to_long(i_result);
+				isfloat = 1;
+				f_result /= YK_FLOAT(yk_lisp_stack_top[i]);
+			} else {
+				YK_ASSERT(0);
+			}
+		}
+	}
+
+	if (isfloat)
+		return YK_MAKE_FLOAT(f_result);
+	else
+		return YK_MAKE_INT(i_result);
+}
+
+static YkObject yk_builtin_pow(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return YK_MAKE_INT(powl(YK_INT(yk_lisp_stack_top[0]),
+									YK_INT(yk_lisp_stack_top[1])));
+		} else {
+			return YK_MAKE_FLOAT(powf(yk_fixnum_to_float(yk_lisp_stack_top[0]),
+									  YK_FLOAT(yk_lisp_stack_top[1])));
+		}
+	} else {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return YK_MAKE_FLOAT(powf(YK_FLOAT(yk_lisp_stack_top[0]),
+									  yk_fixnum_to_float(yk_lisp_stack_top[1])));
+		} else {
+			return YK_MAKE_FLOAT(powf(YK_FLOAT(yk_lisp_stack_top[0]),
+									  YK_FLOAT(yk_lisp_stack_top[1])));
+		}
+	}
+}
+
+static YkObject yk_builtin_cons(YkUint nargs) {
 	return yk_cons(yk_lisp_stack_top[0], yk_lisp_stack_top[1]);
+}
+
+static YkObject yk_builtin_head(YkUint nargs) {
+	if (yk_lisp_stack_top[0] == YK_NIL) return YK_NIL;
+
+	return YK_CAR(yk_lisp_stack_top[0]);
+}
+
+static YkObject yk_builtin_tail(YkUint nargs) {
+	if (yk_lisp_stack_top[0] == YK_NIL) return YK_NIL;
+
+	return YK_CDR(yk_lisp_stack_top[0]);
+}
+
+static YkObject yk_builtin_second(YkUint nargs) {
+	if (yk_lisp_stack_top[0] == YK_NIL) return YK_NIL;
+	YkObject cdr = YK_CDR(yk_lisp_stack_top[0]);
+	if (cdr == YK_NIL) return YK_NIL;
+
+	return YK_CAR(cdr);
+}
+
+static YkObject yk_builtin_third(YkUint nargs) {
+	if (yk_lisp_stack_top[0] == YK_NIL) return YK_NIL;
+	YkObject cdr = YK_CDR(yk_lisp_stack_top[0]);
+	if (cdr == YK_NIL) return YK_NIL;
+	cdr = YK_CDR(cdr);
+	if (cdr == YK_NIL) return YK_NIL;
+
+	return YK_CAR(cdr);
+}
+
+static YkObject yk_builtin_intp(YkUint nargs) {
+	return YK_INTP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_floatp(YkUint nargs) {
+	return YK_FLOATP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_consp(YkUint nargs) {
+	return YK_CONSP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_nullp(YkUint nargs) {
+	return yk_lisp_stack_top[0] == YK_NIL ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_listp(YkUint nargs) {
+	return YK_LISTP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_symbolp(YkUint nargs) {
+	return YK_SYMBOLP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_closurep(YkUint nargs) {
+	return YK_CLOSUREP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_bytecodep(YkUint nargs) {
+	return YK_BYTECODEP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+}
+
+static YkObject yk_builtin_compiled_functionp(YkUint nargs) {
+	return YK_CPROCP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
 }
 
 void yk_init() {
@@ -254,9 +488,28 @@ void yk_init() {
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
 	yk_make_builtin("*", -1, yk_builtin_mul);
+	yk_make_builtin("/", -1, yk_builtin_div);
 	yk_make_builtin("-", -2, yk_builtin_sub);
+	yk_make_builtin("**", 2, yk_builtin_pow);
+
 	yk_make_builtin("=", 2, yk_builtin_neq);
+
 	yk_make_builtin("cons", 2, yk_builtin_cons);
+	yk_make_builtin("head", 1, yk_builtin_head);
+	yk_make_builtin("tail", 1, yk_builtin_tail);
+	yk_make_builtin("first", 1, yk_builtin_head);
+	yk_make_builtin("second", 1, yk_builtin_second);
+	yk_make_builtin("third", 1, yk_builtin_third);
+
+	yk_make_builtin("int?", 1, yk_builtin_intp);
+	yk_make_builtin("float?", 1, yk_builtin_floatp);
+	yk_make_builtin("cons?", 1, yk_builtin_consp);
+	yk_make_builtin("null?", 1, yk_builtin_nullp);
+	yk_make_builtin("list?", 1, yk_builtin_listp);
+	yk_make_builtin("symbol?", 1, yk_builtin_symbolp);
+	yk_make_builtin("closure?", 1, yk_builtin_closurep);
+	yk_make_builtin("bytecode?", 1, yk_builtin_bytecodep);
+	yk_make_builtin("compiled-function?", 1, yk_builtin_compiled_functionp);
 }
 
 YkObject yk_make_symbol(char* name) {
@@ -348,9 +601,27 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 	last_i->opcode = op;
 }
 
+static YkObject yk_nreverse(YkObject list) {
+	YK_ASSERT(YK_LISTP(list));
+
+	YkObject current = list,
+		next, previous = YK_NIL,
+		last = YK_NIL;
+
+	while (current != YK_NIL) {
+		next = YK_CDR(current);
+		YK_CDR(current) = previous;
+		previous = current;
+		last = current;
+		current = next;
+	}
+
+	return last;
+}
+
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 
-YkObject yk_read_list(const char* string, int string_size) {
+static YkObject yk_read_list(const char* string, int string_size) {
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
 
@@ -456,7 +727,7 @@ void yk_print(YkObject o) {
 		}
 		break;
 	case yk_t_int:
-		printf("%ld", YK_INT(o));
+		printf("%ld", yk_signed_fixnum_to_long(YK_INT(o)));
 		break;
 	case yk_t_float:
 		printf("%f", YK_FLOAT(o));
@@ -621,7 +892,7 @@ end:
 
 void yk_repl() {
 	char buffer[2048];
-	YkObject forms = YK_NIL;
+	YkObject forms = YK_NIL, bytecode = YK_NIL;
 
 	YK_GC_PROTECT1(forms);
 
@@ -631,7 +902,23 @@ void yk_repl() {
 
 		forms = yk_read(buffer);
 
-		yk_print(forms);
+		if (YK_LISTP(forms)) {
+			bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
+
+			YkUint nargs = 0;
+			YK_LIST_FOREACH(yk_nreverse(YK_CDR(forms)), f) {
+				YkObject o = YK_CAR(f);
+				yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, o);
+				yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+				nargs++;
+			}
+
+			yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, YK_CAR(forms));
+			yk_bytecode_emit(bytecode, YK_OP_CALL, nargs, YK_NIL);
+			yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
+		}
+
+		yk_print(yk_run(bytecode));
 		printf("\n");
 	} while (strcmp(buffer, "bye\n") != 0);
 

@@ -65,6 +65,8 @@ typedef union YkUnion *YkObject;
 
 #define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? (x)->t : YK_IMMEDIATE(x))
 
+#define YK_LIST_FOREACH(list, l) for (YkObject l = list; l != YK_NIL; l = YK_CDR(l))
+
 /* List operations */
 #define YK_CAR(x) (YK_PTR(x)->cons.car)
 #define YK_CDR(x) (YK_PTR(x)->cons.cdr)

@@ -141,4 +141,4 @@ unbind 2
    programming language is useless without a standard library.
 
 *** Arithmetic
-	~+~, ~-~, ~*~, ~**~, are the basic number manipulation functions.
+	~+~, ~-~, ~*~, ~/~, ~**~, are the basic number manipulation functions.
