@@ -14,7 +14,7 @@ void image_blank_init(Image* image, uint32_t width, uint32_t height, GLuint colo
 }
 
 int image_write_to_file(Image* image, const char* path) {
-	FILE* f = fopen(path, "w");
+	FILE* f = m_fopen(path, "w");
 	if (f == NULL)
 		return -1;
 
@@ -114,7 +114,7 @@ typedef struct {
 int image_load_png(Image* image, const char* path) {
 	FILE* png_file;
 
-	if ((png_file = fopen(path, "rb")) < 0)
+	if ((png_file = m_fopen(path, "rb")) == NULL)
 		return -1;
 
 	uchar file_header[9];

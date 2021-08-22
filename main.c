@@ -77,13 +77,8 @@ void update_fractal() {
 
 	hopalong_fractal(hopalong_points, ITERATIONS_NUMBER, a, b, c, 0.1f);
 
-	Vector3 color;
-
-	uint rate = (ITERATIONS_NUMBER / SUBSET_NUMBER);
-
-	for (uint i = 0; i < ITERATIONS_NUMBER; i++) {
+	for (uint i = 0; i < ITERATIONS_NUMBER; i++)
 		hopalong_color[i] = hopalong_subsets[i * SUBSET_NUMBER / ITERATIONS_NUMBER];
-	}
 
 	drawable_update(hopalong_drawable);
 }
@@ -196,8 +191,9 @@ int do_main(int argc, char** argv) {
 	else
 		little_endian = 0;
 
-	printf("Endianess is %d\n", little_endian);
-	printf("Locale is %s\n", locale);
+#ifdef _WIN32
+	SetConsoleOutputCP(65001);
+#endif
 
 	main_file_contents = read_file("lisp/core.ul");
 	execute_tests();			// Unit tests

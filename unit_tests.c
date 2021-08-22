@@ -211,28 +211,34 @@ void execute_tests(void) {
 
 		range = yk_make_bytecode_begin(yk_make_symbol("range"), 1);
 		yk_bytecode_emit(range, YK_OP_LEXICAL_VAR, 1, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(0));
-		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("="));
-		yk_bytecode_emit(fact, YK_OP_CALL, 2, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_JNIL, 9, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_JMP, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_LEXICAL_VAR, 1, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_LEXICAL_VAR, 2, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("-"));
-		yk_bytecode_emit(fact, YK_OP_CALL, 2, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(fact, YK_OP_FETCH_LITERAL, 0, range);
-		yk_bytecode_emit(fact, YK_OP_CALL, 1, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(0));
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("="));
+		yk_bytecode_emit(range, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_JNIL, 9, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_JMP, 23, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(1));
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_LEXICAL_VAR, 2, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("-"));
+		yk_bytecode_emit(range, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, range);
+		yk_bytecode_emit(range, YK_OP_CALL, 1, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_LEXICAL_VAR, 2, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("cons"));
+		yk_bytecode_emit(range, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_RET, 0, YK_NIL);
 
 		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(15));
 		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, fact);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, range);
 		yk_bytecode_emit(bytecode, YK_OP_CALL, 1, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
 
@@ -244,11 +250,6 @@ void execute_tests(void) {
 		printf("Done in %lu clock_t\n", t2 - t1);
 
 		YK_GC_UNPROTECT;
-
-		char a[] = "Bonjour mon ami, as tu considéré de boire un coup?\n"
-			"アニメスレエロアニメも可";
-
-		printf("%s\n", a);
 
 		yk_repl();
 	}

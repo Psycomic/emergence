@@ -133,4 +133,12 @@ unbind 2
 #+end_src
 
 	 Lexical variables and function arguments are pushed on the stack,
-	 and can be accessed in /O(n)/ time.
+	 and can be accessed in /O(1)/ time.
+
+** Standard library
+   The specials operators of a language makes what the language is,
+   whereas the standard library makes what it can do. Even the best
+   programming language is useless without a standard library.
+
+*** Arithmetic
+	~+~, ~-~, ~*~, ~**~, are the basic number manipulation functions.

@@ -150,6 +150,9 @@ static void yk_sweep() {
 }
 
 static void yk_gc() {
+	yk_mark(yk_value_register);
+	yk_mark(yk_bytecode_register);
+
 	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++)
 		yk_mark(yk_symbol_table[i]);
 
@@ -231,6 +234,10 @@ YkObject yk_builtin_mul(YkUint nargs) {
 	return YK_MAKE_INT(result);
 }
 
+YkObject yk_builtin_cons(YkUint nargs) {
+	return yk_cons(yk_lisp_stack_top[0], yk_lisp_stack_top[1]);
+}
+
 void yk_init() {
 	yk_gc_stack_size = 0;
 	yk_lisp_stack_top = yk_lisp_stack + YK_LISP_STACK_MAX_SIZE;
@@ -249,6 +256,7 @@ void yk_init() {
 	yk_make_builtin("*", -1, yk_builtin_mul);
 	yk_make_builtin("-", -2, yk_builtin_sub);
 	yk_make_builtin("=", 2, yk_builtin_neq);
+	yk_make_builtin("cons", 2, yk_builtin_cons);
 }
 
 YkObject yk_make_symbol(char* name) {
@@ -473,6 +481,8 @@ void yk_print(YkObject o) {
 		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
 	}
 }
+
+#define YK_RUN_DEBUG
 
 YkObject yk_run(YkObject bytecode) {
 	YK_ASSERT(YK_BYTECODEP(bytecode));

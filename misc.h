@@ -38,8 +38,7 @@ extern void exit(int status);
 
 #ifdef _WIN32
 
-#define UNICODE
-#define _UNICODE
+#pragma execution_character_set("utf-8")
 
 #include <windows.h>
 
@@ -56,6 +55,7 @@ extern int usleep (unsigned int __useconds);
 
 #include <stddef.h>
 #include <GL/glew.h>
+#include <stdio.h>
 
 #include "linear_algebra.h"
 
@@ -65,6 +65,7 @@ extern char little_endian;
 
 typedef unsigned int uint;
 typedef unsigned char uchar;
+typedef unsigned short char16_t;
 
 typedef struct {
 	void* data;
@@ -109,12 +110,16 @@ void dynamic_array_remove(DynamicArray* arr, uint id);
 void dynamic_array_clear(DynamicArray* arr);
 void dynamic_array_destroy(DynamicArray* arr);
 
+FILE* m_fopen(const char* filename, const char* mode);
+
 char* m_strdup(const char* str);
 char* m_strndup(const char* str, size_t count);
 int m_scanf(const char* fmt, ...);
 void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n);
 size_t strcount(const char* str, char c);
 int u_codepoint_to_string(char* dst, uint code);
+
+char16_t* u_utf8_to_utf16(const char* str);
 
 // Returns 0 if integer, 1 if float, and -1 if error
 int parse_number(char* str, long* integer, double* floating);

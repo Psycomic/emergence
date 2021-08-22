@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -12,8 +11,23 @@ void usleep(clock_t time) {
 }
 #endif
 
+FILE* m_fopen(const char* filename, const char* mode) {
+#ifdef _WIN32
+	wchar_t* w_filename = u_utf8_to_utf16(filename);
+	wchar_t* w_mode = u_utf8_to_utf16(mode);
+
+	FILE* file = _wfopen(w_filename, w_mode);
+	free(w_filename);
+	free(w_mode);
+
+	return file;
+#else
+	return fopen(filename, mode);
+#endif
+}
+
 char* read_file(const char* filename) {
-	FILE* file = fopen(filename, "r");
+	FILE* file = m_fopen(filename, "r");
 
 	fseek(file, 0L, SEEK_END);
 	size_t sz = ftell(file);
