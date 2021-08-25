@@ -115,6 +115,7 @@ typedef enum {
 	YK_OP_PUSH,
 	YK_OP_UNBIND,
 	YK_OP_CALL,
+	YK_OP_TAIL_CALL,
 	YK_OP_RET,
 	YK_OP_JMP,
 	YK_OP_JNIL,

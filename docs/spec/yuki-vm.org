@@ -32,6 +32,7 @@
    | X                  | X                    | =PUSH=          |
    | X                  | Lexical binding size | =UNBIND=        |
    | X                  | Number of arguments  | =CALL=          |
+   | X                  | Number of arguments  | ~TAIL_CALL~     |
    | X                  | X                    | =RET=           |
    | X                  | Byte code index      | =JMP=           |
    | X                  | Byte code index      | =JNIL=          |
@@ -55,6 +56,9 @@
       the next instruction on the return stack as well as the
       =bytecode_register=, push *Modifier* on the Yuki stack, and put the
       pointer to the code of the function into =program_counter=.
+	- ~TAIL_CALL~: Same as ~CALL~, but doesn't save the return value of
+      the call, and unbinds the current stack frame to replace it with
+      the calling stack frame. Used to implement iterative constructs.
 	- =RET=: Unbinds the stack frame of the function by subtracting the
       arguments count from the stack pointer, and jumps back to the
       caller by popping the top of the return stack into

@@ -23,7 +23,7 @@ static YkInstruction* yk_program_counter;
 static YkObject yk_bytecode_register;
 
 /* Symbols */
-YkObject yk_tee;
+YkObject yk_tee, yk_nil;
 
 /* Stacks */
 YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
@@ -484,6 +484,7 @@ void yk_init() {
 
 	/* Special symbols */
 	yk_tee = yk_make_symbol("t");
+	yk_nil = yk_make_symbol("nil");
 
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
@@ -494,7 +495,7 @@ void yk_init() {
 
 	yk_make_builtin("=", 2, yk_builtin_neq);
 
-	yk_make_builtin("cons", 2, yk_builtin_cons);
+	yk_make_builtin(":", 2, yk_builtin_cons);
 	yk_make_builtin("head", 1, yk_builtin_head);
 	yk_make_builtin("tail", 1, yk_builtin_tail);
 	yk_make_builtin("first", 1, yk_builtin_head);
@@ -789,6 +790,56 @@ start:
 	case YK_OP_UNBIND:
 		yk_lisp_stack_top += yk_program_counter->modifier;
 		yk_program_counter++;
+		break;
+	case YK_OP_TAIL_CALL:
+		if (YK_CLOSUREP(yk_value_register)) {
+			panic("Not implemented!\n");
+		}
+		else if (YK_BYTECODEP(yk_value_register)) {
+			YkInt last_frame_size = YK_INT(yk_lisp_stack_top[yk_program_counter->modifier]);
+
+			YkObject* last_top = yk_lisp_stack_top;
+			yk_lisp_stack_top += last_frame_size + yk_program_counter->modifier + 1;
+
+			yk_lisp_stack_top -= yk_program_counter->modifier;
+			memcpy(yk_lisp_stack_top, last_top, sizeof(YkObject) * yk_program_counter->modifier);
+
+			YK_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
+
+			YkObject code = YK_PTR(yk_value_register);
+			YkInt nargs = code->bytecode.nargs;
+			if (nargs >= 0) {
+				YK_ASSERT(yk_program_counter->modifier == nargs);
+			}
+			else {
+				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
+			}
+
+			yk_bytecode_register = code;
+			yk_program_counter = code->bytecode.code;
+		}
+		else if (YK_CPROCP(yk_value_register)) {
+			YkObject proc = YK_PTR(yk_value_register);
+			YkInt nargs = proc->c_proc.nargs;
+			if (nargs >= 0) {
+				YK_ASSERT(yk_program_counter->modifier == nargs);
+			}
+			else {
+				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
+			}
+
+			yk_value_register = proc->c_proc.cfun(yk_program_counter->modifier);
+			yk_lisp_stack_top += yk_program_counter->modifier;
+
+			YkObject last_nargs; /* Only builtin functions return control in tail calls */
+			YK_STACK_POP(last_nargs);
+			yk_lisp_stack_top += YK_INT(last_nargs);
+			YK_RET_POP(yk_program_counter);
+			YK_RET_POP(yk_bytecode_register);
+		}
+		else {
+			panic("Not a function!\n");
+		}
 		break;
 	case YK_OP_CALL:
 		if (YK_CLOSUREP(yk_value_register)) {
