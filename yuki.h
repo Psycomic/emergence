@@ -119,6 +119,8 @@ typedef enum {
 	YK_OP_RET,
 	YK_OP_JMP,
 	YK_OP_JNIL,
+	YK_OP_BIND_DYNAMIC,
+	YK_OP_UNBIND_DYNAMIC,
 	YK_OP_END
 } YkOpcode;
 
@@ -136,7 +138,8 @@ typedef struct {
 	enum YkSymbolType {
 		yk_s_normal,
 		yk_s_macro,
-		yk_s_constant
+		yk_s_constant,
+		yk_s_dynamic
 	} type;
 	uint32_t hash;
 	char* name;
@@ -169,6 +172,11 @@ typedef struct {
 	YkObject bytecode;
 	YkObject lexical_env;
 } YkClosure;
+
+typedef struct {
+	YkObject symbol;
+	YkObject old_value;
+} YkDynamicBinding;
 
 union YkUnion {
 	YkType t;

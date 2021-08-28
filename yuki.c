@@ -29,19 +29,24 @@ YkObject yk_tee, yk_nil;
 YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
 YkUint yk_gc_stack_size;
 
-#define YK_LISP_STACK_MAX_SIZE 1024
-static YkObject yk_lisp_stack[YK_LISP_STACK_MAX_SIZE];
+#define YK_STACK_MAX_SIZE 1024
+static YkObject yk_lisp_stack[YK_STACK_MAX_SIZE];
 static YkObject* yk_lisp_stack_top;
 
-#define YK_STACK_PUSH(x) *(--yk_lisp_stack_top) = x
-#define YK_STACK_POP(x) x = *(yk_lisp_stack_top++)
+static YkObject yk_return_stack[YK_STACK_MAX_SIZE];
+static YkObject* yk_return_stack_top;
+
+static YkDynamicBinding yk_dynamic_bindings_stack[YK_STACK_MAX_SIZE];
+static YkDynamicBinding* yk_dynamic_bindings_stack_top;
+
+#define YK_PUSH(stack, x) *(--(stack)) = x
+#define YK_POP(stack, x) x = *((stack)++)
+
+#define YK_LISP_STACK_PUSH(x) YK_PUSH(yk_lisp_stack_top, x)
+#define YK_LISP_STACK_POP(x) YK_POP(yk_lisp_stack_top, x)
 
 #define YK_RET_PUSH(x) *(--yk_return_stack_top) = (void*)(x)
 #define YK_RET_POP(x) x = (void*)(*(yk_return_stack_top++))
-
-#define YK_LISP_STACK_MAX_SIZE 1024
-static YkObject yk_return_stack[YK_LISP_STACK_MAX_SIZE];
-static YkObject* yk_return_stack_top;
 
 static void yk_gc();
 
@@ -160,10 +165,10 @@ static void yk_gc() {
 	for (size_t i = 0; i < yk_gc_stack_size; i++)
 		yk_mark(*yk_gc_stack[i]);
 
-	for (long i = 0; i < yk_lisp_stack_top - yk_lisp_stack - YK_LISP_STACK_MAX_SIZE; i++)
+	for (long i = 0; i < yk_lisp_stack_top - yk_lisp_stack - YK_STACK_MAX_SIZE; i++)
 		yk_mark(yk_lisp_stack_top[i]);
 
-	for (long i = 0; i < yk_return_stack_top - yk_return_stack - YK_LISP_STACK_MAX_SIZE; i += 2)
+	for (long i = 0; i < yk_return_stack_top - yk_return_stack - YK_STACK_MAX_SIZE; i += 2)
 		yk_mark(yk_return_stack_top[i]);
 
 	yk_sweep();
@@ -182,6 +187,7 @@ static void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
 	YK_GC_PROTECT2(proc, sym);
 
 	sym = yk_make_symbol(name);
+	sym->symbol.declared = 1;
 
 	proc = yk_alloc();
 	proc->c_proc.name = sym;
@@ -472,10 +478,21 @@ static YkObject yk_builtin_compiled_functionp(YkUint nargs) {
 	return YK_CPROCP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
 }
 
+static YkObject yk_builtin_boundp(YkUint nargs) {
+	YkObject sym = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_SYMBOLP(sym));
+
+	if (YK_PTR(sym)->symbol.value == NULL)
+		return YK_NIL;
+	else
+		return yk_tee;
+}
+
 void yk_init() {
 	yk_gc_stack_size = 0;
-	yk_lisp_stack_top = yk_lisp_stack + YK_LISP_STACK_MAX_SIZE;
-	yk_return_stack_top = yk_return_stack + YK_LISP_STACK_MAX_SIZE;
+	yk_lisp_stack_top = yk_lisp_stack + YK_STACK_MAX_SIZE;
+	yk_return_stack_top = yk_return_stack + YK_STACK_MAX_SIZE;
+	yk_dynamic_bindings_stack_top = yk_dynamic_bindings_stack + YK_STACK_MAX_SIZE;
 	yk_value_register = YK_NIL;
 	yk_program_counter = NULL;
 
@@ -484,7 +501,12 @@ void yk_init() {
 
 	/* Special symbols */
 	yk_tee = yk_make_symbol("t");
+	YK_PTR(yk_tee)->symbol.value = yk_tee;
+	YK_PTR(yk_tee)->symbol.type = yk_s_constant;
+
 	yk_nil = yk_make_symbol("nil");
+	YK_PTR(yk_nil)->symbol.value = YK_NIL;
+	YK_PTR(yk_nil)->symbol.type = yk_s_constant;
 
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
@@ -511,6 +533,8 @@ void yk_init() {
 	yk_make_builtin("closure?", 1, yk_builtin_closurep);
 	yk_make_builtin("bytecode?", 1, yk_builtin_bytecodep);
 	yk_make_builtin("compiled-function?", 1, yk_builtin_compiled_functionp);
+
+	yk_make_builtin("bound?", 1, yk_builtin_boundp);
 }
 
 YkObject yk_make_symbol(char* name) {
@@ -539,7 +563,10 @@ YkObject yk_make_symbol(char* name) {
 			 s = s->symbol.next_sym);
 
 		if (YK_PTR(s)->symbol.hash == hash) {
-			return s;
+			if (s == yk_nil)
+				return YK_NIL;
+			else
+				return s;
 		} else {
 			sym = yk_alloc();
 
@@ -784,7 +811,7 @@ start:
 		if (yk_lisp_stack_top <= yk_lisp_stack)
 			panic("Stack overflow!\n");
 
-		YK_STACK_PUSH(yk_value_register);
+		YK_LISP_STACK_PUSH(yk_value_register);
 		yk_program_counter++;
 		break;
 	case YK_OP_UNBIND:
@@ -804,7 +831,7 @@ start:
 			yk_lisp_stack_top -= yk_program_counter->modifier;
 			memcpy(yk_lisp_stack_top, last_top, sizeof(YkObject) * yk_program_counter->modifier);
 
-			YK_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
+			YK_LISP_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
 
 			YkObject code = YK_PTR(yk_value_register);
 			YkInt nargs = code->bytecode.nargs;
@@ -832,7 +859,7 @@ start:
 			yk_lisp_stack_top += yk_program_counter->modifier;
 
 			YkObject last_nargs; /* Only builtin functions return control in tail calls */
-			YK_STACK_POP(last_nargs);
+			YK_LISP_STACK_POP(last_nargs);
 			yk_lisp_stack_top += YK_INT(last_nargs);
 			YK_RET_POP(yk_program_counter);
 			YK_RET_POP(yk_bytecode_register);
@@ -846,7 +873,7 @@ start:
 			panic("Not implemented!\n");
 		}
 		else if (YK_BYTECODEP(yk_value_register)) {
-			YK_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
+			YK_LISP_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
 
 			YK_RET_PUSH(yk_bytecode_register);
 			YK_RET_PUSH(yk_program_counter + 1);
@@ -884,7 +911,7 @@ start:
 	case YK_OP_RET:
 	{
 		YkObject nargs;
-		YK_STACK_POP(nargs);
+		YK_LISP_STACK_POP(nargs);
 		yk_lisp_stack_top += YK_INT(nargs);
 		YK_RET_POP(yk_program_counter);
 		YK_RET_POP(yk_bytecode_register);
@@ -903,6 +930,25 @@ start:
 			yk_program_counter++;
 		}
 		break;
+	case YK_OP_BIND_DYNAMIC:
+	{
+		YkObject sym = yk_program_counter->ptr;
+		yk_dynamic_bindings_stack_top--;
+		yk_dynamic_bindings_stack_top->symbol = sym;
+		yk_dynamic_bindings_stack_top->old_value = YK_PTR(sym)->symbol.value;
+
+		YK_PTR(sym)->symbol.value = yk_value_register;
+	}
+		yk_program_counter++;
+		break;
+	case YK_OP_UNBIND_DYNAMIC:
+		for (uint16_t i = 0; i < yk_program_counter->modifier; i++) {
+			YK_PTR(yk_dynamic_bindings_stack_top[i].symbol)->symbol.value =
+				yk_dynamic_bindings_stack_top[i].old_value;
+		}
+		yk_dynamic_bindings_stack_top += yk_program_counter->modifier;
+		yk_program_counter++;
+		break;
 	case YK_OP_END:
 		goto end;
 		break;
@@ -911,9 +957,9 @@ start:
 #ifdef YK_RUN_DEBUG
 
 	printf("\n ______STACK_____\n");
-	if (yk_lisp_stack_top - yk_lisp_stack < YK_LISP_STACK_MAX_SIZE) {
+	if (yk_lisp_stack_top - yk_lisp_stack < YK_STACK_MAX_SIZE) {
 		for (YkObject* ptr = yk_lisp_stack_top;
-			 ptr < yk_lisp_stack + YK_LISP_STACK_MAX_SIZE; ptr++)
+			 ptr < yk_lisp_stack + YK_STACK_MAX_SIZE; ptr++)
 		{
 			if (*ptr != NULL) {
 				printf(" | ");

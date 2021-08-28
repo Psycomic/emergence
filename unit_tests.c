@@ -183,6 +183,13 @@ void execute_tests(void) {
 		YkObject fact = YK_NIL, range = YK_NIL, bytecode = YK_NIL;
 		YK_GC_PROTECT3(fact, range, bytecode);
 
+		/*
+		  (func fact (x)
+		  	(if (= x 0)
+				1
+				(* (fact (- x 1)) x)))
+		 */
+
    		fact = yk_make_bytecode_begin(yk_make_symbol("fact"), 1);
 		yk_bytecode_emit(fact, YK_OP_LEXICAL_VAR, 1, YK_NIL);
 		yk_bytecode_emit(fact, YK_OP_PUSH, 0, YK_NIL);
@@ -214,7 +221,6 @@ void execute_tests(void) {
 				acc
 				(range (- x 1)
 					   (: x acc))))
-
 		 */
 
 		range = yk_make_bytecode_begin(yk_make_symbol("range"), 2);
@@ -251,10 +257,19 @@ void execute_tests(void) {
 		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, range);
 		yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(89));
+		yk_bytecode_emit(bytecode, YK_OP_BIND_DYNAMIC, 0, yk_make_symbol("*var*"));
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*var*"));
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(689));
+		yk_bytecode_emit(bytecode, YK_OP_BIND_DYNAMIC, 0, yk_make_symbol("*var*"));
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*var*"));
+		yk_bytecode_emit(bytecode, YK_OP_UNBIND_DYNAMIC, 1, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*var*"));
+		yk_bytecode_emit(bytecode, YK_OP_UNBIND_DYNAMIC, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
 
 		clock_t t1 = clock();
-		yk_print(yk_run(bytecode));
+		yk_run(bytecode);
 		clock_t t2 = clock();
 
 		printf("\n");

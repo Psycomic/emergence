@@ -704,7 +704,10 @@ LinearCode make_hamming_code(uint64_t check_bits_count) {
 		}
 	}
 
-	LinearCode code = { .generator = generator, .parity_check = binary_matrix_transpose(parity_check) };
+	LinearCode code = {
+		.generator = generator,
+		.parity_check = binary_matrix_transpose(parity_check)
+	};
 	free(parity_check);
 
 	return code;
