@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <memory.h>
 #include <time.h>
+#include <math.h>
 
 #include "random.h"
 #include "misc.h"
@@ -44,6 +45,11 @@ float gaussian_random() {
 		sum += random_float();
 
 	return sum - 6.f;
+}
+
+float random_normal(float mean, float deviation) {
+	/* N(μ, σ²) = μ + σZ */
+	return gaussian_random() * sqrtf(deviation) + mean;
 }
 
 void random_arrayf(float* destination, uint64_t size) {

@@ -277,7 +277,23 @@ void execute_tests(void) {
 
 		YK_GC_UNPROTECT;
 
-		yk_repl();
+		/* yk_repl(); */
+	}
+
+	{
+		random_seed(696969);
+
+		MatrixUint16* x = matrix_random_randint_uint16(0, 10, 2, 3);
+		MatrixUint16* y = matrix_random_randint_uint16(0, 10, 3, 4);
+
+		MatrixUint16* z = matrix_dot_uint16(x, y);
+
+		printf("X: \n");
+		matrix_print_uint16(x);
+		printf("Y: \n");
+		matrix_print_uint16(y);
+		printf("Z: \n");
+		matrix_print_uint16(z);
 	}
 
 	{
@@ -296,4 +312,6 @@ void execute_tests(void) {
 		}
 */
 	}
+
+	exit(0);
 }

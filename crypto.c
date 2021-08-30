@@ -712,3 +712,295 @@ LinearCode make_hamming_code(uint64_t check_bits_count) {
 
 	return code;
 }
+
+MatrixUint16* matrix_random_randint_uint16(uint16_t low, uint16_t high, size_t w, size_t h) {
+	MatrixUint16* mat = malloc(sizeof(MatrixUint16) + sizeof(uint16_t) * w * h);
+	mat->width = w;
+	mat->height = h;
+
+	for (size_t i = 0; i < w * h; i++) {
+		uint64_t r = random_randint();
+		mat->data[i] = low + r % (high - low);
+	}
+
+	return mat;
+}
+
+MatrixInt16* matrix_random_randint_int16(int16_t low, int16_t high, size_t w, size_t h) {
+	MatrixInt16* mat = malloc(sizeof(MatrixInt16) + sizeof(int16_t) * w * h);
+	mat->width = w;
+	mat->height = h;
+
+	for (size_t i = 0; i < w * h; i++) {
+		uint64_t r = random_randint();
+		mat->data[i] = low + r % (high - low);
+	}
+
+	return mat;
+}
+
+MatrixUint32* matrix_random_randint_uint32(uint32_t low, uint32_t high, size_t w, size_t h) {
+	MatrixUint32* mat = malloc(sizeof(MatrixUint32) + sizeof(uint32_t) * w * h);
+	mat->width = w;
+	mat->height = h;
+
+	for (size_t i = 0; i < w * h; i++) {
+		uint64_t r = random_randint();
+		mat->data[i] = low + r % (high - low);
+	}
+
+	return mat;
+}
+
+MatrixInt32* matrix_random_randint_int32(int32_t low, int32_t high, size_t w, size_t h) {
+	MatrixInt32* mat = malloc(sizeof(MatrixInt32) + sizeof(int32_t) * w * h);
+	mat->width = w;
+	mat->height = h;
+
+	for (size_t i = 0; i < w * h; i++) {
+		uint64_t r = random_randint();
+		mat->data[i] = low + r % (high - low);
+	}
+
+	return mat;
+}
+
+MatrixFloat32* matrix_random_normal_float32(float mean, float deviation, size_t w, size_t h) {
+	MatrixFloat32* mat = malloc(sizeof(MatrixFloat32) + sizeof(float) * w * h);
+	mat->width = w;
+	mat->height = h;
+
+	for (size_t i = 0; i < w * h; i++) {
+		mat->data[i] = random_normal(mean, deviation);
+	}
+
+	return mat;
+}
+
+void matrix_round_to_uint16(MatrixFloat32* from, MatrixUint16* to) {
+	assert(from->width == to->width && from->height == to->height);
+
+	for (size_t i = 0; i < from->width * from->height; i++) {
+		to->data[i] = (uint16_t)roundf(from->data[i]);
+	}
+}
+
+void matrix_round_to_int16(MatrixFloat32* from, MatrixInt16* to) {
+	assert(from->width == to->width && from->height == to->height);
+
+	for (size_t i = 0; i < from->width * from->height; i++) {
+		to->data[i] = (int16_t)roundf(from->data[i]);
+	}
+}
+
+void matrix_round_to_uint32(MatrixFloat32* from, MatrixUint32* to) {
+	assert(from->width == to->width && from->height == to->height);
+
+	for (size_t i = 0; i < from->width * from->height; i++) {
+		to->data[i] = (uint32_t)roundf(from->data[i]);
+	}
+}
+
+void matrix_round_to_int32(MatrixFloat32* from, MatrixInt32* to) {
+	assert(from->width == to->width && from->height == to->height);
+
+	for (size_t i = 0; i < from->width * from->height; i++) {
+		to->data[i] = (int32_t)roundf(from->data[i]);
+	}
+}
+
+void matrix_mod_uint16(MatrixUint16* mat, uint16_t x) {
+	for (size_t i = 0; i < mat->width * mat->height; i++) {
+		mat->data[i] %= x;
+	}
+}
+
+void matrix_mod_int16(MatrixInt16* mat, int16_t x) {
+	for (size_t i = 0; i < mat->width * mat->height; i++) {
+		mat->data[i] %= x;
+	}
+}
+
+void matrix_mod_uint32(MatrixUint32* mat, uint32_t x) {
+	for (size_t i = 0; i < mat->width * mat->height; i++) {
+		mat->data[i] %= x;
+	}
+}
+
+void matrix_mod_int32(MatrixInt32* mat, int32_t x) {
+	for (size_t i = 0; i < mat->width * mat->height; i++) {
+		mat->data[i] %= x;
+	}
+}
+
+#define MATRIX_GET(mat, x, y) mat->data[x * mat->height + y]
+
+MatrixUint16* matrix_dot_uint16(MatrixUint16* a, MatrixUint16* b) {
+	assert(a->height == b->width);
+
+	size_t new_width = a->width,
+		new_height = b->height;
+
+	MatrixUint16* new_matrix = malloc(sizeof(MatrixUint16) +
+									  sizeof(uint16_t) * new_width * new_height);
+	new_matrix->width = new_width;
+	new_matrix->height = new_height;
+
+	for (size_t x = 0; x < new_width; x++) {
+		for (size_t y = 0; y < new_height; y++) {
+			MATRIX_GET(new_matrix, x, y) = 0;
+
+			for (size_t k = 0; k < b->width; k++) {
+				MATRIX_GET(new_matrix, x, y) +=
+					MATRIX_GET(a, x, k) * MATRIX_GET(b, k, y);
+			}
+		}
+	}
+
+	return new_matrix;
+}
+
+MatrixInt16* matrix_dot_int16(MatrixInt16* a, MatrixInt16* b) {
+	assert(a->height == b->width);
+
+	size_t new_width = a->width,
+		new_height = b->height;
+
+	MatrixInt16* new_matrix = malloc(sizeof(MatrixInt16) +
+									 sizeof(int16_t) * new_width * new_height);
+	new_matrix->width = new_width;
+	new_matrix->height = new_height;
+
+	for (size_t x = 0; x < new_width; x++) {
+		for (size_t y = 0; y < new_height; y++) {
+			MATRIX_GET(new_matrix, x, y) = 0;
+
+			for (size_t k = 0; k < b->width; k++) {
+				MATRIX_GET(new_matrix, x, y) +=
+					MATRIX_GET(a, x, k) * MATRIX_GET(b, k, y);
+			}
+		}
+	}
+
+	return new_matrix;
+}
+
+MatrixUint32* matrix_dot_uint32(MatrixUint32* a, MatrixUint32* b) {
+	assert(a->height == b->width);
+
+	size_t new_width = a->width,
+		new_height = b->height;
+
+	MatrixUint32* new_matrix = malloc(sizeof(MatrixUint32) +
+									  sizeof(uint32_t) * new_width * new_height);
+	new_matrix->width = new_width;
+	new_matrix->height = new_height;
+
+	for (size_t x = 0; x < new_width; x++) {
+		for (size_t y = 0; y < new_height; y++) {
+			MATRIX_GET(new_matrix, x, y) = 0;
+
+			for (size_t k = 0; k < b->width; k++) {
+				MATRIX_GET(new_matrix, x, y) +=
+					MATRIX_GET(a, x, k) * MATRIX_GET(b, k, y);
+			}
+		}
+	}
+
+	return new_matrix;
+}
+
+MatrixInt32* matrix_dot_int32(MatrixInt32* a, MatrixInt32* b) {
+	assert(a->height == b->width);
+
+	size_t new_width = a->width,
+		new_height = b->height;
+
+	MatrixInt32* new_matrix = malloc(sizeof(MatrixInt32) +
+									 sizeof(int32_t) * new_width * new_height);
+	new_matrix->width = new_width;
+	new_matrix->height = new_height;
+
+	for (size_t x = 0; x < new_width; x++) {
+		for (size_t y = 0; y < new_height; y++) {
+			MATRIX_GET(new_matrix, x, y) = 0;
+
+			for (size_t k = 0; k < b->width; k++) {
+				MATRIX_GET(new_matrix, x, y) +=
+					MATRIX_GET(a, x, k) * MATRIX_GET(b, k, y);
+			}
+		}
+	}
+
+	return new_matrix;
+}
+
+MatrixFloat32* matrix_dot_float32(MatrixFloat32* a, MatrixFloat32* b) {
+	assert(a->height == b->width);
+
+	size_t new_width = a->width,
+		new_height = b->height;
+
+	MatrixFloat32* new_matrix = malloc(sizeof(MatrixFloat32) +
+									   sizeof(float) * new_width * new_height);
+	new_matrix->width = new_width;
+	new_matrix->height = new_height;
+
+	for (size_t x = 0; x < new_width; x++) {
+		for (size_t y = 0; y < new_height; y++) {
+			MATRIX_GET(new_matrix, x, y) = 0;
+
+			for (size_t k = 0; k < b->width; k++) {
+				MATRIX_GET(new_matrix, x, y) +=
+					MATRIX_GET(a, x, k) * MATRIX_GET(b, k, y);
+			}
+		}
+	}
+
+	return new_matrix;
+}
+
+void matrix_print_uint16(MatrixUint16* mat) {
+	for (size_t x = 0; x < mat->width; x++) {
+		for (size_t y = 0; y < mat->height; y++) {
+			printf("%u ", MATRIX_GET(mat, x, y));
+		}
+		printf("\n");
+	}
+}
+
+void matrix_print_int16(MatrixInt16* mat) {
+	for (size_t x = 0; x < mat->width; x++) {
+		for (size_t y = 0; y < mat->height; y++) {
+			printf("%d ", MATRIX_GET(mat, x, y));
+		}
+		printf("\n");
+	}
+}
+
+void matrix_print_uint32(MatrixUint32* mat) {
+	for (size_t x = 0; x < mat->width; x++) {
+		for (size_t y = 0; y < mat->height; y++) {
+			printf("%u ", MATRIX_GET(mat, x, y));
+		}
+		printf("\n");
+	}
+}
+
+void matrix_print_int32(MatrixInt32* mat) {
+	for (size_t x = 0; x < mat->width; x++) {
+		for (size_t y = 0; y < mat->height; y++) {
+			printf("%d ", MATRIX_GET(mat, x, y));
+		}
+		printf("\n");
+	}
+}
+
+void matrix_print_float32(MatrixFloat32* mat) {
+	for (size_t x = 0; x < mat->width; x++) {
+		for (size_t y = 0; y < mat->height; y++) {
+			printf("%f ", MATRIX_GET(mat, x, y));
+		}
+		printf("\n");
+	}
+}
