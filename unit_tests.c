@@ -281,19 +281,35 @@ void execute_tests(void) {
 	}
 
 	{
-		random_seed(696969);
+		random_seed(time(NULL));
 
-		MatrixUint16* x = matrix_random_randint_uint16(0, 10, 2, 3);
-		MatrixUint16* y = matrix_random_randint_uint16(0, 10, 3, 4);
+		LWEPrivateKey prk;
+		LWEPublicKey puk;
 
-		MatrixUint16* z = matrix_dot_uint16(x, y);
+		lwe_generate_keys(5, 12, 5, 2, 4093, 0.0024f, &puk, &prk);
 
-		printf("X: \n");
-		matrix_print_uint16(x);
-		printf("Y: \n");
-		matrix_print_uint16(y);
-		printf("Z: \n");
-		matrix_print_uint16(z);
+		printf("Public key A: \n");
+		matrix_print_int32(puk.A);
+
+		printf("Public key P: \n");
+		matrix_print_int32(puk.P);
+
+		printf("Private key S: \n");
+		matrix_print_int32(prk.S);
+
+		uint8_t encrypted = 25;
+		binary_vector_print(&encrypted, 5);
+
+		MatrixInt32* c;
+		MatrixInt32* u;
+
+		lwe_encrypt(&encrypted, &puk, &c, &u);
+
+		MatrixInt32* decrypted = matrix_zeros_int32(1, 5);
+		lwe_decrypt(c, u, &prk, decrypted);
+
+		printf("Decrypted is:\n");
+		matrix_print_int32(decrypted);
 	}
 
 	{

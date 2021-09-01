@@ -49,7 +49,7 @@ float gaussian_random() {
 
 float random_normal(float mean, float deviation) {
 	/* N(μ, σ²) = μ + σZ */
-	return gaussian_random() * sqrtf(deviation) + mean;
+	return gaussian_random() * deviation + mean;
 }
 
 void random_arrayf(float* destination, uint64_t size) {
