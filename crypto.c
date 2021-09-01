@@ -824,7 +824,7 @@ void matrix_mod_int32(MatrixInt32* mat, int32_t x) {
 		if (mat->data[i] >= 0)
 			mat->data[i] %= x;
 		else
-			mat->data[i] = x - (mat->data[i] % x);
+			mat->data[i] = x + (mat->data[i] % x);
 	}
 }
 
@@ -1081,8 +1081,7 @@ void lwe_encrypt(uint8_t* message, LWEPublicKey* key,
 
 void lwe_decrypt(MatrixInt32* c, MatrixInt32* u, LWEPrivateKey* key, MatrixInt32* message) {
 	MatrixInt32* temp = matrix_dot_int32(u, key->S);
-	printf("Temp is\n");
-	matrix_print_int32(temp);
+	matrix_mod_int32(temp, key->q);
 	matrix_neg_int32(temp);
 
 	MatrixInt32* temp2 = matrix_copy_int32(c);
@@ -1090,9 +1089,6 @@ void lwe_decrypt(MatrixInt32* c, MatrixInt32* u, LWEPrivateKey* key, MatrixInt32
 	free(temp);
 
 	matrix_mod_int32(temp2, key->q);
-
-	printf("Temp2 is\n");
-	matrix_print_int32(temp2);
 
 	lwe_f_inv(temp2, message, key->q, 2);
 	free(temp2);
