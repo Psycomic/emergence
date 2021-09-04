@@ -39,6 +39,9 @@ static YkObject* yk_return_stack_top;
 static YkDynamicBinding yk_dynamic_bindings_stack[YK_STACK_MAX_SIZE];
 static YkDynamicBinding* yk_dynamic_bindings_stack_top;
 
+static YkObject yk_continuations_stack[YK_STACK_MAX_SIZE];
+static YkObject* yk_continuations_stack_top;
+
 #define YK_PUSH(stack, x) *(--(stack)) = x
 #define YK_POP(stack, x) x = *((stack)++)
 
@@ -52,7 +55,7 @@ static void yk_gc();
 
 static void yk_allocator_init() {
 	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
-    yk_workspace_size= YK_WORKSPACE_SIZE;
+    yk_workspace_size = YK_WORKSPACE_SIZE;
 	yk_free_list = yk_workspace;
 
 	if ((uint64_t)yk_free_list % 16 != 0) {
@@ -127,6 +130,13 @@ mark:
 		o = docstring;
 		goto mark;
 	}
+	else if (YK_CONTINUATIONP(o)) {
+		YkObject bytecode = YK_PTR(o)->continuation.bytecode_register;
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+
+		o = bytecode;
+		goto mark;
+	}
 	else {
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
@@ -168,7 +178,20 @@ static void yk_gc() {
 	for (long i = 0; i < yk_lisp_stack_top - yk_lisp_stack - YK_STACK_MAX_SIZE; i++)
 		yk_mark(yk_lisp_stack_top[i]);
 
-	for (long i = 0; i < yk_return_stack_top - yk_return_stack - YK_STACK_MAX_SIZE; i += 2)
+	for (long i = 0; i < yk_continuations_stack_top - yk_continuations_stack -
+			 YK_STACK_MAX_SIZE; i++)
+		yk_mark(yk_continuations_stack_top[i]);
+
+	for (long i = 0; i < yk_dynamic_bindings_stack_top -
+			 yk_dynamic_bindings_stack - YK_STACK_MAX_SIZE;
+		 i++)
+	{
+		yk_mark(yk_dynamic_bindings_stack_top[i].symbol);
+		yk_mark(yk_dynamic_bindings_stack_top[i].old_value);
+	}
+
+	for (long i = 0; i < yk_return_stack_top - yk_return_stack - YK_STACK_MAX_SIZE;
+		 i += 2)
 		yk_mark(yk_return_stack_top[i]);
 
 	yk_sweep();
@@ -493,6 +516,7 @@ void yk_init() {
 	yk_lisp_stack_top = yk_lisp_stack + YK_STACK_MAX_SIZE;
 	yk_return_stack_top = yk_return_stack + YK_STACK_MAX_SIZE;
 	yk_dynamic_bindings_stack_top = yk_dynamic_bindings_stack + YK_STACK_MAX_SIZE;
+	yk_continuations_stack_top = yk_continuations_stack + YK_STACK_MAX_SIZE;
 	yk_value_register = YK_NIL;
 	yk_program_counter = NULL;
 
@@ -583,6 +607,20 @@ YkObject yk_make_symbol(char* name) {
 			return sym;
 		}
 	}
+}
+
+YkObject yk_make_continuation(uint16_t offset) {
+	YkObject cont = yk_alloc();
+	cont->t = yk_t_continuation;
+
+	cont->continuation.lisp_stack_pointer = yk_lisp_stack_top;
+	cont->continuation.return_stack_pointer = yk_return_stack_top;
+	cont->continuation.dynamic_bindings_stack_pointer = yk_dynamic_bindings_stack_top;
+	cont->continuation.bytecode_register = yk_bytecode_register;
+	cont->continuation.program_counter = YK_PTR(yk_bytecode_register)->bytecode.code + offset;
+	cont->continuation.exited = 0;
+
+	return cont;
 }
 
 YkObject yk_cons(YkObject car, YkObject cdr) {
@@ -948,6 +986,46 @@ start:
 		}
 		yk_dynamic_bindings_stack_top += yk_program_counter->modifier;
 		yk_program_counter++;
+		break;
+	case YK_OP_WITH_CONT:
+		YK_PUSH(yk_continuations_stack_top,
+				yk_make_continuation(yk_program_counter->modifier));
+		yk_program_counter++;
+		break;
+	case YK_OP_EXIT_CONT:
+	{
+		YkObject exit = yk_continuations_stack_top[yk_program_counter->modifier];
+		YK_ASSERT(!(YK_PTR(exit)->continuation.exited));
+
+		for (uint i = 0; i < yk_program_counter->modifier; i--) {
+			YkObject cont;
+			YK_POP(yk_continuations_stack_top, cont);
+			YK_PTR(cont)->continuation.exited = 1;
+		}
+
+		YkDynamicBinding* ptr = yk_dynamic_bindings_stack_top;
+		YkDynamicBinding* next_ptr = YK_PTR(exit)->continuation.dynamic_bindings_stack_pointer;
+		for (; ptr != next_ptr; ptr++) { /* todo */
+			YK_PTR(ptr->symbol)->symbol.value = ptr->old_value;
+		}
+
+		yk_dynamic_bindings_stack_top = YK_PTR(exit)->continuation.dynamic_bindings_stack_pointer;
+		yk_lisp_stack_top = YK_PTR(exit)->continuation.lisp_stack_pointer;
+		yk_return_stack_top = YK_PTR(exit)->continuation.return_stack_pointer;
+		yk_bytecode_register = YK_PTR(exit)->continuation.bytecode_register;
+		yk_program_counter = YK_PTR(exit)->continuation.program_counter;
+
+		YK_PTR(exit)->continuation.exited = 1;
+		yk_continuations_stack_top++;
+	}
+		break;
+	case YK_OP_EXIT:
+	{
+		YkObject exit;
+		YK_POP(yk_continuations_stack_top, exit);
+		YK_PTR(exit)->continuation.exited = 1;
+		yk_program_counter++;
+	}
 		break;
 	case YK_OP_END:
 		goto end;

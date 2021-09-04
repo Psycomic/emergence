@@ -17,8 +17,10 @@ typedef enum {
 	yk_t_closure = 6 << 1,
 	yk_t_bytecode = 7 << 1,
 	/* Tagged values end */
-	yk_t_array,
-	yk_t_stream,
+	yk_t_continuation = 8 << 1,
+	yk_t_array = 9 << 1,
+	yk_t_string = 10 << 1,
+	yk_t_stream = 11 << 1,
 } YkType;
 
 union YkUnion;
@@ -62,6 +64,8 @@ typedef union YkUnion *YkObject;
 
 #define YK_TAG_BYTECODE(x) YK_TAG(x, yk_t_bytecode)
 #define YK_BYTECODEP(x) (YK_IMMEDIATE(x) == yk_t_bytecode)
+
+#define YK_CONTINUATIONP(x) ((x)->t == yk_t_continuation)
 
 #define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? (x)->t : YK_IMMEDIATE(x))
 
@@ -121,6 +125,9 @@ typedef enum {
 	YK_OP_JNIL,
 	YK_OP_BIND_DYNAMIC,
 	YK_OP_UNBIND_DYNAMIC,
+	YK_OP_WITH_CONT,
+	YK_OP_EXIT_CONT,
+	YK_OP_EXIT,
 	YK_OP_END
 } YkOpcode;
 
@@ -178,6 +185,17 @@ typedef struct {
 	YkObject old_value;
 } YkDynamicBinding;
 
+typedef struct {
+	YkType t;
+	YkObject* lisp_stack_pointer;
+	YkObject* return_stack_pointer;
+	YkDynamicBinding* dynamic_bindings_stack_pointer;
+	YkObject bytecode_register;
+	YkInstruction* program_counter;
+	YkObject dummmy;
+	uint8_t exited;
+} YkContinuation;
+
 union YkUnion {
 	YkType t;
 	double number_double;
@@ -186,6 +204,7 @@ union YkUnion {
 	YkCProc c_proc;
 	YkClosure closure;
 	YkBytecode bytecode;
+	YkContinuation continuation;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);
