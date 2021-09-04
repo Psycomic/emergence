@@ -65,9 +65,9 @@ typedef union YkUnion *YkObject;
 #define YK_TAG_BYTECODE(x) YK_TAG(x, yk_t_bytecode)
 #define YK_BYTECODEP(x) (YK_IMMEDIATE(x) == yk_t_bytecode)
 
-#define YK_CONTINUATIONP(x) ((x)->t == yk_t_continuation)
+#define YK_CONTINUATIONP(x) ((x)->t.t == yk_t_continuation)
 
-#define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? (x)->t : YK_IMMEDIATE(x))
+#define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? (x)->t.t : YK_IMMEDIATE(x))
 
 #define YK_LIST_FOREACH(list, l) for (YkObject l = list; l != YK_NIL; l = YK_CDR(l))
 
@@ -186,18 +186,21 @@ typedef struct {
 } YkDynamicBinding;
 
 typedef struct {
+	YkObject bytecode_register;
 	YkType t;
 	YkObject* lisp_stack_pointer;
 	YkObject* return_stack_pointer;
 	YkDynamicBinding* dynamic_bindings_stack_pointer;
-	YkObject bytecode_register;
 	YkInstruction* program_counter;
 	YkObject dummmy;
 	uint8_t exited;
 } YkContinuation;
 
 union YkUnion {
-	YkType t;
+	struct {
+		YkObject dummy;
+		YkType t;
+	} t;
 	double number_double;
 	YkCons cons;
 	YkSymbol symbol;

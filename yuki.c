@@ -611,7 +611,7 @@ YkObject yk_make_symbol(char* name) {
 
 YkObject yk_make_continuation(uint16_t offset) {
 	YkObject cont = yk_alloc();
-	cont->t = yk_t_continuation;
+	cont->continuation.t = yk_t_continuation;
 
 	cont->continuation.lisp_stack_pointer = yk_lisp_stack_top;
 	cont->continuation.return_stack_pointer = yk_return_stack_top;

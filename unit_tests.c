@@ -262,12 +262,6 @@ void execute_tests(void) {
 		 */
 
 		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(15));
-		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, range);
-		yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(89));
 		yk_bytecode_emit(bytecode, YK_OP_BIND_DYNAMIC, 0, yk_make_symbol("*var*"));
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*var*"));
@@ -275,6 +269,12 @@ void execute_tests(void) {
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(689));
 		yk_bytecode_emit(bytecode, YK_OP_BIND_DYNAMIC, 0, yk_make_symbol("*var*"));
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*var*"));
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(15));
+		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, range);
+		yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_EXIT_CONT, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_UNBIND_DYNAMIC, 1, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("*var*"));
