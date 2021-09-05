@@ -26,11 +26,11 @@ int signal_test(WorkerData* data) {
 }
 
 void execute_tests(void) {
-/*	Worker* worker = worker_create(signal_test, NULL);
+	Worker* worker = worker_create(signal_test, NULL);
 
 	while (!worker_finished(worker))
 		worker_update(worker);
-*/
+
 	// string test
 
 	char dest[8];
@@ -224,10 +224,10 @@ void execute_tests(void) {
 		 */
 
 		range = yk_make_bytecode_begin(yk_make_symbol("range"), 2);
-		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(0));
-		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_MAKE_INT(0));
-		yk_bytecode_emit(range, YK_OP_LEXICAL_VAR, 2, YK_MAKE_INT(0));
-		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_MAKE_INT(0));
+		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, range);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_LEXICAL_VAR, 2, YK_NIL);
+		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
 		yk_bytecode_emit(range, YK_OP_FETCH_GLOBAL, 0, yk_make_symbol("="));
 		yk_bytecode_emit(range, YK_OP_CALL, 2, YK_NIL);
 		yk_bytecode_emit(range, YK_OP_JNIL, 9, YK_NIL);

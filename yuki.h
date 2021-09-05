@@ -76,7 +76,7 @@ typedef union YkUnion *YkObject;
 #define YK_CDR(x) (YK_PTR(x)->cons.cdr)
 
 /* Error handling */
-#define YK_ASSERT(cond) assert(cond)
+#define YK_ASSERT(cond) yk_assert(cond, __FILE__, __LINE__)
 
 /* GC protection */
 #define YK_GC_STACK_MAX_SIZE 1024
@@ -187,9 +187,15 @@ typedef struct {
 
 typedef struct {
 	YkObject bytecode_register;
+	YkInstruction* program_counter;
+	YkObject* stack_pointer;
+} YkReturnInfo;
+
+typedef struct {
+	YkObject bytecode_register;
 	YkType t;
 	YkObject* lisp_stack_pointer;
-	YkObject* return_stack_pointer;
+	YkReturnInfo* return_stack_pointer;
 	YkDynamicBinding* dynamic_bindings_stack_pointer;
 	YkInstruction* program_counter;
 	YkObject dummmy;
@@ -220,6 +226,7 @@ YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 YkObject yk_read(const char* string);
 YkObject yk_run(YkObject bytecode);
+void yk_assert(uint8_t expression, const char* file, uint32_t line);
 void yk_repl();
 
 #endif
