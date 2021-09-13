@@ -17,10 +17,12 @@ typedef enum {
 	yk_t_closure = 6 << 1,
 	yk_t_bytecode = 7 << 1,
 	/* Tagged values end */
-	yk_t_continuation = 8 << 1,
-	yk_t_array = 9 << 1,
-	yk_t_string = 10 << 1,
-	yk_t_stream = 11 << 1,
+	yk_t_continuation,
+	yk_t_instance,
+	yk_t_class,
+	yk_t_array,
+	yk_t_string,
+	yk_t_stream,
 } YkType;
 
 union YkUnion;
@@ -76,7 +78,7 @@ typedef union YkUnion *YkObject;
 #define YK_CDR(x) (YK_PTR(x)->cons.cdr)
 
 /* Error handling */
-#define YK_ASSERT(cond) yk_assert(cond, __FILE__, __LINE__)
+#define YK_ASSERT(cond) yk_assert(cond, #cond, __FILE__, __LINE__)
 
 /* GC protection */
 #define YK_GC_STACK_MAX_SIZE 1024
@@ -144,12 +146,14 @@ typedef struct {
 	YkObject next_sym;
 	enum YkSymbolType {
 		yk_s_normal,
-		yk_s_macro,
 		yk_s_constant,
-		yk_s_dynamic
+		yk_s_dynamic,
+		yk_s_function,
+		yk_s_macro
 	} type;
-	uint32_t hash;
 	char* name;
+	int32_t function_nargs;
+	uint32_t hash;
 	uint8_t declared;
 } YkSymbol;
 
@@ -226,7 +230,7 @@ YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 YkObject yk_read(const char* string);
 YkObject yk_run(YkObject bytecode);
-void yk_assert(uint8_t expression, const char* file, uint32_t line);
+void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t line);
 void yk_repl();
 
 #endif

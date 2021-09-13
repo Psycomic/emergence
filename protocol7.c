@@ -17,7 +17,7 @@ static HashTable* p7_inbound_nodes;
 
 static clock_t p7_clock;
 
-uint p7_addr_hash(struct sockaddr* addr) {
+uint p7_addr_hash(void* addr) {
 	uchar* as_bytes = (uchar*)addr;
 
 	uint hash = as_bytes[0];
@@ -101,12 +101,11 @@ int p7_init() {
 		printf("Error at WSAStartup()\n");
 #endif
 
-	DYNAMIC_ARRAY_CREATE(&p7_inbound_nodes, P7Node);
 	DYNAMIC_ARRAY_CREATE(&p7_outbound_nodes, P7Node);
 
 	p7_inbound_nodes = hash_table_create(64, p7_addr_hash);
 
-	random_csprng_bytes(p7_id, sizeof(p7_id));
+	random_csprng_bytes((uchar*)p7_id, sizeof(p7_id));
 	printf("====ID IS 0x%lx%lx%lx%lx====\n", p7_id[0], p7_id[1], p7_id[2], p7_id[3]);
 
 	struct sockaddr_in server_address;

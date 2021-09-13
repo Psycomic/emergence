@@ -224,7 +224,7 @@ void execute_tests(void) {
 		 */
 
 		range = yk_make_bytecode_begin(yk_make_symbol("range"), 2);
-		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, range);
+		yk_bytecode_emit(range, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(0));
 		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
 		yk_bytecode_emit(range, YK_OP_LEXICAL_VAR, 2, YK_NIL);
 		yk_bytecode_emit(range, YK_OP_PUSH, 0, YK_NIL);
@@ -296,7 +296,7 @@ void execute_tests(void) {
 
 		YK_GC_UNPROTECT;
 
-		/* yk_repl(); */
+		yk_repl();
 	}
 
 	{
