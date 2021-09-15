@@ -621,7 +621,7 @@ YkUint yk_length(YkObject list) {
 }
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda,
-	yk_keyword_comptime, yk_keyword_do;
+	yk_keyword_comptime, yk_keyword_do, yk_keyword_if;
 
 void yk_init() {
 	yk_gc_stack_size = 0;
@@ -649,6 +649,7 @@ void yk_init() {
 	yk_keyword_lambda = yk_make_symbol("lambda");
 	yk_keyword_comptime = yk_make_symbol("comptime");
 	yk_keyword_do = yk_make_symbol("do");
+	yk_keyword_if = yk_make_symbol("if");
 
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
@@ -1276,7 +1277,7 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 
 #define YK_WARN printf
 
-void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_stack, YkObject lexical_stack, YkUint stack_offset, char is_comptime) {
+void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_stack, YkObject lexical_stack, YkUint stack_offset, bool is_comptime, bool is_tail) {
 	YK_GC_PROTECT4(expression, bytecode, continuations_stack, lexical_stack);
 	printf("Compiling ");
 	yk_print(expression);
@@ -1349,7 +1350,8 @@ void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_s
 
 			YK_LIST_FOREACH(bindings, l) {
 				YkObject pair = YK_CAR(l);
-				yk_compile(YK_CAR(YK_CDR(pair)), bytecode, continuations_stack, lexical_stack, offset, false);
+				yk_compile(YK_CAR(YK_CDR(pair)), bytecode, continuations_stack,
+						   lexical_stack, offset, false, false);
 				yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
 				body_lexical_stack = yk_cons(YK_CAR(pair), body_lexical_stack);
 				offset++;
@@ -1358,7 +1360,12 @@ void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_s
 			YK_GC_UNPROTECT;
 
 			YK_LIST_FOREACH(body, e) {
-				yk_compile(YK_CAR(e), bytecode, continuations_stack, body_lexical_stack, stack_offset, false);
+				bool compiled_is_tail = false;
+				if (is_tail && !(YK_CONSP(YK_CDR(e))))
+					compiled_is_tail = true;
+
+				yk_compile(YK_CAR(e), bytecode, continuations_stack, body_lexical_stack,
+						   stack_offset, false, compiled_is_tail);
 			}
 
 			yk_bytecode_emit(bytecode, YK_OP_UNBIND, offset, YK_NIL);
@@ -1366,8 +1373,9 @@ void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_s
 			YK_ASSERT(YK_CONSP(YK_CDR(expression)));
 			YK_ASSERT(!is_comptime);
 
-			YkObject comptime_bytecode = yk_make_bytecode_begin(yk_make_symbol("compile-time-bytecode"), 0);
-			yk_compile(YK_CAR(YK_CDR(expression)), comptime_bytecode, YK_NIL, YK_NIL, 0, true);
+			YkObject comptime_bytecode =
+				yk_make_bytecode_begin(yk_make_symbol("compile-time-bytecode"), 0);
+			yk_compile(YK_CAR(YK_CDR(expression)), comptime_bytecode, YK_NIL, YK_NIL, 0, true, true);
 			yk_bytecode_emit(comptime_bytecode, YK_OP_END, 0, YK_NIL);
 
 			yk_bytecode_disassemble(comptime_bytecode);
@@ -1401,7 +1409,8 @@ void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_s
 						   continuations_stack,
 						   lambda_lexical_stack,
 						   stack_offset + 1,
-						   false);
+						   false,
+						   !YK_CONSP(YK_CDR(e)));
 			}
 
 			yk_bytecode_emit(lambda_bytecode, YK_OP_RET, 0, YK_NIL);
@@ -1414,17 +1423,39 @@ void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_s
 			YK_GC_UNPROTECT;
 	 	} else if (first == yk_keyword_do) {
 			YK_LIST_FOREACH(YK_CDR(expression), l) {
-				yk_compile(YK_CAR(l), bytecode, continuations_stack, lexical_stack, stack_offset, false);
+				bool compiled_is_tail = false;
+				if (is_tail && !YK_CONSP(YK_CDR(l)))
+					compiled_is_tail = true;
+
+				yk_compile(YK_CAR(l), bytecode, continuations_stack,
+						   lexical_stack, stack_offset, false, compiled_is_tail);
 			}
+		} else if (first == yk_keyword_if) {
+			yk_compile(YK_CAR(YK_CDR(expression)), bytecode, continuations_stack,
+					   lexical_stack, stack_offset, false, false);
+			YkUint branch_offset = YK_PTR(bytecode)->bytecode.code_size;
+			yk_bytecode_emit(bytecode, YK_OP_JNIL, 69, YK_NIL);
+			yk_compile(YK_CAR(YK_CDR(YK_CDR(expression))), bytecode,
+					   continuations_stack, lexical_stack, stack_offset, false, is_tail);
+
+			YkUint else_offset = YK_PTR(bytecode)->bytecode.code_size;
+			YK_PTR(bytecode)->bytecode.code[branch_offset].modifier = else_offset + 1;
+			yk_bytecode_emit(bytecode, YK_OP_JMP, 69, YK_NIL);
+
+			yk_compile(YK_CAR(YK_CDR(YK_CDR(YK_CDR(expression)))), bytecode,
+					   continuations_stack, lexical_stack, stack_offset, false, is_tail);
+
+			YK_PTR(bytecode)->bytecode.code[else_offset].modifier =
+				YK_PTR(bytecode)->bytecode.code_size;
 		} else {
 			YkUint argcount = 0;
 			YkUint offset = stack_offset;
 
 			YkObject arguments = yk_reverse(YK_CDR(expression));
 			YK_GC_PROTECT1(arguments);
-
 			YK_LIST_FOREACH(arguments, e) {
-				yk_compile(YK_CAR(e), bytecode, continuations_stack, lexical_stack, offset, false);
+				yk_compile(YK_CAR(e), bytecode, continuations_stack,
+						   lexical_stack, offset, false, false);
 				yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
 				argcount++;
 				offset++;
@@ -1449,8 +1480,13 @@ void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_s
 				}
 			}
 
-			yk_compile(YK_CAR(expression), bytecode, continuations_stack, lexical_stack, stack_offset, false);
-			yk_bytecode_emit(bytecode, YK_OP_CALL, argcount, YK_NIL);
+			yk_compile(YK_CAR(expression), bytecode, continuations_stack,
+					   lexical_stack, stack_offset, false, false);
+
+			if (is_tail)
+				yk_bytecode_emit(bytecode, YK_OP_TAIL_CALL, argcount, YK_NIL);
+			else
+				yk_bytecode_emit(bytecode, YK_OP_CALL, argcount, YK_NIL);
 		}
 	}
 		break;
@@ -1473,7 +1509,7 @@ void yk_repl() {
 		forms = yk_read(buffer);
 
 		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
-		yk_compile(forms, bytecode, YK_NIL, YK_NIL, 0, false);
+		yk_compile(forms, bytecode, YK_NIL, YK_NIL, 0, false, false);
 		yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
 
 		yk_bytecode_disassemble(bytecode);
