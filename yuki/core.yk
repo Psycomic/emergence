@@ -1,0 +1,9 @@
+(set-macro! (quote define-macro)
+			(lambda define-macro (name args body)
+					(list (quote comptime)
+						  (list (quote set-macro!)
+						  		(list (quote quote) name)
+								(list (quote lambda)
+									  name
+									  args
+									  (head body))))))

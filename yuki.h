@@ -5,6 +5,7 @@
 
 #include <inttypes.h>
 #include <assert.h>
+#include <stdbool.h>
 
 typedef enum {
 	yk_t_start = 0,
@@ -229,6 +230,7 @@ YkObject yk_make_symbol(char* name);
 YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 YkObject yk_read(const char* string);
+void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_stack, YkObject lexical_stack, YkUint stack_offset, bool is_comptime, bool is_tail);
 YkObject yk_run(YkObject bytecode);
 void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t line);
 void yk_repl();

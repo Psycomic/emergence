@@ -117,7 +117,6 @@ int update_terrain(WorkerData* data) {
 	return 0;
 }
 
-static char* main_file_contents = NULL;
 static World* physic_world;
 static Drawable* triangle1_drawable;
 static Drawable* triangle2_drawable;
@@ -195,7 +194,6 @@ int do_main(int argc, char** argv) {
 	SetConsoleOutputCP(65001);
 #endif
 
-	main_file_contents = read_file("lisp/core.ul");
 	execute_tests();			// Unit tests
 
 	Image lain_image;
