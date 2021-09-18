@@ -141,8 +141,8 @@ void dynamic_array_destroy(DynamicArray* arr) {
 	arr->data = NULL;
 }
 
-uint hash_string(uchar *str) {
-    uint hash = 5381;
+uint64_t hash_string(uchar *str) {
+    uint64_t hash = 5381;
     int c;
 
     while ((c = *str++))
@@ -277,6 +277,21 @@ int m_scanf(const char* fmt, ...) {
 	va_end(args);
 
 	return -1;
+}
+
+char* m_snprintf_dup(const char* fmt, ...) {
+	va_list args;
+
+	va_start(args, fmt);
+	size_t string_size = vsnprintf(NULL, 0, fmt, args);
+	char* string = malloc(string_size);
+	va_end(args);
+
+	va_start(args, fmt);
+	vsnprintf(string, string_size, fmt, args);
+	va_end(args);
+
+	return string;
 }
 
 int parse_number(char* str, long* integer, double* floating) {

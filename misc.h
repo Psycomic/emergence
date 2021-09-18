@@ -114,6 +114,7 @@ FILE* m_fopen(const char* filename, const char* mode);
 
 char* m_strdup(const char* str);
 char* m_strndup(const char* str, size_t count);
+char* m_snprintf_dup(const char* fmt, ...);
 int m_scanf(const char* fmt, ...);
 void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n);
 size_t strcount(const char* str, char c);
@@ -126,7 +127,7 @@ int parse_number(char* str, long* integer, double* floating);
 
 void m_bzero(void* dst, size_t size);
 
-uint hash_string(uchar *str);
+uint64_t hash_string(uchar *str);
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);

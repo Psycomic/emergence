@@ -1,9 +1,42 @@
-(set-macro! (quote define-macro)
-			(lambda define-macro (name args body)
-					(list (quote comptime)
-						  (list (quote set-macro!)
-						  		(list (quote quote) name)
-								(list (quote lambda)
-									  name
-									  args
-									  (head body))))))
+(do
+  (comptime
+   (set-macro! (quote define-macro)
+			   (named-lambda define-macro (name args body)
+							 (list (quote comptime)
+								   (list (quote set-macro!)
+										 (list (quote quote) name)
+										 (list (quote named-lambda)
+											   name
+											   args
+											   body))))))
+
+  (define-macro define (symbol value)
+	(list (quote do)
+		  (list (quote comptime)
+				(list (quote register-global!)
+					  (list (quote quote) symbol)))
+		  (list (quote set-global!)
+				(list (quote quote) symbol)
+				value)))
+
+  (define-macro defun (name args body)
+	(list (quote do)
+		  (list (quote comptime)
+				(list (quote register-function!)
+					  (list (quote quote) name)
+					  (length args)))
+		  (list (quote define) name
+				(list (quote named-lambda)
+					  name
+					  args
+					  body))
+		  (list (quote quote) name)))
+
+  (defun even? (x)
+	(if (= x 0)
+		t (odd? (- x 1))))
+
+  (defun odd? (x)
+	(if (= x 1)
+		t (even? (- x 1))))
+  )

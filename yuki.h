@@ -153,8 +153,8 @@ typedef struct {
 		yk_s_macro
 	} type;
 	char* name;
+	uint64_t hash;
 	int32_t function_nargs;
-	uint32_t hash;
 	uint8_t declared;
 } YkSymbol;
 
@@ -223,6 +223,29 @@ union YkUnion {
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);
 
+typedef struct {
+	enum {
+		YK_W_UNDECLARED_VARIABLE,
+		YK_W_WRONG_NUMBER_OF_ARGUMENTS
+	} type;
+
+	char* file;
+	uint32_t line;
+	uint32_t character;
+
+	union {
+		struct {
+			YkObject symbol;
+		} undeclared_variable;
+
+		struct {
+			YkObject function_symbol;
+			YkInt expected_number;
+			YkUint given_number;
+		} wrong_number_of_arguments;
+	} warning;
+} YkWarning;
+
 void yk_init();
 YkObject yk_cons(YkObject car, YkObject cdr);
 void yk_print(YkObject o);
@@ -230,7 +253,7 @@ YkObject yk_make_symbol(char* name);
 YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 YkObject yk_read(const char* string);
-void yk_compile(YkObject expression, YkObject bytecode, YkObject continuations_stack, YkObject lexical_stack, YkUint stack_offset, bool is_comptime, bool is_tail);
+void yk_compile(YkObject forms, YkObject bytecode);
 YkObject yk_run(YkObject bytecode);
 void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t line);
 void yk_repl();

@@ -297,9 +297,7 @@ void execute_tests(void) {
 		char* core_file = read_file("yuki/core.yk");
 
 		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
-		yk_compile(yk_read(core_file), bytecode, YK_NIL, YK_NIL, 0, false, false);
-		yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
-
+		yk_compile(yk_read(core_file), bytecode);
 		yk_run(bytecode);
 
 		YK_GC_UNPROTECT;
