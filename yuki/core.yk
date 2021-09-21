@@ -25,18 +25,22 @@
 				(list (quote register-function!)
 					  (list (quote quote) name)
 					  (length args)))
-		  (list (quote define) name
+		  (list (quote set-global!)
+				(list (quote quote) name)
 				(list (quote named-lambda)
 					  name
 					  args
 					  body))
 		  (list (quote quote) name)))
 
-  (defun even? (x)
-	(if (= x 0)
-		t (odd? (- x 1))))
+  (defun cond-helper (clauses)
+	(if (null? clauses)
+		nil
+		(let ((c (head clauses)))
+		  (list (quote if) (head c)
+				(second c)
+				(cond-helper (tail clauses))))))
 
-  (defun odd? (x)
-	(if (= x 1)
-		t (even? (- x 1))))
-  )
+  (cond-helper (quote (((= x 0) (x-is-zero))
+					 ((> x 0) (x-is-superior))
+					 (t (x-is-inferior))))))

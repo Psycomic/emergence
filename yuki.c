@@ -720,7 +720,8 @@ YkObject yk_apply(YkObject function, YkObject args) {
 }
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda,
-	yk_keyword_comptime, yk_keyword_do, yk_keyword_if;
+	yk_keyword_comptime, yk_keyword_do, yk_keyword_if,
+	yk_symbol_argcount;
 
 void yk_init() {
 	yk_gc_stack_size = 0;
@@ -750,11 +751,13 @@ void yk_init() {
 	yk_keyword_do = yk_make_symbol("do");
 	yk_keyword_if = yk_make_symbol("if");
 
+	yk_symbol_argcount = yk_make_symbol("*argcount*");
+
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
 	yk_make_builtin("*", -1, yk_builtin_mul);
 	yk_make_builtin("/", -1, yk_builtin_div);
-	yk_make_builtin("-", -2, yk_builtin_sub);
+	yk_make_builtin("-", -1, yk_builtin_sub);
 	yk_make_builtin("**", 2, yk_builtin_pow);
 
 	yk_make_builtin("=", 2, yk_builtin_neq);
@@ -1170,10 +1173,11 @@ start:
 			panic("Not implemented!\n");
 		}
 		else if (YK_BYTECODEP(yk_value_register)) {
-			YkInt last_frame_size = YK_INT(yk_lisp_stack_top[yk_program_counter->modifier]);
+			YkInt current_frame_size = yk_program_counter->modifier + YK_INT(yk_program_counter->ptr),
+				last_frame_size = YK_INT(yk_lisp_stack_top[current_frame_size]);
 
 			YkObject* last_top = yk_lisp_stack_top;
-			yk_lisp_stack_top += last_frame_size + yk_program_counter->modifier + 1;
+			yk_lisp_stack_top += last_frame_size + current_frame_size + 1;
 
 			yk_lisp_stack_top -= yk_program_counter->modifier;
 			memcpy(yk_lisp_stack_top, last_top, sizeof(YkObject) * yk_program_counter->modifier);
@@ -1203,7 +1207,7 @@ start:
 			}
 
 			yk_value_register = proc->c_proc.cfun(yk_program_counter->modifier);
-			yk_lisp_stack_top += yk_program_counter->modifier;
+			yk_lisp_stack_top += yk_program_counter->modifier + YK_INT(yk_program_counter->ptr);
 
 			YkObject last_nargs; /* Only builtin functions return control in tail calls */
 			YK_LISP_STACK_POP(last_nargs);
@@ -1369,8 +1373,13 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 		YkInstruction instruction = YK_PTR(bytecode)->bytecode.code[i];
 		printf("(%s ", yk_opcode_names[instruction.opcode]);
 
-		if (instruction.opcode == YK_OP_FETCH_LITERAL ||
-			instruction.opcode == YK_OP_FETCH_GLOBAL) {
+		if (instruction.opcode == YK_OP_TAIL_CALL) {
+			printf(" ");
+			yk_print(instruction.ptr);
+			printf(" %u)\n", instruction.modifier);
+		} else if (instruction.opcode == YK_OP_FETCH_LITERAL ||
+				   instruction.opcode == YK_OP_FETCH_GLOBAL)
+		{
 			yk_print(instruction.ptr);
 			printf(")\n");
 		} else {
@@ -1526,7 +1535,7 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 					compiled_is_tail = true;
 
 				yk_compile_loop(YK_CAR(e), bytecode, continuations_stack, body_lexical_stack,
-								stack_offset, false, compiled_is_tail, warnings);
+								stack_offset, is_comptime, compiled_is_tail, warnings);
 			}
 
 			yk_bytecode_emit(bytecode, YK_OP_UNBIND, offset, YK_NIL);
@@ -1553,15 +1562,20 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			YkObject arglist = YK_CAR(YK_CDR(YK_CDR(expression)));
 			YkObject body = YK_CDR(YK_CDR(YK_CDR(expression)));
 
-			YkObject lambda_lexical_stack = lexical_stack,
+			YkObject lambda_lexical_stack = YK_NIL,
 				lambda_bytecode = YK_NIL,
-				reversed_arglist = yk_reverse(arglist);
+				reversed_arglist = YK_NIL;
+
 			YK_GC_PROTECT2(lambda_lexical_stack, reversed_arglist);
+
+			reversed_arglist = yk_reverse(arglist);
 
 			YK_LIST_FOREACH(reversed_arglist, l) {
 				YkObject arg = YK_CAR(l);
 				lambda_lexical_stack = yk_cons(arg, lambda_lexical_stack);
 			}
+
+			lambda_lexical_stack = yk_cons(yk_symbol_argcount, lambda_lexical_stack);
 
 			lambda_bytecode = yk_make_bytecode_begin(name, yk_length(arglist));
 
@@ -1569,7 +1583,7 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 				yk_compile_loop(YK_CAR(e), lambda_bytecode,
 								continuations_stack,
 								lambda_lexical_stack,
-								stack_offset + 1,
+								stack_offset,
 								is_comptime,
 								!YK_CONSP(YK_CDR(e)),
 								warnings);
@@ -1658,10 +1672,29 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			yk_compile_loop(YK_CAR(expression), bytecode, continuations_stack,
 							lexical_stack, stack_offset, is_comptime, is_tail, warnings);
 
-			if (is_tail)
-				yk_bytecode_emit(bytecode, YK_OP_TAIL_CALL, argcount, YK_NIL);
-			else
+			if (is_tail) {
+				printf("Compiling tail call with ");
+				yk_print(lexical_stack);
+				printf("!\n");
+
+				YkUint frame_size = 0;
+				bool found = false;
+				YK_LIST_FOREACH(lexical_stack, s) {
+					if (YK_CAR(s) == yk_symbol_argcount) {
+						found = true;
+						break;
+					}
+
+					frame_size++;
+				}
+
+				YK_ASSERT(found);
+
+				yk_bytecode_emit(bytecode, YK_OP_TAIL_CALL,
+								 argcount, YK_MAKE_INT(frame_size + stack_offset));
+			} else {
 				yk_bytecode_emit(bytecode, YK_OP_CALL, argcount, YK_NIL);
+			}
 		}
 	}
 		break;
