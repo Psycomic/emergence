@@ -17,7 +17,7 @@ static HashTable* p7_inbound_nodes;
 
 static clock_t p7_clock;
 
-uint p7_addr_hash(void* addr) {
+uint p7_addr_hash(struct sockaddr* addr) {
 	uchar* as_bytes = (uchar*)addr;
 
 	uint hash = as_bytes[0];
@@ -29,7 +29,8 @@ uint p7_addr_hash(void* addr) {
 }
 
 GLboolean uint256_eq(uint256 a, uint256 b) {
-	return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3];
+	return a[0] == b[0] && a[1] == b[1] &&
+		a[2] == b[2] && a[3] == b[3];
 }
 
 void uint256_print(uint256 x) {
@@ -130,7 +131,8 @@ bind:
 
 int p7_node_send(P7PacketHeader* packet, size_t p_size, P7Node* node) {
 	memcpy(packet->source, p7_id, sizeof(p7_id));
-	sendto(node->socket, packet, p_size, 0, (struct sockaddr*)&node->addr, sizeof(struct sockaddr_in));
+	sendto(node->socket, packet, p_size, 0,
+		   (struct sockaddr*)&node->addr, sizeof(struct sockaddr_in));
 
 	return 0;
 }

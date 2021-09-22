@@ -10,15 +10,6 @@
 											   args
 											   body))))))
 
-  (define-macro define (symbol value)
-	(list (quote do)
-		  (list (quote comptime)
-				(list (quote register-global!)
-					  (list (quote quote) symbol)))
-		  (list (quote set-global!)
-				(list (quote quote) symbol)
-				value)))
-
   (define-macro defun (name args body)
 	(list (quote do)
 		  (list (quote comptime)
@@ -33,14 +24,53 @@
 					  body))
 		  (list (quote quote) name)))
 
-  (defun cond-helper (clauses)
-	(if (null? clauses)
-		nil
-		(let ((c (head clauses)))
-		  (list (quote if) (head c)
-				(second c)
-				(cond-helper (tail clauses))))))
+  (comptime
+   (defun cond-helper (clauses)
+	 (if (null? clauses)
+		 nil
+		 (let ((c (head clauses)))
+		   (list (quote if) (head c)
+				 (second c)
+				 (cond-helper (tail clauses))))))
 
-  (cond-helper (quote (((= x 0) (x-is-zero))
-					 ((> x 0) (x-is-superior))
-					 (t (x-is-inferior))))))
+   (defun map-helper (fn lst acc)
+	 (if (null? lst)
+		 (reverse! acc)
+		 (map-helper fn (tail lst)
+					 (: (fn (head lst)) acc))))
+
+   (defun map (fn lst)
+	 (map-helper fn lst nil))
+
+   (defun quasiquote-helper (expression)
+	 (if (list? expression)
+		 (if (eq? (head expression) (quote unquote))
+			 (second expression)
+			 (: (quote list)
+				(map quasiquote-helper expression)))
+		 (list (quote quote) expression))))
+
+  (define-macro cond (clauses)
+	(cond-helper clauses))
+
+  (define-macro quasiquote (expression)
+	(quasiquote-helper expression))
+
+  (define-macro lambda (args body)
+	(quasiquote
+	 (named-lambda anon (unquote args)
+				   (unquote body))))
+
+  (define-macro define (symbol value)
+	(quasiquote
+	 (do (comptime (register-global! (quote (unquote symbol))))
+		 (set-global! (quote (unquote symbol))
+					  (unquote value)))))
+
+  (defun range-helper (max acc)
+	(if (= max 0)
+		(: max acc)
+		(range-helper (- max 1)
+					  (: max acc))))
+
+  (defun range (x) (range-helper x nil)))
