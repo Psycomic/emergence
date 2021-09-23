@@ -73,4 +73,34 @@
 		(range-helper (- max 1)
 					  (: max acc))))
 
-  (defun range (x) (range-helper x nil)))
+  (defun range (x) (range-helper x nil))
+
+  (defun assert-fn (value error)
+	(if value value
+		(invoke-debugger (quote assertion-error))))
+
+  (define-macro assert (value)
+	(quasiquote
+	 (assert-fn (unquote value)
+				(quote (unquote value)))))
+
+  (assert (= 5 5))
+  (assert (= 5.0 5))
+  (assert (= 5 5.0))
+  (assert (= 5.0 5.0))
+
+  (assert (> 4.5 2))
+  (assert (> 6 3.2))
+  (assert (> 6 5))
+  (assert (> 6.5 5.5))
+
+  (assert (< 2 4.5))
+  (assert (< 3 6.2))
+  (assert (< 5 6))
+  (assert (< 5.5 6.5))
+
+  (defun hello (a b c d)
+	(list (argument 0)
+		  (argument 1)
+		  (argument 2)
+		  (argument 3))))

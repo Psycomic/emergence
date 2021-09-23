@@ -60,6 +60,8 @@ static void yk_gc();
 static YkObject yk_reverse(YkObject list);
 static YkObject yk_nreverse(YkObject list);
 
+static YkObject yk_argument_function;
+
 static void yk_allocator_init() {
 	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
     yk_workspace_size = YK_WORKSPACE_SIZE;
@@ -81,7 +83,7 @@ static void yk_allocator_init() {
 	yk_free_space = yk_workspace_size;
 }
 
-#define YK_GC_STRESS 0
+#define YK_GC_STRESS 1
 
 static YkObject yk_alloc() {
 	if (YK_GC_STRESS || yk_free_space < 20)
@@ -180,10 +182,12 @@ static void yk_sweep() {
 static void yk_gc() {
 	yk_mark(yk_value_register);
 	yk_mark(yk_bytecode_register);
+	yk_mark(yk_argument_function);
 
 	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++)
 		yk_mark(yk_symbol_table[i]);
 
+	printf("GC stack: %ld\n", yk_gc_stack_size);
 	for (size_t i = 0; i < yk_gc_stack_size; i++)
 		yk_mark(*yk_gc_stack[i]);
 
@@ -254,7 +258,110 @@ static YkObject yk_builtin_neq(YkUint nargs) {
 	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
 	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
 
-	return yk_lisp_stack_top[0] == yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return yk_lisp_stack_top[0] == yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+		} else {
+			return yk_fixnum_to_float(yk_lisp_stack_top[0]) ==
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	} else {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return YK_FLOAT(yk_lisp_stack_top[0]) ==
+				yk_fixnum_to_float(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		} else {
+			return YK_FLOAT(yk_lisp_stack_top[0]) ==
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	}
+}
+
+static YkObject yk_builtin_nsup(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return yk_lisp_stack_top[0] > yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+		} else {
+			return yk_fixnum_to_float(yk_lisp_stack_top[0]) >
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	} else {
+		if (YK_INTP(yk_lisp_stack_top[0])) {
+			return YK_FLOAT(yk_lisp_stack_top[0]) >
+				yk_fixnum_to_float(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		} else {
+			return YK_FLOAT(yk_lisp_stack_top[0]) >
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	}
+}
+
+static YkObject yk_builtin_ninf(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return yk_lisp_stack_top[0] < yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+		} else {
+			return yk_fixnum_to_float(yk_lisp_stack_top[0]) <
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	} else {
+		if (YK_INTP(yk_lisp_stack_top[0])) {
+			return YK_FLOAT(yk_lisp_stack_top[0]) <
+				yk_fixnum_to_float(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		} else {
+			return YK_FLOAT(yk_lisp_stack_top[0]) <
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	}
+}
+
+static YkObject yk_builtin_nsupeq(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return yk_lisp_stack_top[0] >= yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+		} else {
+			return yk_fixnum_to_float(yk_lisp_stack_top[0]) >=
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	} else {
+		if (YK_INTP(yk_lisp_stack_top[0])) {
+			return YK_FLOAT(yk_lisp_stack_top[0]) >=
+				yk_fixnum_to_float(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		} else {
+			return YK_FLOAT(yk_lisp_stack_top[0]) >=
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	}
+}
+
+static YkObject yk_builtin_ninfeq(YkUint nargs) {
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) || YK_FLOATP(yk_lisp_stack_top[0]));
+	YK_ASSERT(YK_INTP(yk_lisp_stack_top[1]) || YK_FLOATP(yk_lisp_stack_top[1]));
+
+	if (YK_INTP(yk_lisp_stack_top[0])) {
+		if (YK_INTP(yk_lisp_stack_top[1])) {
+			return yk_lisp_stack_top[0] <= yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
+		} else {
+			return yk_fixnum_to_float(yk_lisp_stack_top[0]) <=
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	} else {
+		if (YK_INTP(yk_lisp_stack_top[0])) {
+			return YK_FLOAT(yk_lisp_stack_top[0]) <=
+				yk_fixnum_to_float(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		} else {
+			return YK_FLOAT(yk_lisp_stack_top[0]) <=
+				YK_FLOAT(yk_lisp_stack_top[1]) ? yk_tee : YK_NIL;
+		}
+	}
 }
 
 static YkObject yk_builtin_eq(YkUint nargs) {
@@ -563,8 +670,7 @@ static YkObject yk_builtin_set_global(YkUint nargs) {
 	YK_ASSERT(YK_SYMBOLP(symbol) && symbol != YK_NIL);
 
 	if (YK_PTR(symbol)->symbol.value != NULL)
-		YK_ASSERT(YK_PTR(symbol)->symbol.type != yk_s_constant &&
-				  YK_PTR(symbol)->symbol.type != yk_s_function);
+		YK_ASSERT(YK_PTR(symbol)->symbol.type != yk_s_constant);
 
 	YK_PTR(symbol)->symbol.value = value;
 
@@ -597,6 +703,17 @@ static YkObject yk_builtin_register_function(YkUint nargs) {
 	YK_PTR(sym)->symbol.function_nargs = YK_INT(fn_nargs);
 
 	return sym;
+}
+
+static YkObject yk_builtin_argument(YkUint nargs) {
+	YkUint argcount_pos = YK_INT(yk_lisp_stack_top[0]);
+	YkUint arg_number = YK_INT(yk_lisp_stack_top[1]);
+
+	YkUint argcount = YK_INT(yk_lisp_stack_top[argcount_pos + 2]);
+
+	YK_ASSERT(arg_number < argcount);
+
+	return yk_lisp_stack_top[argcount_pos + arg_number + 3];
 }
 
 static YkObject yk_default_debugger(YkUint nargs) {
@@ -732,7 +849,7 @@ YkObject yk_apply(YkObject function, YkObject args) {
 }
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda,
-	yk_keyword_comptime, yk_keyword_do, yk_keyword_if,
+	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_argument,
 	yk_symbol_argcount;
 
 void yk_init() {
@@ -762,8 +879,22 @@ void yk_init() {
 	yk_keyword_comptime = yk_make_symbol("comptime");
 	yk_keyword_do = yk_make_symbol("do");
 	yk_keyword_if = yk_make_symbol("if");
+	yk_keyword_argument = yk_make_symbol("argument");
 
 	yk_symbol_argcount = yk_make_symbol("*argcount*");
+
+	/* Functions */
+	YkObject argument_function_sym = yk_make_symbol("argument");
+	YK_GC_PROTECT1(argument_function_sym);
+
+	yk_argument_function = yk_alloc();
+	yk_argument_function->c_proc.name = argument_function_sym;
+	yk_argument_function->c_proc.nargs = 2;
+	yk_argument_function->c_proc.cfun = yk_builtin_argument;
+
+	yk_argument_function = YK_TAG(yk_argument_function, yk_t_c_proc);
+
+	YK_GC_UNPROTECT;
 
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
@@ -1143,7 +1274,7 @@ static inline void yk_debug_info() {
 	printf("\n");
 }
 
-#define YK_RUN_DEBUG 0
+#define YK_RUN_DEBUG 1
 
 YkObject yk_run(YkObject bytecode) {
 	YK_ASSERT(YK_BYTECODEP(bytecode));
@@ -1363,7 +1494,10 @@ start:
 	goto start;
 
 end:
+#if YK_RUN_DEBUG
 	yk_debug_info();
+#endif
+
 	return yk_value_register;
 }
 
@@ -1587,21 +1721,25 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			YkObject body = YK_CDR(YK_CDR(YK_CDR(expression)));
 
 			YkObject lambda_lexical_stack = YK_NIL,
-				lambda_bytecode = YK_NIL,
-				reversed_arglist = YK_NIL;
+				lambda_bytecode = YK_NIL;
 
-			YK_GC_PROTECT2(lambda_lexical_stack, reversed_arglist);
+			YK_GC_PROTECT1(lambda_lexical_stack);
 
-			reversed_arglist = yk_reverse(arglist);
-
-			YK_LIST_FOREACH(reversed_arglist, l) {
+			YkObject l;
+			YkInt argcount = 0;
+			for (l = arglist; YK_CONSP(l); l = YK_CDR(l)) {
 				YkObject arg = YK_CAR(l);
 				lambda_lexical_stack = yk_cons(arg, lambda_lexical_stack);
+				argcount++;
 			}
 
-			lambda_lexical_stack = yk_cons(yk_symbol_argcount, lambda_lexical_stack);
+			if (l != YK_NIL && YK_SYMBOLP(l)) {
+				argcount = -(argcount + 1);
+			}
 
-			lambda_bytecode = yk_make_bytecode_begin(name, yk_length(arglist));
+			lambda_lexical_stack = yk_cons(yk_symbol_argcount,
+										   yk_nreverse(lambda_lexical_stack));
+			lambda_bytecode = yk_make_bytecode_begin(name, argcount);
 
 			YK_LIST_FOREACH(body, e) {
 				yk_compile_loop(YK_CAR(e), lambda_bytecode,
@@ -1620,7 +1758,30 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, lambda_bytecode);
 
 			YK_GC_UNPROTECT;
-	 	} else if (first == yk_keyword_do) {
+	 	} else if (first == yk_keyword_argument) {
+			YkUint argument_offset = stack_offset;
+			bool found = false;
+
+			YK_LIST_FOREACH(lexical_stack, s) {
+				if (YK_CAR(s) == yk_symbol_argcount) {
+					found = true;
+					break;
+				}
+
+				argument_offset++;
+			}
+
+			YK_ASSERT(found);
+
+			yk_compile_loop(YK_CAR(YK_CDR(expression)), bytecode, continuations_stack,
+							lexical_stack, stack_offset, false, warnings);
+			yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL,
+							 0, YK_MAKE_INT(argument_offset));
+			yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
+			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_argument_function);
+			yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
+		} else if (first == yk_keyword_do) {
 			YK_LIST_FOREACH(YK_CDR(expression), l) {
 				bool compiled_is_tail = false;
 				if (is_tail && !YK_CONSP(YK_CDR(l)))
