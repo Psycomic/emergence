@@ -131,6 +131,8 @@ typedef enum {
 	YK_OP_WITH_CONT,
 	YK_OP_EXIT_CONT,
 	YK_OP_EXIT,
+	YK_OP_LEXICAL_SET,
+	YK_OP_GLOBAL_SET,
 	YK_OP_END
 } YkOpcode;
 
@@ -226,7 +228,8 @@ ct_assert(sizeof(union YkUnion) % 16 == 0);
 typedef struct {
 	enum {
 		YK_W_UNDECLARED_VARIABLE,
-		YK_W_WRONG_NUMBER_OF_ARGUMENTS
+		YK_W_WRONG_NUMBER_OF_ARGUMENTS,
+		YK_W_ASSIGNING_TO_FUNCTION
 	} type;
 
 	char* file;
@@ -243,6 +246,10 @@ typedef struct {
 			YkInt expected_number;
 			YkUint given_number;
 		} wrong_number_of_arguments;
+
+		struct {
+			YkObject function_symbol;
+		} assigning_to_function;
 	} warning;
 } YkWarning;
 

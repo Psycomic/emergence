@@ -681,6 +681,8 @@ static YkObject yk_builtin_set_macro(YkUint nargs) {
 	YkObject symbol = yk_lisp_stack_top[0];
 	YkObject value = yk_lisp_stack_top[1];
 
+	YK_ASSERT(YK_SYMBOLP(symbol) && symbol != YK_NIL);
+
 	YK_PTR(symbol)->symbol.type = yk_s_macro;
 	YK_PTR(symbol)->symbol.value = value;
 
@@ -689,7 +691,9 @@ static YkObject yk_builtin_set_macro(YkUint nargs) {
 
 static YkObject yk_builtin_register_global(YkUint nargs) {
 	YkObject sym = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_SYMBOLP(sym) && sym != YK_NIL);
 
+	YK_PTR(sym)->symbol.type = yk_s_normal;
 	YK_PTR(sym)->symbol.declared = 1;
 	return sym;
 }
@@ -848,7 +852,7 @@ YkObject yk_apply(YkObject function, YkObject args) {
 	return result;
 }
 
-static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda,
+static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
 	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_argument,
 	yk_symbol_argcount;
 
@@ -875,6 +879,7 @@ void yk_init() {
 
 	yk_keyword_quote = yk_make_symbol("quote");
 	yk_keyword_let = yk_make_symbol("let");
+	yk_keyword_setq = yk_make_symbol("set!");
 	yk_keyword_lambda = yk_make_symbol("named-lambda");
 	yk_keyword_comptime = yk_make_symbol("comptime");
 	yk_keyword_do = yk_make_symbol("do");
@@ -925,7 +930,7 @@ void yk_init() {
 
 	yk_make_builtin("int?", 1, yk_builtin_intp);
 	yk_make_builtin("float?", 1, yk_builtin_floatp);
-	yk_make_builtin("cons?", 1, yk_builtin_consp);
+	yk_make_builtin("pair?", 1, yk_builtin_consp);
 	yk_make_builtin("null?", 1, yk_builtin_nullp);
 	yk_make_builtin("list?", 1, yk_builtin_listp);
 	yk_make_builtin("symbol?", 1, yk_builtin_symbolp);
@@ -1482,6 +1487,14 @@ start:
 		yk_program_counter++;
 	}
 		break;
+	case YK_OP_LEXICAL_SET:
+		yk_lisp_stack_top[yk_program_counter->modifier] = yk_value_register;
+		yk_program_counter++;
+		break;
+	case YK_OP_GLOBAL_SET:
+		YK_PTR(yk_program_counter->ptr)->symbol.value = yk_value_register;
+		yk_program_counter++;
+		break;
 	case YK_OP_END:
 		goto end;
 		break;
@@ -1516,6 +1529,8 @@ char* yk_opcode_names[] = {
 	[YK_OP_UNBIND_DYNAMIC] = "unbind-dynamic",
 	[YK_OP_WITH_CONT] = "with-cont",
 	[YK_OP_EXIT_CONT] = "exit-cont",
+	[YK_OP_LEXICAL_SET] = "lexical-set",
+	[YK_OP_GLOBAL_SET] = "global-set",
 	[YK_OP_EXIT] = "exit",
 	[YK_OP_END] = "end"
 };
@@ -1532,7 +1547,8 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 			yk_print(instruction.ptr);
 			printf(" %u)\n", instruction.modifier);
 		} else if (instruction.opcode == YK_OP_FETCH_LITERAL ||
-				   instruction.opcode == YK_OP_FETCH_GLOBAL)
+				   instruction.opcode == YK_OP_FETCH_GLOBAL ||
+				   instruction.opcode == YK_OP_GLOBAL_SET)
 		{
 			yk_print(instruction.ptr);
 			printf(")\n");
@@ -1568,6 +1584,17 @@ void yk_w_wrong_number_of_arguments_init(YkWarning* warning, char* file, uint32_
 	warning->warning.wrong_number_of_arguments.given_number = given_number;
 }
 
+void yk_w_assigning_to_function_init(YkWarning* warning, char* file, uint32_t line,
+									 uint32_t character, YkObject function_symbol)
+{
+	warning->type = YK_W_WRONG_NUMBER_OF_ARGUMENTS;
+	warning->file = file;
+	warning->line = line;
+	warning->character = character;
+
+	warning->warning.assigning_to_function.function_symbol = function_symbol;
+}
+
 void yk_w_print(YkWarning* w) {
 	switch (w->type) {
 	case YK_W_UNDECLARED_VARIABLE:
@@ -1580,6 +1607,11 @@ void yk_w_print(YkWarning* w) {
 			   YK_PTR(w->warning.wrong_number_of_arguments.function_symbol)->symbol.name,
 			   w->warning.wrong_number_of_arguments.expected_number,
 			   w->warning.wrong_number_of_arguments.given_number,
+			   w->file, w->line);
+		break;
+	case YK_W_ASSIGNING_TO_FUNCTION:
+		printf("Assignment to variable '%s' declared as a function at %s:%d\n",
+			   YK_PTR(w->warning.assigning_to_function.function_symbol)->symbol.name,
 			   w->file, w->line);
 		break;
 	}
@@ -1694,6 +1726,41 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			}
 
 			yk_bytecode_emit(bytecode, YK_OP_UNBIND, offset, YK_NIL);
+		} else if (first == yk_keyword_setq) {
+			YK_ASSERT(yk_length(expression) == 3);
+
+			YkObject symbol = YK_CAR(YK_CDR(expression));
+			YkObject value = YK_CAR(YK_CDR(YK_CDR(expression)));
+
+			bool found = false;
+			YkUint offset = stack_offset;
+			YK_LIST_FOREACH(lexical_stack, l) {
+				if (YK_CAR(l) == symbol) {
+					found = true;
+					break;
+				}
+				offset++;
+			}
+
+			yk_compile_loop(value, bytecode, continuations_stack,
+								lexical_stack, stack_offset, false, warnings);
+
+			if (found) { 		/* Lexically scoped variable */
+				yk_bytecode_emit(bytecode, YK_OP_LEXICAL_SET, offset, YK_NIL);
+			} else {			/* Global variable */
+				YK_ASSERT(!(YK_PTR(symbol)->symbol.type == yk_s_macro ||
+							YK_PTR(symbol)->symbol.type == yk_s_constant));
+
+				if (!YK_PTR(symbol)->symbol.declared) {
+					YkWarning* w = dynamic_array_push_back(warnings, 1);
+					yk_w_undeclared_var_init(w, "None", 0, 0, symbol);
+				} else if (YK_PTR(symbol)->symbol.type == yk_s_function) {
+					YkWarning* w = dynamic_array_push_back(warnings, 1);
+					yk_w_assigning_to_function_init(w, "None", 0, 0, symbol);
+				}
+
+				yk_bytecode_emit(bytecode, YK_OP_GLOBAL_SET, 0, symbol);
+			}
 		} else if (first == yk_keyword_comptime) {
 			YkObject comptime_bytecode =
 				yk_make_bytecode_begin(yk_make_symbol("compile-time-bytecode"), 0);
