@@ -209,6 +209,21 @@ typedef struct {
 	uint8_t exited;
 } YkContinuation;
 
+typedef struct {
+	uint8_t marked;
+	uint32_t size;
+	char data[];
+} YkArrayAllocatorBlock;
+
+typedef struct {
+	YkObject dummy;
+	YkType t;
+	YkUint size;
+	YkUint capacity;
+
+	YkObject* data;
+} YkArray;
+
 union YkUnion {
 	struct {
 		YkObject dummy;
@@ -221,6 +236,7 @@ union YkUnion {
 	YkClosure closure;
 	YkBytecode bytecode;
 	YkContinuation continuation;
+	YkArray array;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);

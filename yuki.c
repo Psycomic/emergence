@@ -5,6 +5,9 @@
 #include <setjmp.h>
 #include <math.h>
 #include <stdbool.h>
+#include <time.h>
+
+#include "random.h"
 
 #define YK_MARK_BIT ((YkUint)1)
 #define YK_MARKED(x) (((YkUint)YK_CAR(x)) & YK_MARK_BIT)
@@ -15,6 +18,10 @@ static union YkUnion* yk_workspace;
 static union YkUnion* yk_free_list;
 static YkUint yk_workspace_size;
 static YkUint yk_free_space;
+
+#define YK_ARRAY_ALLOCATOR_SIZE 4096
+static char* yk_array_allocator;
+static char* yk_array_allocator_top;
 
 #define YK_SYMBOL_TABLE_SIZE 4096
 static YkObject *yk_symbol_table;
@@ -59,8 +66,14 @@ static YkObject* yk_continuations_stack_top;
 static void yk_gc();
 static YkObject yk_reverse(YkObject list);
 static YkObject yk_nreverse(YkObject list);
+YkUint yk_length(YkObject list);
 
-static YkObject yk_argument_function;
+static void yk_mark_block_data(void* data);
+static void yk_array_allocator_sweep();
+
+static YkObject yk_make_array(YkUint size, YkObject element);
+
+static YkObject yk_arglist_cfun;
 
 static void yk_allocator_init() {
 	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
@@ -147,6 +160,10 @@ mark:
 		o = bytecode;
 		goto mark;
 	}
+	else if (YK_TYPEOF(o) == yk_t_array) {
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+		yk_mark_block_data(o->array.data);
+	}
 	else {
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
@@ -179,10 +196,20 @@ static void yk_sweep() {
 	printf("after: %ld free space\n", yk_free_space);
 }
 
+static YkObject yk_gc_protected_stack[1024];
+static YkUint yk_gc_protected_stack_size;
+
+static void yk_permanent_gc_protect(YkObject object) {
+	yk_gc_protected_stack[yk_gc_protected_stack_size++] = object;
+}
+
 static void yk_gc() {
 	yk_mark(yk_value_register);
 	yk_mark(yk_bytecode_register);
-	yk_mark(yk_argument_function);
+
+	for (size_t i = 0; i < yk_gc_protected_stack_size; i++) {
+		yk_mark(yk_gc_protected_stack[i]);
+	}
 
 	for (size_t i = 0; i < YK_SYMBOL_TABLE_SIZE; i++)
 		yk_mark(yk_symbol_table[i]);
@@ -213,7 +240,75 @@ static void yk_gc() {
 		yk_mark(yk_return_stack_top[i].bytecode_register);
 	}
 
+	yk_array_allocator_sweep();
 	yk_sweep();
+}
+
+#define YK_BLOCK_USED(b) (b->size & 0x80000000)
+#define YK_BLOCK_SIZE(b) (b->size & ~0x80000000)
+
+static void yk_array_allocator_init() {
+	yk_array_allocator = malloc(YK_ARRAY_ALLOCATOR_SIZE);
+	yk_array_allocator_top = yk_array_allocator;
+}
+
+static void* yk_array_allocator_alloc(YkUint size) {
+	char* block_ptr = yk_array_allocator;
+	while(block_ptr < yk_array_allocator_top) {
+		YkArrayAllocatorBlock* block = (YkArrayAllocatorBlock*)block_ptr;
+
+		if (!YK_BLOCK_USED(block) && YK_BLOCK_SIZE(block) >= size) {
+			block->size = size | 0x80000000;
+			block->marked = false;
+			return block->data;
+		}
+
+		block_ptr += YK_BLOCK_SIZE(block) + sizeof(YkArrayAllocatorBlock);
+	}
+
+	YkArrayAllocatorBlock* block = (YkArrayAllocatorBlock*)yk_array_allocator_top;
+	block->size = size | 0x80000000;
+	block->marked = false;
+	yk_array_allocator_top += sizeof(YkArrayAllocatorBlock) + size;
+
+	return block->data;
+}
+
+static void yk_mark_block_data(void* data) {
+	YkArrayAllocatorBlock* block = (YkArrayAllocatorBlock*)
+		((char*)data - sizeof(YkArrayAllocatorBlock));
+
+	block->marked = true;
+}
+
+static void yk_array_allocator_sweep() {
+	char* block_ptr = yk_array_allocator;
+	YkArrayAllocatorBlock* last_block = NULL;
+	uint freed = 0;
+
+	while(block_ptr < yk_array_allocator_top) {
+		YkArrayAllocatorBlock* block = (YkArrayAllocatorBlock*)block_ptr;
+
+		if (!block->marked) {
+			block->size &= ~0x80000000;
+
+			if (last_block) {
+				last_block->size += YK_BLOCK_SIZE(block) +
+					sizeof(YkArrayAllocatorBlock);
+			} else {
+				last_block = block;
+			}
+
+			freed++;
+		} else {
+			last_block = NULL;
+		}
+
+		block->marked = false;
+		block_ptr += YK_BLOCK_SIZE(block) + sizeof(YkArrayAllocatorBlock);
+	}
+
+	printf("Freed %d blocks of memory!\n", freed);
 }
 
 static void yk_symbol_table_init() {
@@ -224,18 +319,26 @@ static void yk_symbol_table_init() {
 	}
 }
 
-static void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
-	YkObject proc = YK_NIL, sym = YK_NIL;
+static YkObject yk_make_global_function(YkObject sym, YkInt nargs, YkCfun fn) {
+	YkObject proc = YK_NIL;
 	YK_GC_PROTECT2(proc, sym);
-
-	sym = yk_make_symbol(name);
 
 	proc = yk_alloc();
 	proc->c_proc.name = sym;
 	proc->c_proc.nargs = nargs;
 	proc->c_proc.cfun = fn;
 
-	YK_PTR(sym)->symbol.value = YK_TAG(proc, yk_t_c_proc);
+	YK_GC_UNPROTECT;
+	return YK_TAG(proc, yk_t_c_proc);
+}
+
+static void yk_make_builtin(char* name, YkInt nargs, YkCfun fn) {
+	YkObject proc = YK_NIL, sym = YK_NIL;
+	YK_GC_PROTECT2(proc, sym);
+
+	sym = yk_make_symbol(name);
+
+	YK_PTR(sym)->symbol.value = yk_make_global_function(sym, nargs, fn);
 	YK_PTR(sym)->symbol.declared = 1;
 	YK_PTR(sym)->symbol.type = yk_s_function;
 	YK_PTR(sym)->symbol.function_nargs = nargs;
@@ -663,6 +766,28 @@ static YkObject yk_builtin_boundp(YkUint nargs) {
 		return yk_tee;
 }
 
+static YkObject yk_builtin_gensym(YkUint nargs) {
+	char symbol_string[9];
+	symbol_string[0] = '%';
+
+	for (uint i = 1; i < 8; i++)
+		symbol_string[i] = 'A' + (random_randint() % ('Z' - 'A'));
+
+	symbol_string[8] = '\0';
+
+	return yk_make_symbol(m_strdup(symbol_string));
+}
+
+static YkObject yk_builtin_clock(YkUint nargs) {
+	YkInt time = clock();
+	return YK_MAKE_INT(time);
+}
+
+static YkObject yk_builtin_print(YkUint nargs) {
+	yk_print(yk_lisp_stack_top[0]);
+	return YK_NIL;
+}
+
 static YkObject yk_builtin_set_global(YkUint nargs) {
 	YkObject symbol = yk_lisp_stack_top[0];
 	YkObject value = yk_lisp_stack_top[1];
@@ -709,15 +834,106 @@ static YkObject yk_builtin_register_function(YkUint nargs) {
 	return sym;
 }
 
-static YkObject yk_builtin_argument(YkUint nargs) {
-	YkUint argcount_pos = YK_INT(yk_lisp_stack_top[0]);
-	YkUint arg_number = YK_INT(yk_lisp_stack_top[1]);
 
-	YkUint argcount = YK_INT(yk_lisp_stack_top[argcount_pos + 2]);
+static YkObject yk_builtin_length(YkUint nargs) {
+	YK_ASSERT(YK_LISTP(yk_lisp_stack_top[0]));
 
-	YK_ASSERT(arg_number < argcount);
+	return YK_MAKE_INT(yk_length(yk_lisp_stack_top[0]));
+}
 
-	return yk_lisp_stack_top[argcount_pos + arg_number + 3];
+static YkObject yk_builtin_append(YkUint nargs) {
+	YkObject result = YK_NIL;
+	YK_GC_PROTECT1(result);
+
+	for (uint i = 0; i < nargs; i++) {
+		YkObject list = yk_lisp_stack_top[i];
+
+		YK_LIST_FOREACH(list, l) {
+			result = yk_cons(YK_CAR(l), result);
+		}
+	}
+
+	YK_GC_UNPROTECT;
+	return yk_nreverse(result);
+}
+
+static YkObject yk_builtin_array(YkUint nargs) {
+	YkObject array = yk_make_array(nargs, YK_NIL);
+
+	for (uint i = 0; i < nargs; i++) {
+		array->array.data[i] = yk_lisp_stack_top[i];
+	}
+
+	return array;
+}
+
+static YkObject yk_builtin_make_array(YkUint nargs) {
+	YkObject array = yk_make_array(YK_INT(yk_lisp_stack_top[0]),
+								   yk_lisp_stack_top[1]);
+
+	return array;
+}
+
+static YkObject yk_builtin_list_to_array(YkUint nargs) {
+	YkObject list = yk_lisp_stack_top[0];
+	YkObject array = yk_make_array(yk_length(list), YK_NIL);
+
+	uint i = 0;
+	YK_LIST_FOREACH(list, l) {
+		array->array.data[i++] = YK_CAR(l);
+	}
+
+	return array;
+}
+
+static YkObject yk_builtin_array_to_list(YkUint nargs) {
+	YkObject array = yk_lisp_stack_top[0];
+
+	YkObject list = YK_NIL;
+	YK_GC_PROTECT1(list);
+
+	for (int i = array->array.size - 1; i >= 0; i--) {
+		list = yk_cons(array->array.data[i], list);
+	}
+
+	YK_GC_UNPROTECT;
+	return list;
+}
+
+static YkObject yk_builtin_aref(YkUint nargs) {
+	YkObject array = yk_lisp_stack_top[0];
+	YkInt index = YK_INT(yk_lisp_stack_top[1]);
+
+	YK_ASSERT(index < (YkInt)array->array.size && index >= 0);
+
+	return array->array.data[index];
+}
+
+static YkObject yk_builtin_aset(YkUint nargs) {
+	YkObject array = yk_lisp_stack_top[0];
+	YkInt index = YK_INT(yk_lisp_stack_top[1]);
+	YkObject value = yk_lisp_stack_top[2];
+
+	YK_ASSERT(index < (YkInt)array->array.size && index > 0);
+
+	array->array.data[index] = value;
+
+	return value;
+}
+
+static YkObject yk_arglist(YkUint nargs) {
+	YkUint offset = YK_INT(yk_lisp_stack_top[0]);
+	YkUint argcount = YK_INT(yk_lisp_stack_top[1]);
+
+	YkObject list = YK_NIL;
+	YK_GC_PROTECT1(list);
+
+	for (int i = argcount - offset - 1; i >= 0; i--) {
+		list = yk_cons(yk_lisp_stack_top[offset + nargs + i + 1], list);
+	}
+
+	YK_GC_UNPROTECT;
+	return list;
 }
 
 static YkObject yk_default_debugger(YkUint nargs) {
@@ -782,28 +998,6 @@ YkUint yk_length(YkObject list) {
 	return i;
 }
 
-YkObject yk_builtin_length(YkUint nargs) {
-	YK_ASSERT(YK_LISTP(yk_lisp_stack_top[0]));
-
-	return YK_MAKE_INT(yk_length(yk_lisp_stack_top[0]));
-}
-
-YkObject yk_builtin_append(YkUint nargs) {
-	YkObject result = YK_NIL;
-	YK_GC_PROTECT1(result);
-
-	for (uint i = 0; i < nargs; i++) {
-		YkObject list = yk_lisp_stack_top[i];
-
-		YK_LIST_FOREACH(list, l) {
-			result = yk_cons(YK_CAR(l), result);
-		}
-	}
-
-	YK_GC_UNPROTECT;
-	return yk_nreverse(result);
-}
-
 YkObject yk_apply(YkObject function, YkObject args) {
 	YkInt argcount = 0;
 	YkObject result;
@@ -853,11 +1047,13 @@ YkObject yk_apply(YkObject function, YkObject args) {
 }
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
-	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_argument,
+	yk_keyword_comptime, yk_keyword_do, yk_keyword_if,
 	yk_symbol_argcount;
 
 void yk_init() {
 	yk_gc_stack_size = 0;
+	yk_gc_protected_stack_size = 0;
+
 	yk_lisp_stack_top = yk_lisp_stack + YK_STACK_MAX_SIZE;
 	yk_return_stack_top = yk_return_stack + YK_STACK_MAX_SIZE;
 	yk_dynamic_bindings_stack_top = yk_dynamic_bindings_stack + YK_STACK_MAX_SIZE;
@@ -866,6 +1062,7 @@ void yk_init() {
 	yk_program_counter = NULL;
 
 	yk_allocator_init();
+	yk_array_allocator_init();
 	yk_symbol_table_init();
 
 	/* Special symbols */
@@ -884,22 +1081,16 @@ void yk_init() {
 	yk_keyword_comptime = yk_make_symbol("comptime");
 	yk_keyword_do = yk_make_symbol("do");
 	yk_keyword_if = yk_make_symbol("if");
-	yk_keyword_argument = yk_make_symbol("argument");
 
 	yk_symbol_argcount = yk_make_symbol("*argcount*");
 
 	/* Functions */
-	YkObject argument_function_sym = yk_make_symbol("argument");
-	YK_GC_PROTECT1(argument_function_sym);
+	YkObject arglist_symbol = yk_make_symbol("arglist");
 
-	yk_argument_function = yk_alloc();
-	yk_argument_function->c_proc.name = argument_function_sym;
-	yk_argument_function->c_proc.nargs = 2;
-	yk_argument_function->c_proc.cfun = yk_builtin_argument;
+	yk_arglist_cfun = yk_make_global_function(arglist_symbol, 2, yk_arglist);
 
-	yk_argument_function = YK_TAG(yk_argument_function, yk_t_c_proc);
-
-	YK_GC_UNPROTECT;
+	yk_permanent_gc_protect(yk_arglist_cfun);
+	yk_permanent_gc_protect(arglist_symbol);
 
 	/* Builtin functions */
 	yk_make_builtin("+", -1, yk_builtin_add);
@@ -928,6 +1119,13 @@ void yk_init() {
 	yk_make_builtin("reverse", 1, yk_builtin_reverse);
 	yk_make_builtin("reverse!", 1, yk_builtin_nreverse);
 
+	yk_make_builtin("array", -1, yk_builtin_array);
+	yk_make_builtin("make-array", 2, yk_builtin_make_array);
+	yk_make_builtin("aref", 2, yk_builtin_aref);
+	yk_make_builtin("aset!", 3, yk_builtin_aset);
+	yk_make_builtin("list->array", 1, yk_builtin_list_to_array);
+	yk_make_builtin("array->list", 1, yk_builtin_array_to_list);
+
 	yk_make_builtin("int?", 1, yk_builtin_intp);
 	yk_make_builtin("float?", 1, yk_builtin_floatp);
 	yk_make_builtin("pair?", 1, yk_builtin_consp);
@@ -939,11 +1137,16 @@ void yk_init() {
 	yk_make_builtin("compiled-function?", 1, yk_builtin_compiled_functionp);
 
 	yk_make_builtin("bound?", 1, yk_builtin_boundp);
+	yk_make_builtin("gensym", 0, yk_builtin_gensym);
 
 	yk_make_builtin("set-global!", 2, yk_builtin_set_global);
 	yk_make_builtin("set-macro!", 2, yk_builtin_set_macro);
 	yk_make_builtin("register-global!", 1, yk_builtin_register_global);
 	yk_make_builtin("register-function!", 2, yk_builtin_register_function);
+
+	yk_make_builtin("clock", 0, yk_builtin_clock);
+
+	yk_make_builtin("print", 1, yk_builtin_print);
 
 	yk_make_builtin("invoke-debugger", 1, yk_default_debugger);
 }
@@ -1019,6 +1222,22 @@ YkObject yk_make_continuation(uint16_t offset) {
 	cont->continuation.exited = 0;
 
 	return cont;
+}
+
+static YkObject yk_make_array(YkUint size, YkObject element) {
+	YkObject array = yk_alloc();
+
+	array->array.t = yk_t_array;
+	array->array.size = size;
+	array->array.capacity = size;
+
+	array->array.data = yk_array_allocator_alloc(size * sizeof(YkObject));
+
+	for (uint i = 0; i < size; i++) {
+		array->array.data[i] = element;
+	}
+
+	return array;
 }
 
 YkObject yk_cons(YkObject car, YkObject cdr) {
@@ -1224,6 +1443,16 @@ void yk_print(YkObject o) {
 		printf("<compiled-function %s at %p>",
 			   YK_PTR(YK_PTR(o)->c_proc.name)->symbol.name,
 			   YK_PTR(o));
+		break;
+	case yk_t_array:
+		printf("[");
+		for (uint i = 0; i < YK_PTR(o)->array.size; i++) {
+			yk_print(YK_PTR(o)->array.data[i]);
+
+			if (i != YK_PTR(o)->array.size - 1)
+				printf(" ");
+		}
+		printf("]");
 		break;
 	default:
 		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
@@ -1538,6 +1767,10 @@ char* yk_opcode_names[] = {
 void yk_bytecode_disassemble(YkObject bytecode) {
 	YK_ASSERT(YK_BYTECODEP(bytecode));
 
+	printf("Bytecode ");
+	yk_print(YK_PTR(bytecode)->bytecode.name);
+	printf("\n");
+
 	for (uint i = 0; i < YK_PTR(bytecode)->bytecode.code_size; i++) {
 		YkInstruction instruction = YK_PTR(bytecode)->bytecode.code[i];
 		printf("(%s ", yk_opcode_names[instruction.opcode]);
@@ -1790,12 +2023,13 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			YkObject lambda_lexical_stack = YK_NIL,
 				lambda_bytecode = YK_NIL;
 
-			YK_GC_PROTECT1(lambda_lexical_stack);
+			YK_GC_PROTECT2(lambda_lexical_stack, lambda_bytecode);
 
 			YkObject l;
 			YkInt argcount = 0;
 			for (l = arglist; YK_CONSP(l); l = YK_CDR(l)) {
 				YkObject arg = YK_CAR(l);
+				YK_ASSERT(YK_SYMBOLP(arg));
 				lambda_lexical_stack = yk_cons(arg, lambda_lexical_stack);
 				argcount++;
 			}
@@ -1808,6 +2042,18 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 										   yk_nreverse(lambda_lexical_stack));
 			lambda_bytecode = yk_make_bytecode_begin(name, argcount);
 
+			if (argcount < 0) {
+				yk_bytecode_emit(lambda_bytecode, YK_OP_LEXICAL_VAR, 0, YK_NIL);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_PUSH, 0, YK_NIL);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(-argcount - 1));
+				yk_bytecode_emit(lambda_bytecode, YK_OP_PUSH, 0, YK_NIL);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_FETCH_LITERAL, 0, yk_arglist_cfun);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_CALL, 2, YK_NIL);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_PUSH, 0, YK_NIL);
+
+				lambda_lexical_stack = yk_cons(l, lambda_lexical_stack);
+			}
+
 			YK_LIST_FOREACH(body, e) {
 				yk_compile_loop(YK_CAR(e), lambda_bytecode,
 								continuations_stack,
@@ -1815,6 +2061,10 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 								0,
 								!YK_CONSP(YK_CDR(e)),
 								warnings);
+			}
+
+			if (argcount < 0) {
+				yk_bytecode_emit(lambda_bytecode, YK_OP_UNBIND, 1, YK_NIL);
 			}
 
 			yk_bytecode_emit(lambda_bytecode, YK_OP_RET, 0, YK_NIL);
@@ -1825,30 +2075,7 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, lambda_bytecode);
 
 			YK_GC_UNPROTECT;
-	 	} else if (first == yk_keyword_argument) {
-			YkUint argument_offset = stack_offset;
-			bool found = false;
-
-			YK_LIST_FOREACH(lexical_stack, s) {
-				if (YK_CAR(s) == yk_symbol_argcount) {
-					found = true;
-					break;
-				}
-
-				argument_offset++;
-			}
-
-			YK_ASSERT(found);
-
-			yk_compile_loop(YK_CAR(YK_CDR(expression)), bytecode, continuations_stack,
-							lexical_stack, stack_offset, false, warnings);
-			yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL,
-							 0, YK_MAKE_INT(argument_offset));
-			yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_argument_function);
-			yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
-		} else if (first == yk_keyword_do) {
+	 	} else if (first == yk_keyword_do) {
 			YK_LIST_FOREACH(YK_CDR(expression), l) {
 				bool compiled_is_tail = false;
 				if (is_tail && !YK_CONSP(YK_CDR(l)))

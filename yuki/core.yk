@@ -40,27 +40,36 @@
 					 (: (fn (head lst)) acc))))
 
    (defun map (fn lst)
-	 (map-helper fn lst nil)))
+	 (map-helper fn lst nil))
+
+   (defun quasiquote-helper (expression)
+	 (if (list? expression)
+		 (if (eq? (head expression) (quote unquote))
+			 (second expression)
+			 (: (quote list)
+				(map quasiquote-helper expression)))
+		 (list (quote quote) expression))))
+
+  (define-macro quasiquote (expression)
+	(quasiquote-helper expression))
 
   (define-macro cond (clauses)
 	(cond-helper clauses))
 
   (define-macro lambda (args body)
-	(list (quote named-lambda) (quote anon)
-		  args
-		  body))
+	(quasiquote
+	 (named-lambda anon
+	   (unquote args)
+	   (unquote body))))
 
   (define-macro and (a b)
-	(list (quote if) a b nil))
+	(quasiquote
+	 (if (unquote a) (unquote b) nil)))
 
   (define-macro define (symbol value)
-	(list (quote do)
-		  (list (quote comptime)
-				(list (quote register-global!)
-					  (list (quote quote) symbol)))
-		  (list (quote set-global!)
-				(list (quote quote) symbol)
-				value)))
+	(quasiquote
+	 (do (comptime (register-global! (quote (unquote symbol))))
+		 (set-global! (quote (unquote symbol)) (unquote value)))))
 
   (defun range-helper (max acc)
 	(if (= max 0)
@@ -75,8 +84,9 @@
 		(invoke-debugger (quote assertion-error))))
 
   (define-macro assert (value)
-	(list (quote assert-fn)
-		  value (list (quote quote) value)))
+	(quasiquote
+	 (assert-fn (unquote value)
+				(quote (unquote value)))))
 
   (assert (= 5 5))
   (assert (= 5.0 5))
@@ -93,9 +103,6 @@
   (assert (< 5 6))
   (assert (< 5.5 6.5))
 
-  (defun hello (a b c d)
-	(list (argument 0)
-		  (argument 1)
-		  (argument 2)))
-
-  )
+  (defun test ()
+	((lambda (a b . c) (list a b c))
+	 (quote hello) (quote my) (quote friend) (quote you))))
