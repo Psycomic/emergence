@@ -471,6 +471,10 @@ static YkObject yk_builtin_eq(YkUint nargs) {
 	return yk_lisp_stack_top[0] == yk_lisp_stack_top[1] ? yk_tee : YK_NIL;
 }
 
+static YkObject yk_builtin_not(YkUint nargs) {
+	return yk_lisp_stack_top[0] == YK_NIL ? yk_tee : YK_NIL;
+}
+
 static YkObject yk_builtin_add(YkUint nargs) {
 	YkInt i_result = 0;
 	float f_result = 0.f;
@@ -841,6 +845,22 @@ static YkObject yk_builtin_length(YkUint nargs) {
 	return YK_MAKE_INT(yk_length(yk_lisp_stack_top[0]));
 }
 
+static YkObject yk_builtin_arguments_length(YkUint nargs) {
+	YkObject lambda_list = yk_lisp_stack_top[0];
+	YkInt length = 0;
+
+	YkObject a = lambda_list;
+	for (; YK_CONSP(a); a = YK_CDR(a)) {
+		length++;
+	}
+
+	if (a != YK_NIL && YK_SYMBOLP(a)) {
+		length = -(length + 1);
+	}
+
+	return YK_MAKE_INT(length);
+}
+
 static YkObject yk_builtin_append(YkUint nargs) {
 	YkObject result = YK_NIL;
 	YK_GC_PROTECT1(result);
@@ -914,7 +934,7 @@ static YkObject yk_builtin_aset(YkUint nargs) {
 	YkInt index = YK_INT(yk_lisp_stack_top[1]);
 	YkObject value = yk_lisp_stack_top[2];
 
-	YK_ASSERT(index < (YkInt)array->array.size && index > 0);
+	YK_ASSERT(index < (YkInt)array->array.size && index >= 0);
 
 	array->array.data[index] = value;
 
@@ -1115,6 +1135,8 @@ void yk_init() {
 	yk_make_builtin("third", 1, yk_builtin_third);
 	yk_make_builtin("list", -1, yk_builtin_list);
 	yk_make_builtin("length", 1, yk_builtin_length);
+	yk_make_builtin("lambda-list-length", 1, yk_builtin_arguments_length);
+	yk_make_builtin("not", 1, yk_builtin_not);
 	yk_make_builtin("append", -1, yk_builtin_append);
 	yk_make_builtin("reverse", 1, yk_builtin_reverse);
 	yk_make_builtin("reverse!", 1, yk_builtin_nreverse);
@@ -2014,7 +2036,6 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 		} else if (first == yk_keyword_lambda) {
 			YK_ASSERT(yk_length(expression) == 4);
 			YK_ASSERT(YK_SYMBOLP(YK_CAR(YK_CDR(expression))));
-			YK_ASSERT(YK_LISTP(YK_CAR(YK_CDR(YK_CDR(expression)))));
 
 			YkObject name = YK_CAR(YK_CDR(expression));
 			YkObject arglist = YK_CAR(YK_CDR(YK_CDR(expression)));

@@ -10,18 +10,19 @@
 											   args
 											   body))))))
 
-  (define-macro defun (name args body)
+  (define-macro defun (name args . body)
 	(list (quote do)
 		  (list (quote comptime)
 				(list (quote register-function!)
 					  (list (quote quote) name)
-					  (length args)))
+					  (lambda-list-length args)))
 		  (list (quote set-global!)
 				(list (quote quote) name)
 				(list (quote named-lambda)
 					  name
 					  args
-					  body))
+					  (: (quote do)
+						 body)))
 		  (list (quote quote) name)))
 
   (comptime
@@ -46,21 +47,23 @@
 	 (if (list? expression)
 		 (if (eq? (head expression) (quote unquote))
 			 (second expression)
-			 (: (quote list)
-				(map quasiquote-helper expression)))
+			 (if (null? expression)
+				 nil
+				 (: (quote list)
+					(map quasiquote-helper expression))))
 		 (list (quote quote) expression))))
 
   (define-macro quasiquote (expression)
 	(quasiquote-helper expression))
 
-  (define-macro cond (clauses)
+  (define-macro cond clauses
 	(cond-helper clauses))
 
-  (define-macro lambda (args body)
-	(quasiquote
-	 (named-lambda anon
-	   (unquote args)
-	   (unquote body))))
+  (define-macro lambda (args . body)
+	(append (list (quote named-lambda)
+				  (quote anon)
+				  args)
+			body))
 
   (define-macro and (a b)
 	(quasiquote
@@ -101,8 +104,4 @@
   (assert (< 2 4.5))
   (assert (< 3 6.2))
   (assert (< 5 6))
-  (assert (< 5.5 6.5))
-
-  (defun test ()
-	((lambda (a b . c) (list a b c))
-	 (quote hello) (quote my) (quote friend) (quote you))))
+  (assert (< 5.5 6.5)))
