@@ -1855,6 +1855,17 @@ void yk_w_assigning_to_function_init(YkWarning* warning, char* file, uint32_t li
 	warning->warning.assigning_to_function.function_symbol = function_symbol;
 }
 
+void yk_w_dynamic_bind_function_init(YkWarning* warning, char* file, uint32_t line,
+									 uint32_t character, YkObject function_symbol)
+{
+	warning->type = YK_W_DYNAMIC_BIND_FUNCTION;
+	warning->file = file;
+	warning->line = line;
+	warning->character = character;
+
+	warning->warning.dynamic_bind_function.function_symbol = function_symbol;
+}
+
 void yk_w_print(YkWarning* w) {
 	switch (w->type) {
 	case YK_W_UNDECLARED_VARIABLE:
@@ -1871,6 +1882,11 @@ void yk_w_print(YkWarning* w) {
 		break;
 	case YK_W_ASSIGNING_TO_FUNCTION:
 		printf("Assignment to variable '%s' declared as a function at %s:%d\n",
+			   YK_PTR(w->warning.assigning_to_function.function_symbol)->symbol.name,
+			   w->file, w->line);
+		break;
+	case YK_W_DYNAMIC_BIND_FUNCTION:
+		printf("Dynamic binding to the variable '%s' declared as a function at %s:%d\n",
 			   YK_PTR(w->warning.assigning_to_function.function_symbol)->symbol.name,
 			   w->file, w->line);
 		break;
@@ -2006,6 +2022,11 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 				yk_compile_loop(YK_CAR(YK_CDR(pair)), bytecode, continuations_stack,
 								lexical_stack, stack_offset, false, warnings);
 				yk_bytecode_emit(bytecode, YK_OP_BIND_DYNAMIC, 0, YK_CAR(pair));
+
+				if (YK_PTR(YK_CAR(pair))->symbol.type == yk_s_function) {
+					YkWarning* w = dynamic_array_push_back(warnings, 1);
+					yk_w_dynamic_bind_function_init(w, "None", 0, 0, YK_CAR(pair));
+				}
 
 				bindings_count++;
 			}

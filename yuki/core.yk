@@ -1,7 +1,7 @@
 (do
   (comptime
-   (set-macro! (quote define-macro)
-			   (named-lambda define-macro (name args body)
+   (set-macro! (quote macro)
+			   (named-lambda macro (name args body)
 							 (list (quote comptime)
 								   (list (quote set-macro!)
 										 (list (quote quote) name)
@@ -10,7 +10,7 @@
 											   args
 											   body))))))
 
-  (define-macro defun (name args . body)
+  (macro func (name args . body)
 	(list (quote do)
 		  (list (quote comptime)
 				(list (quote register-function!)
@@ -26,7 +26,7 @@
 		  (list (quote quote) name)))
 
   (comptime
-   (defun cond-helper (clauses)
+   (func cond-helper (clauses)
 	 (if (null? clauses)
 		 nil
 		 (let ((c (head clauses)))
@@ -34,16 +34,16 @@
 				 (second c)
 				 (cond-helper (tail clauses))))))
 
-   (defun map-helper (fn lst acc)
+   (func map-helper (fn lst acc)
 	 (if (null? lst)
 		 (reverse! acc)
 		 (map-helper fn (tail lst)
 					 (: (fn (head lst)) acc))))
 
-   (defun map (fn lst)
+   (func map (fn lst)
 	 (map-helper fn lst nil))
 
-   (defun quasiquote-helper (expression)
+   (func quasiquote-helper (expression)
 	 (if (list? expression)
 		 (if (eq? (head expression) (quote unquote))
 			 (second expression)
@@ -53,40 +53,40 @@
 					(map quasiquote-helper expression))))
 		 (list (quote quote) expression))))
 
-  (define-macro quasiquote (expression)
+  (macro quasiquote (expression)
 	(quasiquote-helper expression))
 
-  (define-macro cond clauses
+  (macro cond clauses
 	(cond-helper clauses))
 
-  (define-macro lambda (args . body)
+  (macro lambda (args . body)
 	(append (list (quote named-lambda)
 				  (quote anon)
 				  args)
 			body))
 
-  (define-macro and (a b)
+  (macro and (a b)
 	(quasiquote
 	 (if (unquote a) (unquote b) nil)))
 
-  (define-macro define (symbol value)
+  (macro define (symbol value)
 	(quasiquote
 	 (do (comptime (register-global! (quote (unquote symbol))))
 		 (set-global! (quote (unquote symbol)) (unquote value)))))
 
-  (defun range-helper (max acc)
+  (func range-helper (max acc)
 	(if (= max 0)
 		(: max acc)
 		(range-helper (- max 1)
 					  (: max acc))))
 
-  (defun range (x) (range-helper x nil))
+  (func range (x) (range-helper x nil))
 
-  (defun assert-fn (value error)
+  (func assert-fn (value error)
 	(if value value
 		(invoke-debugger (quote assertion-error))))
 
-  (define-macro assert (value)
+  (macro assert (value)
 	(quasiquote
 	 (assert-fn (unquote value)
 				(quote (unquote value)))))

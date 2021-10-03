@@ -244,7 +244,8 @@ typedef struct {
 	enum {
 		YK_W_UNDECLARED_VARIABLE,
 		YK_W_WRONG_NUMBER_OF_ARGUMENTS,
-		YK_W_ASSIGNING_TO_FUNCTION
+		YK_W_ASSIGNING_TO_FUNCTION,
+		YK_W_DYNAMIC_BIND_FUNCTION
 	} type;
 
 	char* file;
@@ -265,6 +266,10 @@ typedef struct {
 		struct {
 			YkObject function_symbol;
 		} assigning_to_function;
+
+		struct {
+			YkObject function_symbol;
+		} dynamic_bind_function;
 	} warning;
 } YkWarning;
 
