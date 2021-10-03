@@ -91,6 +91,8 @@
 	 (assert-fn (unquote value)
 				(quote (unquote value)))))
 
+  (define pi 3.1415)
+
   (assert (= 5 5))
   (assert (= 5.0 5))
   (assert (= 5 5.0))

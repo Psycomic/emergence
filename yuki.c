@@ -1067,7 +1067,7 @@ YkObject yk_apply(YkObject function, YkObject args) {
 }
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
-	yk_keyword_comptime, yk_keyword_do, yk_keyword_if,
+	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_dynamic_let,
 	yk_symbol_argcount;
 
 void yk_init() {
@@ -1101,6 +1101,7 @@ void yk_init() {
 	yk_keyword_comptime = yk_make_symbol("comptime");
 	yk_keyword_do = yk_make_symbol("do");
 	yk_keyword_if = yk_make_symbol("if");
+	yk_keyword_dynamic_let = yk_make_symbol("dynamic-let");
 
 	yk_symbol_argcount = yk_make_symbol("*argcount*");
 
@@ -1184,6 +1185,8 @@ void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t 
 }
 
 YkObject yk_make_symbol(char* name) {
+	YK_ASSERT(*name != '\0' && *name != '%');
+
 	uint64_t string_hash = hash_string((uchar*)name);
 	uint16_t index = string_hash % YK_SYMBOL_TABLE_SIZE;
 	YkObject sym;
@@ -1802,8 +1805,10 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 			yk_print(instruction.ptr);
 			printf(" %u)\n", instruction.modifier);
 		} else if (instruction.opcode == YK_OP_FETCH_LITERAL ||
-				   instruction.opcode == YK_OP_FETCH_GLOBAL ||
-				   instruction.opcode == YK_OP_GLOBAL_SET)
+				   instruction.opcode == YK_OP_FETCH_GLOBAL  ||
+				   instruction.opcode == YK_OP_GLOBAL_SET    ||
+				   instruction.opcode == YK_OP_BIND_DYNAMIC  ||
+				   instruction.opcode == YK_OP_UNBIND_DYNAMIC)
 		{
 			yk_print(instruction.ptr);
 			printf(")\n");
@@ -1885,6 +1890,26 @@ void yk_w_remove_untrue(DynamicArray* warnings) {
 	}
 }
 
+YkInt yk_lexical_offset(YkObject symbol, YkObject lexical_stack) {
+	YkInt j = 0;
+	YkObject i;
+
+	for (i = lexical_stack; i != YK_NIL; i = YK_CDR(i)) {
+		YkObject sym = YK_CAR(i);
+
+		if (sym == symbol) {
+			break;
+		}
+		j++;
+	}
+
+	if (i != YK_NIL) {
+		return j;
+	} else {
+		return -1;
+	}
+}
+
 void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuations_stack,
 					 YkObject lexical_stack, YkUint stack_offset, bool is_tail, DynamicArray* warnings)
 {
@@ -1910,31 +1935,20 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 		break;
 	case yk_t_symbol:
 	{
-		uint16_t j = 0;
-		YkObject i;
-		for (i = lexical_stack; i != YK_NIL; i = YK_CDR(i)) {
-			YkObject sym = YK_CAR(i);
+		int32_t j = yk_lexical_offset(expression, lexical_stack);
 
-			if (sym == expression) {
-				break;
-			}
-			j++;
-		}
-
-		if (i != YK_NIL) {
+		if (j != -1) {
 			yk_bytecode_emit(bytecode, YK_OP_LEXICAL_VAR, j + stack_offset, YK_NIL);
 		}
 		else {
 			if (YK_PTR(expression)->symbol.type == yk_s_constant) {
-				yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0,
-								 YK_PTR(expression)->symbol.value);
+				yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_PTR(expression)->symbol.value);
 			} else {
-				if (YK_PTR(expression)->symbol.value == NULL &&
-					!YK_PTR(expression)->symbol.declared)
-				{
+				if (YK_PTR(expression)->symbol.value == NULL &&	!YK_PTR(expression)->symbol.declared) {
 					YkWarning* warning = dynamic_array_push_back(warnings, 1);
 					yk_w_undeclared_var_init(warning, "NONE", 0, 0, expression);
 				}
+
 				yk_bytecode_emit(bytecode, YK_OP_FETCH_GLOBAL, 0, expression);
 			}
 		}
@@ -1981,26 +1995,40 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			}
 
 			yk_bytecode_emit(bytecode, YK_OP_UNBIND, offset, YK_NIL);
+		} else if (first == yk_keyword_dynamic_let) {
+			YkObject bindings = YK_CAR(YK_CDR(expression));
+			YkObject body = YK_CDR(YK_CDR(expression));
+
+			YkInt bindings_count = 0;
+
+			YK_LIST_FOREACH(bindings, b) {
+				YkObject pair = YK_CAR(b);
+				yk_compile_loop(YK_CAR(YK_CDR(pair)), bytecode, continuations_stack,
+								lexical_stack, stack_offset, false, warnings);
+				yk_bytecode_emit(bytecode, YK_OP_BIND_DYNAMIC, 0, YK_CAR(pair));
+
+				bindings_count++;
+			}
+
+			YK_LIST_FOREACH(body, e) {
+				yk_compile_loop(YK_CAR(e), bytecode, continuations_stack, lexical_stack,
+								stack_offset, false, warnings);
+			}
+
+			yk_bytecode_emit(bytecode, YK_OP_UNBIND_DYNAMIC, bindings_count, YK_NIL);
 		} else if (first == yk_keyword_setq) {
 			YK_ASSERT(yk_length(expression) == 3);
 
 			YkObject symbol = YK_CAR(YK_CDR(expression));
 			YkObject value = YK_CAR(YK_CDR(YK_CDR(expression)));
 
-			bool found = false;
-			YkUint offset = stack_offset;
-			YK_LIST_FOREACH(lexical_stack, l) {
-				if (YK_CAR(l) == symbol) {
-					found = true;
-					break;
-				}
-				offset++;
-			}
+			YkInt i = yk_lexical_offset(symbol, lexical_stack);
 
 			yk_compile_loop(value, bytecode, continuations_stack,
 								lexical_stack, stack_offset, false, warnings);
 
-			if (found) { 		/* Lexically scoped variable */
+			if (i != -1) { 		/* Lexically scoped variable */
+				YkUint offset = stack_offset + i;
 				yk_bytecode_emit(bytecode, YK_OP_LEXICAL_SET, offset, YK_NIL);
 			} else {			/* Global variable */
 				YK_ASSERT(!(YK_PTR(symbol)->symbol.type == yk_s_macro ||

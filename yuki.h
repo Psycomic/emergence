@@ -150,7 +150,6 @@ typedef struct {
 	enum YkSymbolType {
 		yk_s_normal,
 		yk_s_constant,
-		yk_s_dynamic,
 		yk_s_function,
 		yk_s_macro
 	} type;
