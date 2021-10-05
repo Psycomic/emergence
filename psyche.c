@@ -1691,8 +1691,6 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 				char new_string[5];
 
 				u_codepoint_to_string(new_string, psyche_last_key.code);
-				printf("New string is %s\n", new_string);
-
 				ps_input_insert_at_point(input, new_string);
 			}
 			else {

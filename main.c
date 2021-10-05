@@ -21,6 +21,7 @@
 #include "window.h"
 #include "workers.h"
 #include "protocol7.h"
+#include "yuki.h"
 
 #define WORLD_STEP 0.1f
 
@@ -160,6 +161,20 @@ void update() {
 		else {
 			printf("Already started!\n");
 		}
+	}
+
+	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
+		YkObject forms = YK_NIL;
+		YK_GC_PROTECT1(forms);
+
+		forms = yk_read(ps_input_value(lisp_input));
+
+		YkObject bytecode = yk_make_bytecode_begin(yk_make_symbol("input"), 0);
+		yk_compile(forms, bytecode);
+
+		YK_GC_UNPROTECT;
+
+		yk_run(bytecode);
 	}
 
 	if (scene->flags & SCENE_GUI_MODE)

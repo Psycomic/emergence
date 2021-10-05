@@ -1068,6 +1068,7 @@ YkObject yk_apply(YkObject function, YkObject args) {
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
 	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_dynamic_let,
+	yk_keyword_with_cont, yk_keyword_exit, yk_keyword_loop,
 	yk_symbol_argcount;
 
 void yk_init() {
@@ -1102,6 +1103,9 @@ void yk_init() {
 	yk_keyword_do = yk_make_symbol("do");
 	yk_keyword_if = yk_make_symbol("if");
 	yk_keyword_dynamic_let = yk_make_symbol("dynamic-let");
+	yk_keyword_with_cont = yk_make_symbol("with-cont");
+	yk_keyword_exit = yk_make_symbol("exit");
+	yk_keyword_loop = yk_make_symbol("loop");
 
 	yk_symbol_argcount = yk_make_symbol("*argcount*");
 
@@ -1294,6 +1298,7 @@ YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs) {
 }
 
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr) {
+	YK_ASSERT(YK_BYTECODEP(bytecode));
 	YkObject bytecode_ptr = YK_PTR(bytecode);
 
 	if (bytecode_ptr->bytecode.code_size >= bytecode_ptr->bytecode.code_capacity) {
@@ -2172,6 +2177,46 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 
 			YK_PTR(bytecode)->bytecode.code[else_offset].modifier =
 				YK_PTR(bytecode)->bytecode.code_size;
+		} else if (first == yk_keyword_with_cont) {
+			YkObject cont_sym = YK_CAR(YK_CDR(expression));
+			YkObject cont_body = YK_CDR(YK_CDR(expression));
+
+			YkObject new_continuations_stack = yk_cons(cont_sym, continuations_stack);
+
+			uint before_size = YK_PTR(bytecode)->bytecode.code_size;
+			yk_bytecode_emit(bytecode, YK_OP_WITH_CONT, 0, YK_NIL);
+
+			YK_LIST_FOREACH(cont_body, b) {
+				yk_compile_loop(YK_CAR(b), bytecode, new_continuations_stack,
+								lexical_stack, stack_offset, false, warnings);
+			}
+
+			uint after_size = YK_PTR(bytecode)->bytecode.code_size;
+			YK_PTR(bytecode)->bytecode.code[before_size].modifier = after_size + 1;
+			yk_bytecode_emit(bytecode, YK_OP_EXIT, 0, YK_NIL);
+		} else if (first == yk_keyword_exit) {
+			YK_ASSERT(yk_length(expression) == 3);
+
+			YkObject symbol = YK_CAR(YK_CDR(expression));
+			YkObject value_body = YK_CAR(YK_CDR(YK_CDR(expression)));
+
+			YkInt cont_offset = yk_lexical_offset(symbol, continuations_stack);
+			YK_ASSERT(cont_offset >= 0);
+
+			yk_compile_loop(value_body, bytecode, continuations_stack,
+							lexical_stack, stack_offset, false, warnings);
+
+			yk_bytecode_emit(bytecode, YK_OP_EXIT_CONT, cont_offset, YK_NIL);
+		} else if (first == yk_keyword_loop) {
+			YkUint begin_size = YK_PTR(bytecode)->bytecode.code_size;
+			YkObject body = YK_CDR(expression);
+
+			YK_LIST_FOREACH(body, b) {
+				yk_compile_loop(YK_CAR(b), bytecode, continuations_stack,
+								lexical_stack, stack_offset, false, warnings);
+			}
+
+			yk_bytecode_emit(bytecode, YK_OP_JMP, begin_size, YK_NIL);
 		} else {
 			YkUint argcount = 0;
 			YkUint offset = stack_offset;

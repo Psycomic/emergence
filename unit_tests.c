@@ -301,8 +301,6 @@ void execute_tests(void) {
 		yk_run(bytecode);
 
 		YK_GC_UNPROTECT;
-
-		yk_repl();
 	}
 
 	{
@@ -346,13 +344,5 @@ void execute_tests(void) {
 		}
 
 		p7_node_discover("127.0.0.1", P7_PORT);
-/*
-		while (GL_TRUE) {
-			p7_loop();
-			usleep(1000);
-		}
-*/
 	}
-
-	exit(0);
 }
