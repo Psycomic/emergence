@@ -351,7 +351,7 @@ int do_main(int argc, char** argv) {
 
 	regenerate_button = ps_button_create("Re-generate terrain", 16);
 	wireframe_button = ps_button_create("Toggle Wireframe", 16);
-	lisp_input = ps_input_create("(+ 4 4)", 16);
+	lisp_input = ps_input_create("(aref \"なかだし\" 2)", 16);
 
 	ps_container_add(vbox, regenerate_button);
 	ps_container_add(vbox, wireframe_button);

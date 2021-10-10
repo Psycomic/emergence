@@ -770,6 +770,13 @@ static YkObject yk_builtin_boundp(YkUint nargs) {
 		return yk_tee;
 }
 
+static YkObject yk_builtin_documentation(YkUint nargs) {
+	YkObject bytecode = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_BYTECODEP(bytecode));
+
+	return YK_PTR(bytecode)->bytecode.docstring;
+}
+
 static YkObject yk_builtin_gensym(YkUint nargs) {
 	char symbol_string[9];
 	symbol_string[0] = '%';
@@ -789,7 +796,12 @@ static YkObject yk_builtin_clock(YkUint nargs) {
 
 static YkObject yk_builtin_print(YkUint nargs) {
 	yk_print(yk_lisp_stack_top[0]);
+	printf("\n");
 	return YK_NIL;
+}
+
+static YkObject yk_builtin_random(YkUint nargs) {
+	return YK_MAKE_INT(random_randint() % YK_INT(yk_lisp_stack_top[0]));
 }
 
 static YkObject yk_builtin_set_global(YkUint nargs) {
@@ -920,13 +932,43 @@ static YkObject yk_builtin_array_to_list(YkUint nargs) {
 	return list;
 }
 
+static YkObject yk_string_ref(YkObject string, YkInt i) {
+	uchar* string_ptr = (uchar*)YK_PTR(string)->string.data;
+
+	while (--i >= 0) {
+		YK_ASSERT(*string_ptr != '\0');
+
+		if (*string_ptr <= 0x7f) {
+			string_ptr++;
+		} else if (*string_ptr >> 6 == 2) {
+			YK_ASSERT("error in encoding" == 0);
+		} else if (*string_ptr >> 3 == 0x1e) {
+			string_ptr += 4;
+		} else if (*string_ptr >> 4 == 0xe) {
+			string_ptr += 3;
+		} else if (*string_ptr >> 5 == 6) {
+			string_ptr += 2;
+		}
+	}
+
+	return YK_MAKE_INT(u_string_to_codepoint(string_ptr));
+}
+
 static YkObject yk_builtin_aref(YkUint nargs) {
 	YkObject array = yk_lisp_stack_top[0];
 	YkInt index = YK_INT(yk_lisp_stack_top[1]);
 
-	YK_ASSERT(index < (YkInt)array->array.size && index >= 0);
+	if (YK_TYPEOF(array) == yk_t_array) {
+		YK_ASSERT(index < (YkInt)array->array.size && index >= 0);
 
-	return array->array.data[index];
+		return array->array.data[index];
+	} else if (YK_TYPEOF(array) == yk_t_string) {
+		return yk_string_ref(array, index);
+	} else {
+		YK_ASSERT(0);
+	}
+
+	return YK_NIL;
 }
 
 static YkObject yk_builtin_aset(YkUint nargs) {
@@ -1163,6 +1205,7 @@ void yk_init() {
 	yk_make_builtin("bytecode?", 1, yk_builtin_bytecodep);
 	yk_make_builtin("compiled-function?", 1, yk_builtin_compiled_functionp);
 
+	yk_make_builtin("documentation", 1, yk_builtin_documentation);
 	yk_make_builtin("bound?", 1, yk_builtin_boundp);
 	yk_make_builtin("gensym", 0, yk_builtin_gensym);
 
@@ -1172,6 +1215,7 @@ void yk_init() {
 	yk_make_builtin("register-function!", 2, yk_builtin_register_function);
 
 	yk_make_builtin("clock", 0, yk_builtin_clock);
+	yk_make_builtin("random", 1, yk_builtin_random);
 
 	yk_make_builtin("print", 1, yk_builtin_print);
 
@@ -1189,7 +1233,7 @@ void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t 
 }
 
 YkObject yk_make_symbol(char* name) {
-	YK_ASSERT(*name != '\0' && *name != '%');
+	YK_ASSERT(*name != '\0');
 
 	uint64_t string_hash = hash_string((uchar*)name);
 	uint16_t index = string_hash % YK_SYMBOL_TABLE_SIZE;
@@ -1267,6 +1311,19 @@ static YkObject yk_make_array(YkUint size, YkObject element) {
 	}
 
 	return array;
+}
+
+static YkObject yk_make_string(const char* cstr, size_t cstr_size) {
+	YkObject string = yk_alloc();
+	YkUint size = cstr_size + 1;
+
+	string->string.t = yk_t_string;
+	string->string.size = size - 1;
+	string->string.data = yk_array_allocator_alloc(size);
+	memcpy(string->string.data, cstr, size - 1);
+	string->string.data[size - 1] = '\0';
+
+	return string;
 }
 
 YkObject yk_cons(YkObject car, YkObject cdr) {
@@ -1359,7 +1416,18 @@ static YkObject yk_read_list(const char* string, int string_size) {
 				break;
 		}
 
-		if (string[i] == ')') {
+		if (string[i] == '"') {
+			printf("Creating string...\n");
+			YK_ASSERT(i > 0);
+			int j;
+			for (j = i - 1; string[j] != '"'; j--);
+
+			YkInt str_obj_size = i - j - 1;
+			YkObject str_obj = yk_make_string(string + j + 1, str_obj_size);
+			list = yk_cons(str_obj, list);
+			i -= str_obj_size + 2;
+		}
+		else if (string[i] == ')') {
 			int parens_count = 0;
 			int j = i, count = 0;
 
@@ -1407,12 +1475,14 @@ static YkObject yk_read_list(const char* string, int string_size) {
 
 				float f = (float)dfloating;
 
-				if (type == 0)
+				if (type == 0) {
 					list = yk_cons(YK_MAKE_INT(integer), list);
-				else if (type == 1)
+				} else if (type == 1) {
 					list = yk_cons(YK_MAKE_FLOAT(f), list);
-				else
+				} else {
+					YK_ASSERT(*symbol_string != '%');
 					list = yk_cons(yk_make_symbol(symbol_string), list);
+				}
 			}
 
 			i -= count;
@@ -1483,6 +1553,10 @@ void yk_print(YkObject o) {
 				printf(" ");
 		}
 		printf("]");
+		break;
+	case yk_t_string:
+		printf("\"");
+		printf("%s\"", YK_PTR(o)->string.data);
 		break;
 	default:
 		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
@@ -2088,7 +2162,7 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 
 			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_value_register);
 		} else if (first == yk_keyword_lambda) {
-			YK_ASSERT(yk_length(expression) == 4);
+			YK_ASSERT(yk_length(expression) >= 4);
 			YK_ASSERT(YK_SYMBOLP(YK_CAR(YK_CDR(expression))));
 
 			YkObject name = YK_CAR(YK_CDR(expression));
@@ -2116,6 +2190,10 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			lambda_lexical_stack = yk_cons(yk_symbol_argcount,
 										   yk_nreverse(lambda_lexical_stack));
 			lambda_bytecode = yk_make_bytecode_begin(name, argcount);
+			if (body != YK_NIL && YK_TYPEOF(YK_CAR(body)) == yk_t_string) {
+				YK_PTR(lambda_bytecode)->bytecode.docstring = YK_CAR(body);
+				body = YK_CDR(body);
+			}
 
 			if (argcount < 0) {
 				yk_bytecode_emit(lambda_bytecode, YK_OP_LEXICAL_VAR, 0, YK_NIL);

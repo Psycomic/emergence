@@ -119,6 +119,7 @@ int m_scanf(const char* fmt, ...);
 void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n);
 size_t strcount(const char* str, char c);
 int u_codepoint_to_string(char* dst, uint code);
+uint u_string_to_codepoint(const uchar* string);
 
 char16_t* u_utf8_to_utf16(const char* str);
 

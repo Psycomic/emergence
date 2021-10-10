@@ -1,95 +1,97 @@
 (do
-  (comptime
-   (set-macro! (quote macro)
-			   (named-lambda macro (name args body)
-							 (list (quote comptime)
-								   (list (quote set-macro!)
-										 (list (quote quote) name)
-										 (list (quote named-lambda)
-											   name
-											   args
-											   body))))))
+	(comptime
+	 (set-macro! (quote macro)
+				 (named-lambda macro (name args body)
+							   (list (quote comptime)
+									 (list (quote set-macro!)
+										   (list (quote quote) name)
+										   (list (quote named-lambda)
+												 name
+												 args
+												 body))))))
 
-  (macro func (name args . body)
-	(list (quote do)
-		  (list (quote comptime)
-				(list (quote register-function!)
-					  (list (quote quote) name)
-					  (lambda-list-length args)))
-		  (list (quote set-global!)
-				(list (quote quote) name)
-				(list (quote named-lambda)
-					  name
-					  args
-					  (: (quote do)
-						 body)))
-		  (list (quote quote) name)))
+	(macro func (name args . body)
+		   (list (quote do)
+				 (list (quote comptime)
+					   (list (quote register-function!)
+							 (list (quote quote) name)
+							 (lambda-list-length args)))
+				 (list (quote set-global!)
+					   (list (quote quote) name)
+					   (append (list (quote named-lambda)
+									 name args)
+							    body))
+				 (list (quote quote) name)))
 
   (comptime
    (func cond-helper (clauses)
-	 (if (null? clauses)
-		 nil
-		 (let ((c (head clauses)))
-		   (list (quote if) (head c)
-				 (second c)
-				 (cond-helper (tail clauses))))))
+		 (if (null? clauses)
+			 nil
+			 (let ((c (head clauses)))
+			   (list (quote if) (head c)
+					 (second c)
+					 (cond-helper (tail clauses))))))
 
    (func map-helper (fn lst acc)
-	 (if (null? lst)
-		 (reverse! acc)
-		 (map-helper fn (tail lst)
-					 (: (fn (head lst)) acc))))
+		 (if (null? lst)
+			 (reverse! acc)
+			 (map-helper fn (tail lst)
+						 (: (fn (head lst)) acc))))
 
    (func map (fn lst)
-	 (map-helper fn lst nil))
+		 "Applies the function `fn' to every element in lst
+and returns a list containing the results"
+		 (map-helper fn lst nil))
 
    (func quasiquote-helper (expression)
-	 (if (list? expression)
-		 (if (eq? (head expression) (quote unquote))
-			 (second expression)
-			 (if (null? expression)
-				 nil
-				 (: (quote list)
-					(map quasiquote-helper expression))))
-		 (list (quote quote) expression))))
+		 (if (list? expression)
+			 (if (eq? (head expression) (quote unquote))
+				 (second expression)
+				 (if (null? expression)
+					 nil
+					 (: (quote list)
+						(map quasiquote-helper expression))))
+			 (list (quote quote) expression))))
 
   (macro quasiquote (expression)
-	(quasiquote-helper expression))
+		 (quasiquote-helper expression))
 
   (macro cond clauses
-	(cond-helper clauses))
+		 (cond-helper clauses))
 
   (macro lambda (args . body)
-	(append (list (quote named-lambda)
-				  (quote anon)
-				  args)
-			body))
+		 (append (list (quote named-lambda)
+					   (quote anon)
+					   args)
+				 body))
 
   (macro and (a b)
-	(quasiquote
-	 (if (unquote a) (unquote b) nil)))
+		 (quasiquote
+		  (if (unquote a) (unquote b) nil)))
 
   (macro define (symbol value)
-	(quasiquote
-	 (do (comptime (register-global! (quote (unquote symbol))))
-		 (set-global! (quote (unquote symbol)) (unquote value)))))
+		 (quasiquote
+		  (do (comptime (register-global! (quote (unquote symbol))))
+			  (set-global! (quote (unquote symbol)) (unquote value)))))
 
   (func range-helper (max acc)
-	(if (= max 0)
-		(: max acc)
-		(range-helper (- max 1)
-					  (: max acc))))
+		(if (= max 0)
+			(: max acc)
+			(range-helper (- max 1)
+						  (: max acc))))
 
-  (func range (x) (range-helper x nil))
+  (func range (x)
+		"Return a list containing every number between 0 and `x' (included)"
+		(range-helper x nil))
 
   (func assert-fn (value error)
-	(if value value
-		(invoke-debugger (quote assertion-error))))
+		(if value value
+			(invoke-debugger (quote assertion-error))))
 
   (macro assert (value)
-	(quasiquote
-	 (assert-fn (unquote value)
-				(quote (unquote value)))))
+		 (quasiquote
+		  (assert-fn (unquote value)
+					 (quote (unquote value)))))
 
   (define pi 3.1415)
 
@@ -106,4 +108,37 @@
   (assert (< 2 4.5))
   (assert (< 3 6.2))
   (assert (< 5 6))
-  (assert (< 5.5 6.5)))
+  (assert (< 5.5 6.5))
+
+  (macro for (e lst . body)
+		 (let ((list-sym (gensym))
+			   (cont-sym (gensym)))
+		   (quasiquote
+			(let (((unquote list-sym) (unquote lst)))
+			  (with-cont (unquote cont-sym)
+						 (loop
+						  (if (null? (tail (unquote list-sym)))
+							  (exit (unquote cont-sym) nil)
+							  (do (let (((unquote e) (head (unquote list-sym))))
+									(unquote (head body)))
+								  (set! (unquote list-sym)
+										(tail (unquote list-sym)))))))))))
+
+  (macro times (i count . body)
+		 (let ((count-sym (gensym))
+			   (cont-sym (gensym)))
+		   (quasiquote
+			(let (((unquote i) 0)
+				  ((unquote count-sym) (unquote count)))
+			  (with-cont (unquote cont-sym)
+						 (loop (if (>= i (unquote count-sym))
+								   (exit (unquote cont-sym) i)
+								   (do (unquote (head body))
+									   (set! i (+ i 1))))))))))
+
+  (func make-board (size)
+		"Makes a Game of Life board of size `size'"
+		(let ((board (make-array (* size size) 0)))
+		  (times i (* size size)
+				 (aset! board i (random 2)))
+		  board)))

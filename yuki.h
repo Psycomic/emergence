@@ -223,6 +223,14 @@ typedef struct {
 	YkObject* data;
 } YkArray;
 
+typedef struct {
+	YkObject dummy;
+	YkType t;
+
+	YkUint size;
+	char* data;
+} YkString;
+
 union YkUnion {
 	struct {
 		YkObject dummy;
@@ -236,6 +244,7 @@ union YkUnion {
 	YkBytecode bytecode;
 	YkContinuation continuation;
 	YkArray array;
+	YkString string;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);

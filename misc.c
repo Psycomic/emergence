@@ -426,6 +426,26 @@ int u_codepoint_to_string(char* dst, uint code) {
 	}
 }
 
+uint u_string_to_codepoint(const uchar* string) {
+	if (*string <= 0x7f) {
+		return *string;
+	} else if (*string >> 3 == 0x1e) {
+		return ((string[0] & 0x7)  << 18 |
+				(string[1] & 0x3f) << 12 |
+				(string[2] & 0x3f) << 6  |
+				(string[3] & 0x3f));
+	} else if (*string >> 4 == 0xe) {
+		return ((string[0] & 0xf)  << 12 |
+				(string[1] & 0x3f) << 6  |
+				(string[2] & 0x3f));
+	} else if (*string >> 5 == 6) {
+		return ((string[0] & 0x1f) << 6 |
+				(string[1] & 0x3f));
+	}
+
+	return 0;
+}
+
 int powi(int base, int exp) {
     int result = 1;
     while (exp) {
