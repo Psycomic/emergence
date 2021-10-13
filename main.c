@@ -174,7 +174,10 @@ void update() {
 
 		YK_GC_UNPROTECT;
 
-		yk_run(bytecode);
+		YkObject r = yk_run(bytecode);
+		printf("< ");
+		yk_print(r);
+		printf("\n");
 	}
 
 	if (scene->flags & SCENE_GUI_MODE)

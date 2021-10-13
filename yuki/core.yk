@@ -131,14 +131,68 @@ and returns a list containing the results"
 			(let (((unquote i) 0)
 				  ((unquote count-sym) (unquote count)))
 			  (with-cont (unquote cont-sym)
-						 (loop (if (>= i (unquote count-sym))
-								   (exit (unquote cont-sym) i)
+						 (loop (if (>= (unquote i) (unquote count-sym))
+								   (exit (unquote cont-sym) (unquote i))
 								   (do (unquote (head body))
-									   (set! i (+ i 1))))))))))
+									   (set! (unquote i)
+											 (+ (unquote i) 1))))))))))
+
+  (func 1+ (x) "Add one to `x'" (+ x 1))
+  (func 1- (x) "Substract one to `x'" (- x 1))
 
   (func make-board (size)
 		"Makes a Game of Life board of size `size'"
 		(let ((board (make-array (* size size) 0)))
-		  (times i (* size size)
-				 (aset! board i (random 2)))
-		  board)))
+		  (board-set! board size 1 0 1)
+		  (board-set! board size 2 1 1)
+		  (board-set! board size 0 2 1)
+		  (board-set! board size 1 2 1)
+		  (board-set! board size 2 2 1)
+		  board))
+
+  (func board-get (board size x y)
+		"Get the cell in position (x, y)"
+		(aref board (+ (* (mod x size) size)
+					   (mod y size))))
+
+  (func board-set! (board size x y val)
+		"Set the cell in position (x, y) to `val'"
+		(aset! board (+ (* (mod x size) size)
+						(mod y size))
+			   val))
+
+  (func neighbors (board size x y)
+		"Returns the numbers of neighbors in position (x, y)"
+		(+ (board-get board size (1+ x) y)
+		   (board-get board size (1+ x) (1+ y))
+		   (board-get board size (1+ x) (1- y))
+		   (board-get board size (1- x) y)
+		   (board-get board size (1- x) (1+ y))
+		   (board-get board size (1- x) (1- y))
+		   (board-get board size x (1+ y))
+		   (board-get board size x (1- y))))
+
+  (func next-board (board size)
+		"Returns the next step in the game of life"
+		(let ((new-board (make-array (* size size) 0)))
+		  (times x size
+				 (times y size
+						(let ((c (board-get board size x y))
+							  (n (neighbors board size x y)))
+						  (board-set! new-board size x y
+									  (if (= c 1)
+										  (cond ((= n 2) 1)
+												((= n 3) 1)
+												(t 0))
+										  (if (= n 3) 1 0))))))
+		  new-board))
+
+  (define *board* (make-board 10))
+
+  (func next-step ()
+		(set! *board* (next-board *board* 10)))
+
+  (func benchmark ()
+		(let ((t1 (clock)))
+		  (times i 100 (next-step))
+		  (- (clock) t1))))
