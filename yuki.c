@@ -985,7 +985,14 @@ static YkObject yk_builtin_aref(YkUint nargs) {
 
 static YkObject yk_builtin_mod(YkUint nargs) {
 	YK_ASSERT(YK_INTP(yk_lisp_stack_top[0]) && YK_INTP(yk_lisp_stack_top[1]));
-	return YK_MAKE_INT(modi(YK_INT(yk_lisp_stack_top[0]), YK_INT(yk_lisp_stack_top[1])));
+	YkInt a = YK_INT(yk_lisp_stack_top[0]),
+		b = YK_INT(yk_lisp_stack_top[1]);
+
+	YkInt x = a % b;
+	if (x < 0)
+		x = b - a;
+
+	return YK_MAKE_INT(x);
 }
 
 static YkObject yk_builtin_aset(YkUint nargs) {

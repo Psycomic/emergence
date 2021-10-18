@@ -11,6 +11,8 @@
 typedef struct {
 	Shape* shape;
 	Vector3 velocity;
+	Vector3 acceleration;
+	Vector3 new_acceleration;
 	float mass_inv;
 } PhysicBody;
 
@@ -29,22 +31,33 @@ void physic_body_create(PhysicBody* body, Shape* shape, float mass) {
 	else
 		body->mass_inv = 1.f / mass;
 
-	body->velocity.x = 0.f;
-	body->velocity.y = 0.f;
-	body->velocity.z = 0.f;
+	body->velocity = (Vector3) { { 0.f, 0.f, 0.f } };
+	body->acceleration = (Vector3) { { 0.f, 0.f, 0.f } };
+	body->new_acceleration = (Vector3) { { 0.f, 0.f, 0.f } };
 }
 
 void physic_body_apply_force(PhysicBody* body, Vector3 force) {
-	vector3_scalar_mul(&force, force, body->mass_inv); // Adding force to velocity
-	vector3_add(&body->velocity, body->velocity, force);
+	vector3_scalar_mul(&force, force, body->mass_inv);
+	vector3_add(&body->new_acceleration, body->new_acceleration, force);
 }
 
 void physic_body_update(PhysicBody* body, float delta) {
-	// Applying velocity to the whole shape
-	Vector3 integrated_veloctiy;
-	vector3_scalar_mul(&integrated_veloctiy, body->velocity, delta);
+	Vector3 v;
+	vector3_scalar_mul(&v, body->velocity, delta);
+	Vector3 a;
+	vector3_scalar_mul(&a, body->acceleration, delta * delta * 0.5f);
+	vector3_add(&a, a, v);
+	vector3_add(&body->shape->position, body->shape->position, a);
 
-	vector3_add(&body->shape->position, body->shape->position, integrated_veloctiy);
+	Vector3 b;
+	vector3_add(&b, body->acceleration, body->new_acceleration);
+	vector3_scalar_mul(&b, b, delta * 0.5f);
+
+	Vector3 new_vel;
+	vector3_add(&new_vel, body->velocity, b);
+
+	body->velocity = new_vel;
+	body->acceleration = body->new_acceleration;
 }
 
 Shape* physic_body_get_shape(PhysicBody* body) {
