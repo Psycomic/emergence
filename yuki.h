@@ -159,11 +159,17 @@ typedef struct {
 	uint8_t declared;
 } YkSymbol;
 
+#define YK_PROFILE 0
+
 typedef struct {
 	YkObject name;
 	YkObject docstring;
 	YkInt nargs;
 	YkCfun cfun;
+#if YK_PROFILE
+	YkUint calls;
+	YkUint time_called;
+#endif
 } YkCProc;
 
 typedef struct {

@@ -194,5 +194,5 @@ and returns a list containing the results"
 
   (func benchmark ()
 		(let ((t1 (clock)))
-		  (times i 100 (next-step))
+		  (times i 500 (next-step))
 		  (- (clock) t1))))
