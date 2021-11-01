@@ -77,6 +77,7 @@ static void yk_array_allocator_sweep();
 
 static YkObject yk_make_array(YkUint size, YkObject element);
 static void yk_assert(const char* expression, const char* file, uint32_t line);
+void yk_bytecode_disassemble(YkObject bytecode);
 
 static YkObject yk_arglist_cfun;
 
@@ -826,6 +827,14 @@ static YkObject yk_builtin_documentation(YkUint nargs) {
 	return YK_PTR(bytecode)->bytecode.docstring;
 }
 
+static YkObject yk_builtin_disassemble(YkUint nargs) {
+	YkObject bytecode = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_BYTECODEP(bytecode));
+
+	yk_bytecode_disassemble(bytecode);
+	return YK_NIL;
+}
+
 static YkObject yk_builtin_gensym(YkUint nargs) {
 	char symbol_string[9];
 	symbol_string[0] = '%';
@@ -1276,6 +1285,7 @@ void yk_init() {
 	yk_make_builtin("compiled-function?", 1, yk_builtin_compiled_functionp);
 
 	yk_make_builtin("documentation", 1, yk_builtin_documentation);
+	yk_make_builtin("disassemble", 1, yk_builtin_disassemble);
 	yk_make_builtin("bound?", 1, yk_builtin_boundp);
 	yk_make_builtin("gensym", 0, yk_builtin_gensym);
 
@@ -1491,7 +1501,6 @@ static YkObject yk_read_list(const char* string, int string_size) {
 		}
 
 		if (string[i] == '"') {
-			printf("Creating string...\n");
 			YK_ASSERT(i > 0);
 			int j;
 			for (j = i - 1; string[j] != '"'; j--);
@@ -1984,7 +1993,7 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 
 	for (uint i = 0; i < YK_PTR(bytecode)->bytecode.code_size; i++) {
 		YkInstruction instruction = YK_PTR(bytecode)->bytecode.code[i];
-		printf("(%s ", yk_opcode_names[instruction.opcode]);
+		printf("%d\t(%s", i, yk_opcode_names[instruction.opcode]);
 
 		if (instruction.opcode == YK_OP_TAIL_CALL) {
 			printf(" ");
@@ -1996,10 +2005,16 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 				   instruction.opcode == YK_OP_BIND_DYNAMIC  ||
 				   instruction.opcode == YK_OP_UNBIND_DYNAMIC)
 		{
+			printf(" ");
 			yk_print(instruction.ptr);
 			printf(")\n");
-		} else {
-			printf("%u)\n", instruction.modifier);
+		} else if (instruction.opcode == YK_OP_PUSH ||
+				   instruction.opcode == YK_OP_RET)
+		{
+			printf(")\n");
+		}
+		else {
+			printf(" %u)\n", instruction.modifier);
 		}
 	}
 }
@@ -2116,11 +2131,6 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 					 YkObject lexical_stack, YkUint stack_offset, bool is_tail, DynamicArray* warnings)
 {
 	YK_GC_PROTECT4(expression, bytecode, continuations_stack, lexical_stack);
-	printf("Compiling ");
-	yk_print(expression);
-	printf(" with ");
-	yk_print(lexical_stack);
-	printf(" and %ld offset!\n", stack_offset);
 
 	switch (YK_TYPEOF(expression)) {
 	case yk_t_array:
@@ -2263,8 +2273,6 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			}
 
 			yk_bytecode_emit(comptime_bytecode, YK_OP_END, 0, YK_NIL);
-			yk_bytecode_disassemble(comptime_bytecode);
-
 			yk_run(comptime_bytecode);
 
 			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_value_register);
@@ -2328,10 +2336,6 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			}
 
 			yk_bytecode_emit(lambda_bytecode, YK_OP_RET, 0, YK_NIL);
-
-			yk_bytecode_disassemble(lambda_bytecode);
-			printf("===END===\n");
-
 			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, lambda_bytecode);
 
 			YK_GC_UNPROTECT;
@@ -2490,8 +2494,6 @@ void yk_compile(YkObject forms, YkObject bytecode) {
 
 	yk_compile_loop(forms, bytecode, YK_NIL, YK_NIL, 0, false, &warnings);
 	yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
-
-	yk_bytecode_disassemble(bytecode);
 
 	yk_w_remove_untrue(&warnings);
 	if (warnings.size != 0) {

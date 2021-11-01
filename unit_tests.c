@@ -180,8 +180,8 @@ void execute_tests(void) {
 	{
 		yk_init();
 
-		YkObject fact = YK_NIL, range = YK_NIL, bytecode = YK_NIL, bytecode2 = YK_NIL;
-		YK_GC_PROTECT3(fact, range, bytecode);
+		YkObject result = YK_NIL, bytecode = YK_NIL, bytecode2 = YK_NIL;
+		YK_GC_PROTECT3(result, bytecode, bytecode2);
 
 		char* core_file = read_file("yuki/core.yk");
 
@@ -191,11 +191,13 @@ void execute_tests(void) {
 
 		bytecode2 = yk_make_bytecode_begin(yk_make_symbol("test"), 0);
 		yk_compile(yk_read("(benchmark)"), bytecode2);
-		yk_print(yk_run(bytecode2));
+
+		result = yk_run(bytecode2);
+		printf("=====BENCHMARK RESULTS======\n");
+		yk_print(result);
+		printf("\n===========================\n");
 
 		YK_GC_UNPROTECT;
-
-		exit(0);
 	}
 
 	{
