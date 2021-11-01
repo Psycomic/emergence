@@ -152,25 +152,22 @@ and returns a list containing the results"
 
   (func board-get (board size x y)
 		"Get the cell in position (x, y)"
-		(aref board (+ (* (mod x size) size)
-					   (mod y size))))
+		(aref board (+ (* x size) y)))
 
   (func board-set! (board size x y val)
 		"Set the cell in position (x, y) to `val'"
-		(aset! board (+ (* (mod x size) size)
-						(mod y size))
-			   val))
+		(aset! board (+ (* x size) y) val))
 
   (func neighbors (board size x y)
 		"Returns the numbers of neighbors in position (x, y)"
-		(+ (board-get board size (1+ x) y)
-		   (board-get board size (1+ x) (1+ y))
-		   (board-get board size (1+ x) (1- y))
-		   (board-get board size (1- x) y)
-		   (board-get board size (1- x) (1+ y))
-		   (board-get board size (1- x) (1- y))
-		   (board-get board size x (1+ y))
-		   (board-get board size x (1- y))))
+		(+ (board-get board size (mod (1+ x) size) y)
+		   (board-get board size (mod (1+ x) size) (mod (1+ y) size))
+		   (board-get board size (mod (1+ x) size) (mod (1- y) size))
+		   (board-get board size (mod (1- x) size) y)
+		   (board-get board size (mod (1- x) size) (mod (1+ y) size))
+		   (board-get board size (mod (1- x) size) (mod (1- y) size))
+		   (board-get board size x (mod (1+ y) size))
+		   (board-get board size x (mod (1- y) size))))
 
   (func next-board (board size)
 		"Returns the next step in the game of life"

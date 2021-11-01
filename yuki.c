@@ -63,15 +63,20 @@ static YkObject* yk_continuations_stack_top;
 #define YK_RET_PUSH(x) *(--yk_return_stack_top) = (x)
 #define YK_RET_POP(x) x = (*(yk_return_stack_top++))
 
+/* Error handling */
+#define YK_ASSERT(cond) if (!(cond)) { yk_assert(#cond, __FILE__, __LINE__); }
+
 static void yk_gc();
 static YkObject yk_reverse(YkObject list);
 static YkObject yk_nreverse(YkObject list);
-YkUint yk_length(YkObject list);
+static YkUint yk_length(YkObject list);
+static bool yk_member(YkObject element, YkObject list);
 
 static void yk_mark_block_data(void* data);
 static void yk_array_allocator_sweep();
 
 static YkObject yk_make_array(YkUint size, YkObject element);
+static void yk_assert(const char* expression, const char* file, uint32_t line);
 
 static YkObject yk_arglist_cfun;
 
@@ -257,13 +262,10 @@ static void yk_array_allocator_init() {
 }
 
 static void* yk_array_allocator_alloc(YkUint size) {
-	if ((int64_t)size >= (YK_ARRAY_ALLOCATOR_SIZE -
-						  (yk_array_allocator_top - yk_array_allocator)))
-	{
-		yk_gc();
-	}
+	char* block_ptr;
 
-	char* block_ptr = yk_array_allocator;
+start:
+	block_ptr = yk_array_allocator;
 	while (block_ptr < yk_array_allocator_top) {
 		YkArrayAllocatorBlock* block = (YkArrayAllocatorBlock*)block_ptr;
 
@@ -284,6 +286,13 @@ static void* yk_array_allocator_alloc(YkUint size) {
 		}
 
 		block_ptr += YK_BLOCK_SIZE(block) + sizeof(YkArrayAllocatorBlock);
+	}
+
+	if ((int64_t)size >=
+		(YK_ARRAY_ALLOCATOR_SIZE - (yk_array_allocator_top - yk_array_allocator)))
+	{
+		yk_gc();
+		goto start;
 	}
 
 	YK_ASSERT((int64_t)size < (YK_ARRAY_ALLOCATOR_SIZE - (yk_array_allocator_top - yk_array_allocator)));
@@ -318,8 +327,6 @@ static void yk_array_allocator_print() {
 }
 
 static void yk_array_allocator_sweep() {
-	yk_array_allocator_print();
-
 	char* block_ptr = yk_array_allocator;
 	YkArrayAllocatorBlock* last_block = NULL;
 	uint freed = 0;
@@ -347,7 +354,6 @@ static void yk_array_allocator_sweep() {
 	}
 
 	printf("Freed %d blocks of memory!\n", freed);
-	yk_array_allocator_print();
 }
 
 static void yk_symbol_table_init() {
@@ -1105,13 +1111,22 @@ make_choice:
 	return YK_NIL;
 }
 
-YkUint yk_length(YkObject list) {
+static YkUint yk_length(YkObject list) {
 	YkUint i = 0;
 	YK_LIST_FOREACH(list, l) {
 		i++;
 	}
 
 	return i;
+}
+
+static bool yk_member(YkObject element, YkObject list) {
+	YK_LIST_FOREACH(list, e) {
+		if (e == element)
+			return true;
+	}
+
+	return false;
 }
 
 YkObject yk_apply(YkObject function, YkObject args) {
@@ -1277,14 +1292,12 @@ void yk_init() {
 	yk_make_builtin("invoke-debugger", 1, yk_default_debugger);
 }
 
-void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t line) {
-	if (!cond) {
-		char error_name[100];
-		snprintf(error_name, sizeof(error_name), "<assertion-error '%s' at %s:%d>", expression, file, line);
+static void yk_assert(const char* expression, const char* file, uint32_t line) {
+	char error_name[100];
+	snprintf(error_name, sizeof(error_name), "<assertion-error '%s' at %s:%d>", expression, file, line);
 
-		YK_PUSH(yk_lisp_stack_top, yk_make_symbol(m_strdup(error_name)));
-		yk_default_debugger(1);
-	}
+	YK_PUSH(yk_lisp_stack_top, yk_make_symbol(m_strdup(error_name)));
+	yk_default_debugger(1);
 }
 
 YkObject yk_make_symbol(char* name) {
@@ -1338,7 +1351,7 @@ YkObject yk_make_symbol(char* name) {
 	}
 }
 
-YkObject yk_make_continuation(uint16_t offset) {
+static YkObject yk_make_continuation(uint16_t offset) {
 	YkObject cont = yk_alloc();
 	cont->continuation.t = yk_t_continuation;
 

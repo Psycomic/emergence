@@ -69,31 +69,31 @@ uint8_t aes_initialization_vector[16] = {
 	23, 107, 123, 23
 };
 
-uint8_t aes_sub_byte(uint8_t byte) {
+static inline uint8_t aes_sub_byte(uint8_t byte) {
 	uint8_t first = byte >> 4;
 	uint8_t second = byte & 0x0f;
 
 	return aes_sub_table[second][first];
 }
 
-uint8_t aes_inv_sub_byte(uint8_t byte) {
+static inline uint8_t aes_inv_sub_byte(uint8_t byte) {
 	uint8_t first = byte >> 4;
 	uint8_t second = byte & 0x0f;
 
 	return aes_inv_sub_table[second][first];
 }
 
-void aes_sub_bytes(uint8_t* state) {
+static inline void aes_sub_bytes(uint8_t* state) {
 	for (uint32_t i = 0; i < 16; i++)
 		state[i] = aes_sub_byte(state[i]);
 }
 
-void aes_inv_sub_bytes(uint8_t* state) {
+static inline void aes_inv_sub_bytes(uint8_t* state) {
 	for (uint32_t i = 0; i < 16; i++)
 		state[i] = aes_inv_sub_byte(state[i]);
 }
 
-uint32_t aes_rot_word(uint32_t word) {
+static inline uint32_t aes_rot_word(uint32_t word) {
 	uint32_t result = 0;
 	uint8_t* result_ptr = (uint8_t*)&result;
 	uint8_t* word_ptr = (uint8_t*)&word;
@@ -106,7 +106,7 @@ uint32_t aes_rot_word(uint32_t word) {
 	return result;
 }
 
-uint32_t aes_sub_word(uint32_t word) {
+static inline uint32_t aes_sub_word(uint32_t word) {
 	uint32_t result = 0;
 	uint8_t* result_ptr = (uint8_t*)&result;
 	uint8_t* word_ptr = (uint8_t*)&word;
@@ -119,7 +119,7 @@ uint32_t aes_sub_word(uint32_t word) {
 	return result;
 }
 
-void aes_shift_rows(uint8_t* state) {
+static inline void aes_shift_rows(uint8_t* state) {
 	uint8_t temp[16];
 	memcpy(temp, state, 16);
 
@@ -141,7 +141,7 @@ void aes_shift_rows(uint8_t* state) {
 	memcpy(state, temp, 16);
 }
 
-void aes_inv_shift_rows(uint8_t* state) {
+static inline void aes_inv_shift_rows(uint8_t* state) {
 	uint8_t temp[16];
 	memcpy(temp, state, 16);
 
@@ -163,7 +163,7 @@ void aes_inv_shift_rows(uint8_t* state) {
 	memcpy(state, temp, 16);
 }
 
-uint8_t aes_gmul(uint8_t a, uint8_t b) {
+static inline uint8_t aes_gmul(uint8_t a, uint8_t b) {
     uint8_t p = 0;
 
     for (int counter = 0; counter < 8; counter++) {
@@ -182,7 +182,7 @@ uint8_t aes_gmul(uint8_t a, uint8_t b) {
     return p;
 }
 
-void aes_mix_colums(uint8_t* state) {
+static inline void aes_mix_colums(uint8_t* state) {
 	uint8_t temp[16];
 	memcpy(temp, state, 16);
 
@@ -196,7 +196,7 @@ void aes_mix_colums(uint8_t* state) {
 	memcpy(state, temp, 16);
 }
 
-void aes_inv_mix_colums(uint8_t* state) {
+static inline void aes_inv_mix_colums(uint8_t* state) {
 	uint8_t temp[16];
 	memcpy(temp, state, 16);
 
@@ -214,7 +214,7 @@ void aes_inv_mix_colums(uint8_t* state) {
 	memcpy(state, temp, 16);
 }
 
-void aes_key_expansion(uint8_t* key, uint32_t* w) {
+static inline void aes_key_expansion(uint8_t* key, uint32_t* w) {
 	uint32_t temp, i = 0;
 
 	while (i < aes_nk) {
@@ -236,7 +236,7 @@ void aes_key_expansion(uint8_t* key, uint32_t* w) {
 	}
 }
 
-void aes_add_round_key(uint8_t* state, uint8_t* w, uint32_t round) {
+static inline void aes_add_round_key(uint8_t* state, uint8_t* w, uint32_t round) {
 	for (uint32_t i = 0; i < 16; i++) {
 		state[i] ^= w[i + round * 4];
 	}
@@ -426,7 +426,7 @@ static const uint64_t keccakf_rndc[24] = {
     0x0000000080000001UL, 0x8000000080008008UL
 };
 
-void keccak_f(uint64_t S[25]) {
+static void keccak_f(uint64_t S[25]) {
 	uint32_t nr;
 
 	for (nr = 0; nr < KECCAK_ROUNDS_COUNT; nr++) {

@@ -78,9 +78,6 @@ typedef union YkUnion *YkObject;
 #define YK_CAR(x) (YK_PTR(x)->cons.car)
 #define YK_CDR(x) (YK_PTR(x)->cons.cdr)
 
-/* Error handling */
-#define YK_ASSERT(cond) yk_assert(cond, #cond, __FILE__, __LINE__)
-
 /* GC protection */
 #define YK_GC_STACK_MAX_SIZE 1024
 extern YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
@@ -297,7 +294,6 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 YkObject yk_read(const char* string);
 void yk_compile(YkObject forms, YkObject bytecode);
 YkObject yk_run(YkObject bytecode);
-void yk_assert(uint8_t cond, const char* expression, const char* file, uint32_t line);
 void yk_repl();
 
 #endif
