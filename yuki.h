@@ -133,6 +133,25 @@ typedef enum {
 	YK_OP_END
 } YkOpcode;
 
+typedef struct {
+	enum {
+		YK_TOKEN_LEFT_PAREN,
+		YK_TOKEN_RIGHT_PAREN,
+		YK_TOKEN_DOUBLE_QUOTE,
+		YK_TOKEN_DOT,
+		YK_TOKEN_EOF,
+		YK_TOKEN_INT,
+		YK_TOKEN_FLOAT,
+		YK_TOKEN_SYMBOL,
+	} type;
+
+	union {
+		char* symbol_string;
+		YkInt integer;
+		float floating;
+	} data;
+} YkToken;
+
 /* Yuki types */
 typedef YkObject (*YkCfun)(YkUint nargs);
 
@@ -295,5 +314,7 @@ YkObject yk_read(const char* string);
 void yk_compile(YkObject forms, YkObject bytecode);
 YkObject yk_run(YkObject bytecode);
 void yk_repl();
+YkToken yk_read_get_token(const char* string, uint32_t *offset);
+YkObject yk_read_parse_sexp(const char* string, uint32_t* offset);
 
 #endif

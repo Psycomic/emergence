@@ -102,7 +102,7 @@ static void yk_allocator_init() {
 	yk_free_space = yk_workspace_size;
 }
 
-#define YK_GC_STRESS 0
+#define YK_GC_STRESS 1
 
 static YkObject yk_alloc() {
 	if (YK_GC_STRESS || yk_free_space < 20)
@@ -175,13 +175,13 @@ mark:
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
 	else {
-		YK_ASSERT(0);
+		assert(0);
 	}
 }
 
 static void yk_free(YkObject o) {
 #ifdef YK_GC_STRESS
-	m_bzero(o, sizeof(union YkUnion));
+	memset(o, 0x66, sizeof(union YkUnion));
 #endif
 
 	o->cons.car = yk_free_list;
@@ -1488,6 +1488,128 @@ static YkObject yk_reverse(YkObject list) {
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 
+YkToken yk_read_get_token(const char* string, uint32_t *offset) {
+	for (; IS_BLANK(string[*offset]); (*offset)++);
+
+	char a = string[(*offset)++];
+	YkToken token;
+
+	if (a == '(') {
+		token.type = YK_TOKEN_LEFT_PAREN;
+		return token;
+	} else if (a == ')') {
+		token.type = YK_TOKEN_RIGHT_PAREN;
+		return token;
+	} else if (a == '"') {
+		token.type = YK_TOKEN_DOUBLE_QUOTE;
+		return token;
+	} else if (a == '\0') {
+		token.type = YK_TOKEN_EOF;
+		return token;
+	} else if (a == '.') {
+		token.type = YK_TOKEN_DOT;
+		return token;
+	} else {
+		uint32_t begin_index = *offset - 1;
+
+		while (true) {
+			a = string[(*offset)++];
+
+			if (IS_BLANK(a) || a == '(' || a == ')' ||
+				a == '"' || a == '\0')
+			{
+				uint32_t size = *offset - begin_index - 1;
+				char* ss = m_strndup(string + begin_index, size);
+
+				YkInt integer;
+				double dfloating;
+
+				int type = parse_number(ss, &integer, &dfloating);
+
+				(*offset)--;
+
+				if (type == 0) {
+					token.type = YK_TOKEN_INT;
+					token.data.integer = integer;
+					free(ss);
+					return token;
+				} else if (type == 1) {
+					token.type = YK_TOKEN_FLOAT;
+					token.data.floating = dfloating;
+					free(ss);
+					return token;
+				} else {
+					token.type = YK_TOKEN_SYMBOL;
+					token.data.symbol_string = ss;
+					return token;
+				}
+			}
+		}
+	}
+}
+
+YkObject yk_read_parse_sexp(const char* string, uint32_t* offset) {
+	YkObject list = YK_NIL;
+	YK_GC_PROTECT1(list);
+
+	YkToken t;
+
+	while (true) {
+		t = yk_read_get_token(string, offset);
+
+		switch (t.type) {
+		case YK_TOKEN_LEFT_PAREN:
+			printf("'(' ");
+			break;
+		case YK_TOKEN_DOUBLE_QUOTE:
+			printf("'\"' ");
+			break;
+		case YK_TOKEN_EOF:
+			goto end;
+			break;
+		case YK_TOKEN_INT:
+		{
+			YkObject temp;
+			YK_GC_PROTECT1(temp);
+
+			temp = yk_read_parse_sexp(string, offset);
+			list = yk_cons(YK_MAKE_INT(t.data.integer), temp);
+
+			YK_GC_UNPROTECT;
+		}
+		break;
+		case YK_TOKEN_FLOAT:
+		{
+			YkObject temp;
+			YK_GC_PROTECT1(temp);
+
+			temp = yk_read_parse_sexp(string, offset);
+			list = yk_cons(YK_MAKE_FLOAT(t.data.floating), temp);
+
+			YK_GC_UNPROTECT;
+		}
+		break;
+		case YK_TOKEN_SYMBOL:
+		{
+			YkObject temp;
+			YK_GC_PROTECT1(temp);
+
+			temp = yk_read_parse_sexp(string, offset);
+			list = yk_cons(yk_make_symbol(t.data.symbol_string), temp);
+
+			YK_GC_UNPROTECT;
+		}
+		break;
+		default:
+			YK_ASSERT(0);
+		}
+	}
+
+end:
+	YK_GC_UNPROTECT;
+	return list;
+}
+
 static YkObject yk_read_list(const char* string, int string_size) {
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
@@ -1917,8 +2039,10 @@ start:
 		yk_program_counter++;
 		break;
 	case YK_OP_WITH_CONT:
-		YK_PUSH(yk_continuations_stack_top,
-				yk_make_continuation(yk_program_counter->modifier));
+	{
+		YkObject cont = yk_make_continuation(yk_program_counter->modifier);
+		YK_PUSH(yk_continuations_stack_top, cont);
+	}
 		yk_program_counter++;
 		break;
 	case YK_OP_EXIT_CONT:
@@ -2514,6 +2638,10 @@ void yk_repl() {
 	do {
 		printf("\n> ");
 		fgets(buffer, sizeof(buffer), stdin);
+
+		uint32_t offset = 0;
+		yk_print(yk_read_parse_sexp(buffer, &offset));
+		printf("\n==");
 
 		forms = yk_read(buffer);
 

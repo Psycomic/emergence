@@ -294,7 +294,7 @@ char* m_snprintf_dup(const char* fmt, ...) {
 	return string;
 }
 
-int parse_number(char* str, long* integer, double* floating) {
+int parse_number(const char* str, long* integer, double* floating) {
 	int str_len = strlen(str);
 	GLboolean is_floating = GL_FALSE;
 	GLboolean is_negative = GL_FALSE;

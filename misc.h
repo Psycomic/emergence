@@ -124,7 +124,7 @@ uint u_string_to_codepoint(const uchar* string);
 char16_t* u_utf8_to_utf16(const char* str);
 
 // Returns 0 if integer, 1 if float, and -1 if error
-int parse_number(char* str, long* integer, double* floating);
+int parse_number(const char* str, long* integer, double* floating);
 
 void m_bzero(void* dst, size_t size);
 
