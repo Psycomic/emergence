@@ -1306,7 +1306,8 @@ static void yk_assert(const char* expression, const char* file, uint32_t line) {
 	char error_name[100];
 	snprintf(error_name, sizeof(error_name), "<assertion-error '%s' at %s:%d>", expression, file, line);
 
-	YK_PUSH(yk_lisp_stack_top, yk_make_symbol(m_strdup(error_name)));
+	YkObject sym = yk_make_symbol(m_strdup(error_name));
+	YK_PUSH(yk_lisp_stack_top, sym);
 	yk_default_debugger(1);
 }
 
@@ -1488,7 +1489,7 @@ static YkObject yk_reverse(YkObject list) {
 
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 
-YkToken yk_read_get_token(const char* string, uint32_t *offset) {
+static YkToken yk_read_get_token(const char* string, uint32_t *offset) {
 	for (; IS_BLANK(string[*offset]); (*offset)++);
 
 	char a = string[(*offset)++];
@@ -1501,8 +1502,21 @@ YkToken yk_read_get_token(const char* string, uint32_t *offset) {
 		token.type = YK_TOKEN_RIGHT_PAREN;
 		return token;
 	} else if (a == '"') {
-		token.type = YK_TOKEN_DOUBLE_QUOTE;
-		return token;
+		uint32_t begin_index = *offset;
+
+		while (true) {
+			a = string[(*offset)++];
+
+			if (a == '"') {
+				YkToken t;
+				t.type = YK_TOKEN_STRING;
+				t.data.string_info.size = *offset - begin_index - 1;
+				t.data.string_info.begin_index = begin_index;
+				return t;
+			} else if (a == '\0') {
+				YK_ASSERT("No closing double quote" && 0);
+			}
+		}
 	} else if (a == '\0') {
 		token.type = YK_TOKEN_EOF;
 		return token;
@@ -1548,154 +1562,75 @@ YkToken yk_read_get_token(const char* string, uint32_t *offset) {
 	}
 }
 
-YkObject yk_read_parse_sexp(const char* string, uint32_t* offset) {
+static YkObject yk_read_parse_expression(const char* string, uint32_t* offset);
+
+static YkObject yk_read_parse_sexp(const char* string, uint32_t* offset) {
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
 
-	YkToken t;
+	uint32_t new_offset = *offset;
+	YkToken	t = yk_read_get_token(string, &new_offset);
 
-	while (true) {
+	if (t.type == YK_TOKEN_RIGHT_PAREN) {
+		*offset = new_offset;
+		return list;
+	} else if (t.type == YK_TOKEN_DOT) {
+		YkObject temp;
+		YK_GC_PROTECT1(temp);
+
+		*offset = new_offset;
+		list = yk_read_parse_expression(string, offset);
+
 		t = yk_read_get_token(string, offset);
+		YK_ASSERT(t.type == YK_TOKEN_RIGHT_PAREN);
 
-		switch (t.type) {
-		case YK_TOKEN_LEFT_PAREN:
-			printf("'(' ");
-			break;
-		case YK_TOKEN_DOUBLE_QUOTE:
-			printf("'\"' ");
-			break;
-		case YK_TOKEN_EOF:
-			goto end;
-			break;
-		case YK_TOKEN_INT:
-		{
-			YkObject temp;
-			YK_GC_PROTECT1(temp);
+		YK_GC_UNPROTECT;
+	} else {
+		YkObject temp;
+		YK_GC_PROTECT1(temp);
 
-			temp = yk_read_parse_sexp(string, offset);
-			list = yk_cons(YK_MAKE_INT(t.data.integer), temp);
+		temp = yk_read_parse_expression(string, offset);
+		list = yk_cons(temp, yk_read_parse_sexp(string, offset));
 
-			YK_GC_UNPROTECT;
-		}
-		break;
-		case YK_TOKEN_FLOAT:
-		{
-			YkObject temp;
-			YK_GC_PROTECT1(temp);
-
-			temp = yk_read_parse_sexp(string, offset);
-			list = yk_cons(YK_MAKE_FLOAT(t.data.floating), temp);
-
-			YK_GC_UNPROTECT;
-		}
-		break;
-		case YK_TOKEN_SYMBOL:
-		{
-			YkObject temp;
-			YK_GC_PROTECT1(temp);
-
-			temp = yk_read_parse_sexp(string, offset);
-			list = yk_cons(yk_make_symbol(t.data.symbol_string), temp);
-
-			YK_GC_UNPROTECT;
-		}
-		break;
-		default:
-			YK_ASSERT(0);
-		}
+		YK_GC_UNPROTECT;
 	}
 
-end:
 	YK_GC_UNPROTECT;
 	return list;
 }
 
-static YkObject yk_read_list(const char* string, int string_size) {
-	YkObject list = YK_NIL;
-	YK_GC_PROTECT1(list);
+static YkObject yk_read_parse_expression(const char* string, uint32_t* offset) {
+    YkToken t = yk_read_get_token(string, offset);
 
-	int i = string_size - 1;
+	switch (t.type) {
+	case YK_TOKEN_LEFT_PAREN:
+		return yk_read_parse_sexp(string, offset);
+	case YK_TOKEN_STRING:
+		return yk_make_string(string + t.data.string_info.begin_index,
+							  t.data.string_info.size);
+	case YK_TOKEN_INT:
+		return YK_MAKE_INT(t.data.integer);
+	case YK_TOKEN_FLOAT:
+		return YK_MAKE_FLOAT(t.data.floating);
+	case YK_TOKEN_SYMBOL:
+		return yk_make_symbol(t.data.symbol_string);
+	default:
+		YK_ASSERT("Unexpected token" && 0);
+	}
 
-	while (i >= 0) {
-		for (; IS_BLANK(string[i]); i--) { /* Skip all blank chars */
-			if (i < 0)
-				break;
-		}
+	return YK_NIL;
+}
 
-		if (string[i] == '"') {
-			YK_ASSERT(i > 0);
-			int j;
-			for (j = i - 1; string[j] != '"'; j--);
+static YkObject yk_read_parse_top(const char* string, uint32_t* offset) {
+	YkObject list = YK_NIL, element = YK_NIL;
+	YK_GC_PROTECT2(list, element);
 
-			YkInt str_obj_size = i - j - 1;
-			YkObject str_obj = yk_make_string(string + j + 1, str_obj_size);
-			YK_GC_PROTECT1(str_obj);
+	uint32_t new_offset  = *offset;
+	YkToken	t = yk_read_get_token(string, &new_offset);
 
-			list = yk_cons(str_obj, list);
-			i -= str_obj_size + 2;
-
-			YK_GC_UNPROTECT;
-		}
-		else if (string[i] == ')') {
-			int parens_count = 0;
-			int j = i, count = 0;
-
-			do {
-				if (string[j] == ')')
-					parens_count++;
-				else if (string[j] == '(')
-					parens_count--;
-
-				YK_ASSERT(j >= 0);
-
-				count++;
-				YK_ASSERT(parens_count >= 0);
-			} while(!(string[j--] == '(' && parens_count == 0));
-
-			list = yk_cons(yk_read_list(string + j + 2, count - 2), list);
-			i -= count;
-		}
-		else {
-			int count = 0;
-			int j = i;
-
-			for (; !IS_BLANK(string[j]); j--) {
-				if (j < 0)
-					break;
-
-				YK_ASSERT(string[j] != '(');
-				count++;
-			}
-
-			if (count == 0)
-				break;
-
-			char* symbol_string = m_strndup(string + j + 1, count);
-
-			if (strcmp(symbol_string, ".") == 0) { /* Dotted list */
-				YK_ASSERT(YK_CDR(list) == YK_NIL);
-				list = YK_CAR(list);
-			}
-			else {
-				YkInt integer;
-				double dfloating;
-
-				int type = parse_number(symbol_string, &integer, &dfloating);
-
-				float f = (float)dfloating;
-
-				if (type == 0) {
-					list = yk_cons(YK_MAKE_INT(integer), list);
-				} else if (type == 1) {
-					list = yk_cons(YK_MAKE_FLOAT(f), list);
-				} else {
-					YK_ASSERT(*symbol_string != '%');
-					list = yk_cons(yk_make_symbol(symbol_string), list);
-				}
-			}
-
-			i -= count;
-		}
+	if (t.type != YK_TOKEN_EOF) {
+		element = yk_read_parse_expression(string, offset);
+		list = yk_cons(element, yk_read_parse_top(string, offset));
 	}
 
 	YK_GC_UNPROTECT;
@@ -1703,7 +1638,8 @@ static YkObject yk_read_list(const char* string, int string_size) {
 }
 
 YkObject yk_read(const char* string) {
-	YkObject r = yk_read_list(string, strlen(string));
+	uint32_t offset = 0;
+	YkObject r = yk_read_parse_top(string, &offset);
 	return YK_CAR(r);
 }
 
@@ -1836,8 +1772,9 @@ YkObject yk_run(YkObject bytecode) {
 	yk_program_counter = YK_PTR(bytecode)->bytecode.code;
 	yk_bytecode_register = bytecode;
 
-	YK_PUSH(yk_continuations_stack_top,
-			yk_make_continuation(YK_PTR(bytecode)->bytecode.code_size - 1));
+	YkObject cont = yk_make_continuation(YK_PTR(bytecode)->bytecode.code_size - 1);
+
+	YK_PUSH(yk_continuations_stack_top, cont);
 
 	if (setjmp(yk_jump_buf) != 0) {
 		yk_exit_continuation(*(yk_continuations_stack + YK_STACK_MAX_SIZE - 1));
@@ -2638,10 +2575,6 @@ void yk_repl() {
 	do {
 		printf("\n> ");
 		fgets(buffer, sizeof(buffer), stdin);
-
-		uint32_t offset = 0;
-		yk_print(yk_read_parse_sexp(buffer, &offset));
-		printf("\n==");
 
 		forms = yk_read(buffer);
 
