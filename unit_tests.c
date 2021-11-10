@@ -183,6 +183,21 @@ void execute_tests(void) {
 		YkObject result = YK_NIL, bytecode = YK_NIL, bytecode2 = YK_NIL;
 		YK_GC_PROTECT3(result, bytecode, bytecode2);
 
+		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
+
+		yk_compile(
+			yk_read("(let ((a 5) (b 6))"
+					"  (+ (* a 5)"
+					"     (- 66 b)))"),
+			bytecode);
+
+		yk_bytecode_disassemble(bytecode);
+
+		result = yk_run(bytecode);
+		printf("=====BENCHMARK RESULTS======\n");
+		yk_print(result);
+		printf("\n==============\n");
+
 		char* core_file = read_file("yuki/core.yk");
 
 		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);

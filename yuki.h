@@ -117,12 +117,12 @@ typedef enum {
 	YK_OP_FETCH_GLOBAL,
 	YK_OP_LEXICAL_VAR,
 	YK_OP_PUSH,
-	YK_OP_UNBIND,
+	YK_OP_PREPARE_CALL,
 	YK_OP_CALL,
-	YK_OP_TAIL_CALL,
 	YK_OP_RET,
 	YK_OP_JMP,
 	YK_OP_JNIL,
+	YK_OP_UNBIND,
 	YK_OP_BIND_DYNAMIC,
 	YK_OP_UNBIND_DYNAMIC,
 	YK_OP_WITH_CONT,
@@ -220,15 +220,9 @@ typedef struct {
 
 typedef struct {
 	YkObject bytecode_register;
-	YkInstruction* program_counter;
-	YkObject* stack_pointer;
-} YkReturnInfo;
-
-typedef struct {
-	YkObject bytecode_register;
 	YkType t;
 	YkObject* lisp_stack_pointer;
-	YkReturnInfo* return_stack_pointer;
+	YkObject* lisp_frame_pointer;
 	YkDynamicBinding* dynamic_bindings_stack_pointer;
 	YkInstruction* program_counter;
 	YkObject dummmy;
@@ -315,6 +309,7 @@ void yk_print(YkObject o);
 YkObject yk_make_symbol(char* name);
 YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
+void yk_bytecode_disassemble(YkObject bytecode);
 YkObject yk_read(const char* string);
 void yk_compile(YkObject forms, YkObject bytecode);
 YkObject yk_run(YkObject bytecode);

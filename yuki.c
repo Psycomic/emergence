@@ -45,8 +45,7 @@ static jmp_buf yk_jump_buf;
 static YkObject yk_lisp_stack[YK_STACK_MAX_SIZE];
 static YkObject* yk_lisp_stack_top;
 
-static YkReturnInfo yk_return_stack[YK_STACK_MAX_SIZE];
-static YkReturnInfo* yk_return_stack_top;
+static YkObject* yk_lisp_frame_ptr;
 
 static YkDynamicBinding yk_dynamic_bindings_stack[YK_STACK_MAX_SIZE];
 static YkDynamicBinding* yk_dynamic_bindings_stack_top;
@@ -54,14 +53,11 @@ static YkDynamicBinding* yk_dynamic_bindings_stack_top;
 static YkObject yk_continuations_stack[YK_STACK_MAX_SIZE];
 static YkObject* yk_continuations_stack_top;
 
-#define YK_PUSH(stack, x) *(--(stack)) = x
-#define YK_POP(stack, x) x = *((stack)++)
+#define YK_PUSH(stack, x) *(--(stack)) = ((void*)x)
+#define YK_POP(stack, type, x) x = *((type)((stack)++))
 
 #define YK_LISP_STACK_PUSH(x) YK_PUSH(yk_lisp_stack_top, x)
-#define YK_LISP_STACK_POP(x) YK_POP(yk_lisp_stack_top, x)
-
-#define YK_RET_PUSH(x) *(--yk_return_stack_top) = (x)
-#define YK_RET_POP(x) x = (*(yk_return_stack_top++))
+#define YK_LISP_STACK_POP(x, type) YK_POP(yk_lisp_stack_top, type, x)
 
 /* Error handling */
 #define YK_ASSERT(cond) if (!(cond)) { yk_assert(#cond, __FILE__, __LINE__); }
@@ -102,7 +98,7 @@ static void yk_allocator_init() {
 	yk_free_space = yk_workspace_size;
 }
 
-#define YK_GC_STRESS 1
+#define YK_GC_STRESS 0
 
 static YkObject yk_alloc() {
 	if (YK_GC_STRESS || yk_free_space < 20)
@@ -242,12 +238,6 @@ static void yk_gc() {
 	{
 		yk_mark(yk_dynamic_bindings_stack_top[i].symbol);
 		yk_mark(yk_dynamic_bindings_stack_top[i].old_value);
-	}
-
-	for (long i = 0; i < YK_STACK_MAX_SIZE -
-			 (yk_return_stack_top - yk_return_stack); i++)
-	{
-		yk_mark(yk_return_stack_top[i].bytecode_register);
 	}
 
 	yk_array_allocator_sweep();
@@ -1053,14 +1043,17 @@ static YkObject yk_builtin_aset(YkUint nargs) {
 }
 
 static YkObject yk_arglist(YkUint nargs) {
-	YkUint offset = YK_INT(yk_lisp_stack_top[0]);
-	YkUint argcount = YK_INT(yk_lisp_stack_top[1]);
-
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
 
+	YkObject* last_frame_ptr = (YkObject*) *yk_lisp_frame_ptr,
+		*last_stack_ptr = yk_lisp_stack_top + 4;
+
+	YkUint argcount = last_frame_ptr - last_stack_ptr,
+		offset = YK_INT(yk_lisp_stack_top[0]);
+
 	for (int i = argcount - offset - 1; i >= 0; i--) {
-		list = yk_cons(yk_lisp_stack_top[offset + nargs + i + 1], list);
+		list = yk_cons(last_stack_ptr[offset + i], list);
 	}
 
 	YK_GC_UNPROTECT;
@@ -1142,6 +1135,14 @@ YkObject yk_apply(YkObject function, YkObject args) {
 	YkInt argcount = 0;
 	YkObject result;
 
+	static YkInstruction yk_end = {YK_NIL, 0, YK_OP_END};
+
+	YK_PUSH(yk_lisp_stack_top, yk_bytecode_register);
+	YK_PUSH(yk_lisp_stack_top, &yk_end);
+	YK_PUSH(yk_lisp_stack_top, yk_lisp_frame_ptr);
+
+	yk_lisp_frame_ptr = yk_lisp_stack_top;
+
 	args = yk_reverse(args);
 	YK_LIST_FOREACH(args, e) {
 		YK_PUSH(yk_lisp_stack_top, YK_CAR(e));
@@ -1157,18 +1158,6 @@ YkObject yk_apply(YkObject function, YkObject args) {
 			YK_ASSERT(argcount >= -(nargs + 1));
 		}
 
-		YK_PUSH(yk_lisp_stack_top, YK_MAKE_INT(argcount));
-
-		static YkInstruction yk_end = {YK_NIL, 0, YK_OP_END};
-
-		YkReturnInfo info = {
-			.bytecode_register = NULL,
-			.program_counter = &yk_end,
-			.stack_pointer = NULL
-		};
-
-		YK_PUSH(yk_return_stack_top, info);
-
 		yk_run(function);
 		result = yk_value_register;
 	} else if (YK_CPROCP(function)) {
@@ -1181,6 +1170,11 @@ YkObject yk_apply(YkObject function, YkObject args) {
 		}
 
 		result = YK_PTR(function)->c_proc.cfun(yk_program_counter->modifier);
+		yk_lisp_stack_top = yk_lisp_frame_ptr;
+
+		YK_LISP_STACK_POP(yk_lisp_frame_ptr, YkObject**);
+		YK_LISP_STACK_POP(yk_bytecode_register, YkObject*);
+		YK_LISP_STACK_POP(yk_program_counter, YkInstruction**);
 	}
 
 	return result;
@@ -1188,15 +1182,14 @@ YkObject yk_apply(YkObject function, YkObject args) {
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
 	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_dynamic_let,
-	yk_keyword_with_cont, yk_keyword_exit, yk_keyword_loop,
-	yk_symbol_argcount;
+	yk_keyword_with_cont, yk_keyword_exit, yk_keyword_loop;
 
 void yk_init() {
 	yk_gc_stack_size = 0;
 	yk_gc_protected_stack_size = 0;
 
 	yk_lisp_stack_top = yk_lisp_stack + YK_STACK_MAX_SIZE;
-	yk_return_stack_top = yk_return_stack + YK_STACK_MAX_SIZE;
+	yk_lisp_frame_ptr = yk_lisp_stack_top;
 	yk_dynamic_bindings_stack_top = yk_dynamic_bindings_stack + YK_STACK_MAX_SIZE;
 	yk_continuations_stack_top = yk_continuations_stack + YK_STACK_MAX_SIZE;
 	yk_value_register = YK_NIL;
@@ -1227,12 +1220,10 @@ void yk_init() {
 	yk_keyword_exit = yk_make_symbol("exit");
 	yk_keyword_loop = yk_make_symbol("loop");
 
-	yk_symbol_argcount = yk_make_symbol("*argcount*");
-
 	/* Functions */
 	YkObject arglist_symbol = yk_make_symbol("arglist");
 
-	yk_arglist_cfun = yk_make_global_function(arglist_symbol, 2, yk_arglist);
+	yk_arglist_cfun = yk_make_global_function(arglist_symbol, 1, yk_arglist);
 
 	yk_permanent_gc_protect(yk_arglist_cfun);
 	yk_permanent_gc_protect(arglist_symbol);
@@ -1367,7 +1358,7 @@ static YkObject yk_make_continuation(uint16_t offset) {
 	cont->continuation.t = yk_t_continuation;
 
 	cont->continuation.lisp_stack_pointer = yk_lisp_stack_top;
-	cont->continuation.return_stack_pointer = yk_return_stack_top;
+	cont->continuation.lisp_frame_pointer = yk_lisp_frame_ptr;
 	cont->continuation.dynamic_bindings_stack_pointer = yk_dynamic_bindings_stack_top;
 	cont->continuation.bytecode_register = yk_bytecode_register;
 	cont->continuation.program_counter = YK_PTR(yk_bytecode_register)->bytecode.code + offset;
@@ -1490,6 +1481,7 @@ static YkObject yk_reverse(YkObject list) {
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 
 static YkToken yk_read_get_token(const char* string, uint32_t *offset) {
+start:
 	for (; IS_BLANK(string[*offset]); (*offset)++);
 
 	char a = string[(*offset)++];
@@ -1523,6 +1515,12 @@ static YkToken yk_read_get_token(const char* string, uint32_t *offset) {
 	} else if (a == '.') {
 		token.type = YK_TOKEN_DOT;
 		return token;
+	} else if (a == ';') {
+		char b;
+		do {
+			b = string[(*offset)++];
+		} while(b != '\n' || b == '\0');
+		goto start;
 	} else {
 		uint32_t begin_index = *offset - 1;
 
@@ -1720,7 +1718,7 @@ static inline void yk_exit_continuation(YkObject exit) {
 
 	for (uint i = 0; i < yk_program_counter->modifier; i--) {
 		YkObject cont;
-		YK_POP(yk_continuations_stack_top, cont);
+		YK_POP(yk_continuations_stack_top, YkObject*, cont);
 		YK_PTR(cont)->continuation.exited = 1;
 	}
 
@@ -1732,7 +1730,7 @@ static inline void yk_exit_continuation(YkObject exit) {
 
 	yk_dynamic_bindings_stack_top = YK_PTR(exit)->continuation.dynamic_bindings_stack_pointer;
 	yk_lisp_stack_top = YK_PTR(exit)->continuation.lisp_stack_pointer;
-	yk_return_stack_top = YK_PTR(exit)->continuation.return_stack_pointer;
+	yk_lisp_frame_ptr = YK_PTR(exit)->continuation.lisp_frame_pointer;
 	yk_bytecode_register = YK_PTR(exit)->continuation.bytecode_register;
 	yk_program_counter = YK_PTR(exit)->continuation.program_counter;
 
@@ -1741,17 +1739,24 @@ static inline void yk_exit_continuation(YkObject exit) {
 
 static void yk_debug_info() {
 	printf("\n ______STACK_____\n");
+	YkObject* stack_ptr = yk_lisp_stack_top,
+		*frame_ptr = yk_lisp_frame_ptr;
 	if (yk_lisp_stack_top - yk_lisp_stack < YK_STACK_MAX_SIZE) {
-		for (YkObject* ptr = yk_lisp_stack_top;
-			 ptr < yk_lisp_stack + YK_STACK_MAX_SIZE; ptr++)
-		{
-			if (*ptr != NULL) {
+		while (stack_ptr < yk_lisp_stack + YK_STACK_MAX_SIZE) {
+			for (; stack_ptr != frame_ptr; stack_ptr++) {
 				printf(" | ");
-				yk_print(*ptr);
+				yk_print(*stack_ptr);
 				printf("\t\t|\n");
-			} else {
-				printf(" | NULL\t\t|\n");
 			}
+
+			if (frame_ptr != yk_lisp_stack + YK_STACK_MAX_SIZE) {
+				printf(" | RET ");
+				yk_print(stack_ptr[2]);
+				printf("\t|\n");
+			}
+
+			frame_ptr = (YkObject*)*stack_ptr;
+			stack_ptr += 3;
 		}
 	}
 	else {
@@ -1806,95 +1811,29 @@ start:
 		YK_LISP_STACK_PUSH(yk_value_register);
 		yk_program_counter++;
 		break;
-	case YK_OP_UNBIND:
-		yk_lisp_stack_top += yk_program_counter->modifier;
+	case YK_OP_PREPARE_CALL:
+	{
+		YkInstruction* next_instruction =
+			YK_PTR(yk_bytecode_register)->bytecode.code + yk_program_counter->modifier;
+
+		YK_LISP_STACK_PUSH(yk_bytecode_register);
+		YK_LISP_STACK_PUSH(next_instruction);
+		YK_LISP_STACK_PUSH(yk_lisp_frame_ptr);
+	}
+
+		yk_lisp_frame_ptr = yk_lisp_stack_top;
 		yk_program_counter++;
-		break;
-	case YK_OP_TAIL_CALL:
-		if (YK_CLOSUREP(yk_value_register)) {
-			panic("Not implemented!\n");
-		}
-		else if (YK_BYTECODEP(yk_value_register)) {
-			YkInt current_frame_size = yk_program_counter->modifier + YK_INT(yk_program_counter->ptr),
-				last_frame_size = YK_INT(yk_lisp_stack_top[current_frame_size]);
-
-			YkObject* last_top = yk_lisp_stack_top;
-			yk_lisp_stack_top += last_frame_size + current_frame_size + 1;
-
-			yk_lisp_stack_top -= yk_program_counter->modifier;
-			memcpy(yk_lisp_stack_top, last_top, sizeof(YkObject) * yk_program_counter->modifier);
-
-			YK_LISP_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
-
-			YkObject code = yk_value_register;
-			YkInt nargs = YK_PTR(code)->bytecode.nargs;
-			if (nargs >= 0) {
-				YK_ASSERT(yk_program_counter->modifier == nargs);
-			}
-			else {
-				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
-			}
-
-			yk_bytecode_register = code;
-			yk_program_counter = YK_PTR(code)->bytecode.code;
-		}
-		else if (YK_CPROCP(yk_value_register)) {
-			YkObject proc = YK_PTR(yk_value_register);
-			YkInt nargs = proc->c_proc.nargs;
-			if (nargs >= 0) {
-				YK_ASSERT(yk_program_counter->modifier == nargs);
-			}
-			else {
-				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
-			}
-
-#if YK_PROFILE
-			clock_t t1 = clock();
-#endif
-			yk_value_register = proc->c_proc.cfun(yk_program_counter->modifier);
-#if YK_PROFILE
-			clock_t t2 = clock();
-			uint64_t delta = t2 - t1;
-
-			proc->c_proc.calls++;
-			proc->c_proc.time_called += delta;
-#endif
-
-			yk_lisp_stack_top += yk_program_counter->modifier + YK_INT(yk_program_counter->ptr);
-
-			YkObject last_nargs; /* Only builtin functions return control in tail calls */
-			YK_LISP_STACK_POP(last_nargs);
-			yk_lisp_stack_top += YK_INT(last_nargs);
-
-			YkReturnInfo info;
-			YK_RET_POP(info);
-
-			yk_program_counter = info.program_counter;
-			yk_bytecode_register = info.bytecode_register;
-		}
-		else {
-			panic("Not a function!\n");
-		}
 		break;
 	case YK_OP_CALL:
 		if (YK_CLOSUREP(yk_value_register)) {
 			panic("Not implemented!\n");
 		}
 		else if (YK_BYTECODEP(yk_value_register)) {
-			YK_LISP_STACK_PUSH(YK_MAKE_INT(yk_program_counter->modifier));
-
-			YkReturnInfo info;
-			info.bytecode_register = yk_bytecode_register;
-			info.program_counter = yk_program_counter + 1;
-			info.stack_pointer = yk_lisp_stack_top;
-			YK_RET_PUSH(info);
-
 			YkObject code = yk_value_register;
 			YkInt nargs = YK_PTR(code)->bytecode.nargs;
 			if (nargs >= 0) {
 				YK_ASSERT(yk_program_counter->modifier == nargs);
-			}
-			else {
+			} else {
 				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
 			}
 
@@ -1911,37 +1850,22 @@ start:
 				YK_ASSERT(yk_program_counter->modifier >= -(nargs + 1));
 			}
 
-#if YK_PROFILE
-			clock_t t1 = clock();
-#endif
 			yk_value_register = proc->c_proc.cfun(yk_program_counter->modifier);
-#if YK_PROFILE
-			clock_t t2 = clock();
-			uint64_t delta = t2 - t1;
+			yk_lisp_stack_top = yk_lisp_frame_ptr;
 
-			proc->c_proc.calls++;
-			proc->c_proc.time_called += delta;
-#endif
-
-			yk_lisp_stack_top += yk_program_counter->modifier;
-			yk_program_counter++;
+			YK_LISP_STACK_POP(yk_lisp_frame_ptr, YkObject**);
+			YK_LISP_STACK_POP(yk_program_counter, YkInstruction**);
+			YK_LISP_STACK_POP(yk_bytecode_register, YkObject*);
 		}
 		else {
 			YK_ASSERT(0);
 		}
 		break;
 	case YK_OP_RET:
-	{
-		YkObject nargs;
-		YK_LISP_STACK_POP(nargs);
-		yk_lisp_stack_top += YK_INT(nargs);
-
-		YkReturnInfo info;
-		YK_RET_POP(info);
-
-		yk_bytecode_register = info.bytecode_register;
-		yk_program_counter = info.program_counter;
-	}
+		yk_lisp_stack_top = yk_lisp_frame_ptr;
+		YK_LISP_STACK_POP(yk_lisp_frame_ptr, YkObject**);
+		YK_LISP_STACK_POP(yk_program_counter, YkInstruction**);
+		YK_LISP_STACK_POP(yk_bytecode_register, YkObject*);
 		break;
 	case YK_OP_JMP:
 		yk_program_counter =
@@ -1955,6 +1879,10 @@ start:
 		else {
 			yk_program_counter++;
 		}
+		break;
+	case YK_OP_UNBIND:
+		yk_lisp_stack_top += yk_program_counter->modifier;
+		yk_program_counter++;
 		break;
 	case YK_OP_BIND_DYNAMIC:
 	{
@@ -1992,7 +1920,7 @@ start:
 	case YK_OP_EXIT:
 	{
 		YkObject exit;
-		YK_POP(yk_continuations_stack_top, exit);
+		YK_POP(yk_continuations_stack_top, YkObject*, exit);
 		YK_PTR(exit)->continuation.exited = 1;
 		yk_program_counter++;
 	}
@@ -2006,6 +1934,7 @@ start:
 		yk_program_counter++;
 		break;
 	case YK_OP_END:
+		yk_lisp_stack_top = yk_lisp_frame_ptr;
 		goto end;
 		break;
 	}
@@ -2029,9 +1958,8 @@ char* yk_opcode_names[] = {
 	[YK_OP_FETCH_GLOBAL] = "fetch-global",
 	[YK_OP_LEXICAL_VAR] = "lexical-var",
 	[YK_OP_PUSH] = "push",
-	[YK_OP_UNBIND] = "unbind",
+	[YK_OP_PREPARE_CALL] = "prepare-call",
 	[YK_OP_CALL] = "call",
-	[YK_OP_TAIL_CALL] = "tail-call",
 	[YK_OP_RET] = "ret",
 	[YK_OP_JMP] = "jmp",
 	[YK_OP_JNIL] = "jnil",
@@ -2056,11 +1984,7 @@ void yk_bytecode_disassemble(YkObject bytecode) {
 		YkInstruction instruction = YK_PTR(bytecode)->bytecode.code[i];
 		printf("%d\t(%s", i, yk_opcode_names[instruction.opcode]);
 
-		if (instruction.opcode == YK_OP_TAIL_CALL) {
-			printf(" ");
-			yk_print(instruction.ptr);
-			printf(" %u)\n", instruction.modifier);
-		} else if (instruction.opcode == YK_OP_FETCH_LITERAL ||
+		if (instruction.opcode == YK_OP_FETCH_LITERAL ||
 				   instruction.opcode == YK_OP_FETCH_GLOBAL  ||
 				   instruction.opcode == YK_OP_GLOBAL_SET    ||
 				   instruction.opcode == YK_OP_BIND_DYNAMIC  ||
@@ -2363,8 +2287,7 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 				argcount = -(argcount + 1);
 			}
 
-			lambda_lexical_stack = yk_cons(yk_symbol_argcount,
-										   yk_nreverse(lambda_lexical_stack));
+			lambda_lexical_stack = yk_nreverse(lambda_lexical_stack);
 			lambda_bytecode = yk_make_bytecode_begin(name, argcount);
 			if (body != YK_NIL && YK_TYPEOF(YK_CAR(body)) == yk_t_string) {
 				YK_PTR(lambda_bytecode)->bytecode.docstring = YK_CAR(body);
@@ -2372,12 +2295,14 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			}
 
 			if (argcount < 0) {
-				yk_bytecode_emit(lambda_bytecode, YK_OP_LEXICAL_VAR, 0, YK_NIL);
-				yk_bytecode_emit(lambda_bytecode, YK_OP_PUSH, 0, YK_NIL);
-				yk_bytecode_emit(lambda_bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(-argcount - 1));
+				YkUint size = YK_PTR(lambda_bytecode)->bytecode.code_size + 5,
+					offset = -argcount - 1;
+
+				yk_bytecode_emit(lambda_bytecode, YK_OP_PREPARE_CALL, size, YK_NIL);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_FETCH_LITERAL, 0, YK_MAKE_INT(offset));
 				yk_bytecode_emit(lambda_bytecode, YK_OP_PUSH, 0, YK_NIL);
 				yk_bytecode_emit(lambda_bytecode, YK_OP_FETCH_LITERAL, 0, yk_arglist_cfun);
-				yk_bytecode_emit(lambda_bytecode, YK_OP_CALL, 2, YK_NIL);
+				yk_bytecode_emit(lambda_bytecode, YK_OP_CALL, 1, YK_NIL);
 				yk_bytecode_emit(lambda_bytecode, YK_OP_PUSH, 0, YK_NIL);
 
 				lambda_lexical_stack = yk_cons(l, lambda_lexical_stack);
@@ -2390,10 +2315,6 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 								0,
 								!YK_CONSP(YK_CDR(e)),
 								warnings);
-			}
-
-			if (argcount < 0) {
-				yk_bytecode_emit(lambda_bytecode, YK_OP_UNBIND, 1, YK_NIL);
 			}
 
 			yk_bytecode_emit(lambda_bytecode, YK_OP_RET, 0, YK_NIL);
@@ -2469,7 +2390,7 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			yk_bytecode_emit(bytecode, YK_OP_JMP, begin_size, YK_NIL);
 		} else {
 			YkUint argcount = 0;
-			YkUint offset = stack_offset;
+			YkUint offset = stack_offset + 3;
 
 			if (YK_SYMBOLP(YK_CAR(expression)) &&
 				YK_PTR(YK_CAR(expression))->symbol.type == yk_s_macro)
@@ -2483,8 +2404,14 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 				goto end;
 			}
 
-			YkObject arguments = yk_reverse(YK_CDR(expression));
-			YK_GC_PROTECT1(arguments);
+			YkObject arguments = YK_NIL, new_stack = YK_NIL;
+			YK_GC_PROTECT2(arguments, new_stack);
+
+			yk_bytecode_emit(bytecode, YK_OP_PREPARE_CALL, 0, YK_NIL);
+			uint64_t prepare_call_offset = YK_PTR(bytecode)->bytecode.code_size - 1;
+
+			arguments = yk_reverse(YK_CDR(expression));
+
 			YK_LIST_FOREACH(arguments, e) {
 				yk_compile_loop(YK_CAR(e), bytecode, continuations_stack,
 								lexical_stack, offset, false, warnings);
@@ -2515,29 +2442,8 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 			yk_compile_loop(YK_CAR(expression), bytecode, continuations_stack,
 							lexical_stack, offset, false, warnings);
 
-			if (is_tail) {
-				printf("Compiling tail call with ");
-				yk_print(lexical_stack);
-				printf("!\n");
-
-				YkUint frame_size = 0;
-				bool found = false;
-				YK_LIST_FOREACH(lexical_stack, s) {
-					if (YK_CAR(s) == yk_symbol_argcount) {
-						found = true;
-						break;
-					}
-
-					frame_size++;
-				}
-
-				YK_ASSERT(found);
-
-				yk_bytecode_emit(bytecode, YK_OP_TAIL_CALL,
-								 argcount, YK_MAKE_INT(frame_size));
-			} else {
-				yk_bytecode_emit(bytecode, YK_OP_CALL, argcount, YK_NIL);
-			}
+			yk_bytecode_emit(bytecode, YK_OP_CALL, argcount, YK_NIL);
+			YK_PTR(bytecode)->bytecode.code[prepare_call_offset].modifier = YK_PTR(bytecode)->bytecode.code_size;
 		}
 	}
 		break;

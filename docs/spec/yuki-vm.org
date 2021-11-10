@@ -3,9 +3,12 @@
    Several stacks are needed for the Yuki virtual machine to work
    correctly:
 
-   - The Yuki stack, contains the current lexical binding environment.
-   - The control stack, to save the return address of the called
-     procedure.
+   - The Yuki stack, contains the current frame activation record as
+     well as function parameters, local variables, and return addresses.
+   - The continuations stack, to save created continuations (they have
+     their own namespace)
+   - The dynamic bindings stack, to restore the dynamically-bound
+     variables to their old value.
 
 ** Registers
    There are 3 registers:
@@ -14,6 +17,64 @@
    - The =program_counter=, points to the current instruction
    - The =bytecode_register=, points to the current byte code object
      being executed.
+   - The ~stack_pointer~, points to the top of the lisp stack
+   - The ~frame_pointer~, points right after the activation frame, is
+     used to access the lexical environment, and unbind the stack
+     after a call
+
+** Internal stack workings and function application
+
+   =(hello a b c)=
+
+   |-------------------|
+   | Bytecode register |
+   | Return address    |
+   | Frame pointer     |
+   |-------------------|
+   | Argument 0: a     |
+   | Argument 1: b     |
+   | Argument 2: c     |
+   | Local 0           |
+   | Local 1           |
+   | Local 2           |
+   | ...               |
+   +-------------------+
+
+   This is a table representing a Yuki stack frame. The frame pointer
+   points to the location of the previously saved frame pointer, and
+   is used to access the locals and arguments to the called function.
+
+   With this calling convention, the bytecode for this:
+   #+BEGIN_SRC scheme
+	 (let ((a 5) (b 6))
+	   (+ (* a 5)
+		  (- 66 b)))
+   #+END_SRC
+   could look like this
+   #+BEGIN_SRC lisp
+0	 (fetch-literal 5)
+1	 (push)
+2 	 (fetch-literal 6)
+3	 (push)
+4	 (prepare-call 11)
+5	 (lexical-var 4)
+6	 (push)
+7	 (fetch-literal 5)
+8	 (push)
+9	 (fetch-literal *)
+10	 (call 2)
+11	 (push)
+12	 (prepare-call 19)
+13	 (fetch-literal 66)
+14	 (push)
+15	 (lexical-var 5)
+16	 (push)
+17	 (fetch-literal -)
+18	 (call 2)
+19	 (push)
+20	 (fetch-literal +)
+21	 (tail-call 2)
+   #+END_SRC
 
 ** Instructions and opcodes
    An instruction is represented on 88 bits, and has 3 parts: the
