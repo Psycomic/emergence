@@ -778,14 +778,10 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 
 			float width = i * size_width + size_width;
 
-			Vector2 vertex_up_left = { { position.x + i * size_width,
-										 position.y + (-size_height + y_stride * size_height) } };
-			Vector2 vertex_up_right = { { position.x + width,
-										  position.y + (-size_height + y_stride * size_height) } };
-			Vector2 vertex_down_left = { { position.x + i * size_width,
-										   position.y + y_stride * size_height } };
-			Vector2 vertex_down_right = { { position.x + width,
-											position.y + y_stride * size_height } };
+			Vector2 vertex_up_left = { { position.x + i * size_width, position.y + (-size_height + y_stride * size_height) } };
+			Vector2 vertex_up_right = { { position.x + width, position.y + (-size_height + y_stride * size_height) } };
+			Vector2 vertex_down_left = { { position.x + i * size_width, position.y + y_stride * size_height } };
+			Vector2 vertex_down_right = { { position.x + width, position.y + y_stride * size_height } };
 
 			max_width = width > max_width ? width : max_width;
 
@@ -923,7 +919,8 @@ static float ps_window_border_size = 2.f;
 
 BOOL ps_window_inside(PsWindow* window, Vector2 point) {
 	return vector2_inside_rectangle(point, window->position.x, window->position.y,
-									window->size.x + ps_window_border_size, window->size.y + ps_window_border_size);
+									window->size.x + ps_window_border_size,
+									window->size.y + ps_window_border_size);
 }
 
 BOOL ps_window_resize_triangle_inside(PsWindow* window, Vector2 point) {
@@ -991,20 +988,15 @@ void ps_menubar_draw() {
 		strcpy(title_format, "Desktop");
 	}
 
-	ps_fill_rect(-g_window.size.x / 2, g_window.size.y / 2 - 24.f, g_window.size.x, 24.f,
-				 (Vector4) { { 0.2f, 0.2f, 0.2f, 0.9f } });
-	ps_fill_rect_vertical_gradient(-g_window.size.x / 2, g_window.size.y / 2 - 48.f, g_window.size.x, 24.f,
-								   (Vector4) { { 0.f, 0.f, 0.f, 0.5f } }, (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
+	ps_fill_rect(-g_window.size.x / 2, g_window.size.y / 2 - 24.f, g_window.size.x, 24.f, (Vector4) { { 0.2f, 0.2f, 0.2f, 0.9f } });
+	ps_fill_rect_vertical_gradient(-g_window.size.x / 2, g_window.size.y / 2 - 48.f, g_window.size.x, 24.f, (Vector4) { { 0.f, 0.f, 0.f, 0.5f } }, (Vector4) { { 0.f, 0.f, 0.f, 0.f } });
 
 	char buf[256];
 	snprintf(buf, sizeof(buf), "%lu FPS", g_window.fps);
 
 	float fps_size = ps_text_width(buf, 20.f);
-	ps_text(buf, (Vector2) { { g_window.size.x / 2 - fps_size, g_window.size.y / 2 - 4.f } }, 20.f,
-			(Vector4){ { 0.9f, 0.9f, 0.9f, 1.f } });
-
-	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } }, 20.f,
-			(Vector4) { { 0.9f, 0.9f, 0.9f, 1.f } });
+	ps_text(buf, (Vector2) { { g_window.size.x / 2 - fps_size, g_window.size.y / 2 - 4.f } }, 20.f,	(Vector4){ { 0.9f, 0.9f, 0.9f, 1.f } });
+	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } }, 20.f, (Vector4) { { 0.9f, 0.9f, 0.9f, 1.f } });
 }
 
 void ps_window_draw(PsWindow* window) {
