@@ -39,6 +39,9 @@
 	l'addition. L'expression mathématique =2 * (3 + 4)= est exprimée
 	comme =(* 2 (+ 3 4))=.
 
+	_Exercice:_ Quelle est l'expression YUKI équivalente à (3 + 5) /
+	(4 * (5 + 9)) ?
+
 *** Variables
 	Pour déclarer une variable globale, on peut utiliser ~define~, comme
 	ceci:
@@ -103,8 +106,8 @@
 
 #+begin_src scheme
   (let ((age 18))
-	(cond ((<= age 10) "Bonjour bonhomme"))
-		  ((<= age 18) "Bonjour jeune homme"))
+	(cond ((<= age 10) "Bonjour bonhomme")
+		  ((<= age 18) "Bonjour jeune homme")
           (t "Bonjour monsieur"))) ; => "Bonjour jeune homme"
 #+end_src
 
@@ -114,6 +117,9 @@
 	tous les tests dans l'ordre jusqu’à en trouver un vrai, et évalue
 	les instructions correspondantes. La dernière partie utilise la
 	variable ~t~, qui est une constante représentant la valeur vraie.
+
+	_Exercice:_ Écrivez un programme calculant la valeur absolue de la
+	variable locale =x=
 
 *** Boucles
 	Souvent, il est utile d'automatiser des tâches qui se
