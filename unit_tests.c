@@ -198,7 +198,6 @@ void execute_tests(void) {
 		printf("\n===========================\n");
 
 		YK_GC_UNPROTECT;
-		exit(0);
 	}
 
 	{

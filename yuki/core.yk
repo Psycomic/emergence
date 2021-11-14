@@ -137,6 +137,15 @@ and returns a list containing the results"
 									   (set! (unquote i)
 											 (+ (unquote i) 1))))))))))
 
+  (macro while (condition body)
+		 (let ((cont-sym (gensym)))
+		   (quasiquote
+			(with-cont (unquote cont-sym)
+					   (loop
+						(if (unquote condition)
+							(unquote body)
+							(exit (unquote cont-sym) nil)))))))
+
   (func 1+ (x) "Add one to `x'" (+ x 1))
   (func 1- (x) "Substract one to `x'" (- x 1))
 
@@ -192,4 +201,15 @@ and returns a list containing the results"
   (func benchmark ()
 		(let ((t1 (clock)))
 		  (times i 500 (next-step))
-		  (- (clock) t1))))
+		  (- (clock) t1)))
+
+  (func stream-test ()
+		(let ((out (make-string-output-stream)))
+		  (write-char! out 65)
+		  (write-char! out 54)
+		  (write-char! out 10)
+		  (write-char! out 12405)
+		  (write-char! out 10)
+		  (let ((result (stream-string out)))
+			(stream-close out)
+			result))))

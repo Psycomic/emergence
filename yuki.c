@@ -75,7 +75,10 @@ static YkObject yk_make_array(YkUint size, YkObject element);
 static void yk_assert(const char* expression, const char* file, uint32_t line);
 void yk_bytecode_disassemble(YkObject bytecode);
 
-static YkObject yk_arglist_cfun;
+static YkObject yk_arglist_cfun,
+	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
+	yk_symbol_file_mode_binary_input, yk_symbol_file_mode_binary_output, yk_symbol_file_mode_binary_append,
+	yk_symbol_eof;
 
 static void yk_allocator_init() {
 	yk_workspace = malloc(sizeof(union YkUnion) * YK_WORKSPACE_SIZE);
@@ -168,6 +171,13 @@ mark:
 	}
 	else if (YK_TYPEOF(o) == yk_t_string) {
 		yk_mark_block_data(YK_PTR(o)->string.data);
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+	}
+	else if (YK_TYPEOF(o) == yk_t_file_stream) {
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+	}
+	else if (YK_TYPEOF(o) == yk_t_string_stream) {
+		yk_mark_block_data(YK_PTR(o)->string_stream.buffer);
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
 	else {
@@ -395,6 +405,211 @@ static YkInt yk_signed_fixnum_to_long(YkInt i) {
 
 static float yk_fixnum_to_float(YkObject fix) {
 	return (float)yk_signed_fixnum_to_long(YK_INT(fix));
+}
+
+static char* yk_string_to_c_str(YkObject string) {
+	return YK_PTR(string)->string.data;
+}
+
+static YkObject yk_make_file_stream(YkObject path, YkObject mode) {
+	YK_GC_PROTECT2(path, mode);
+
+	YkObject stream = yk_alloc();
+	stream->file_stream.t = yk_t_file_stream;
+
+	char* s_mode = NULL;
+	if (mode == yk_symbol_file_mode_input) {
+		s_mode = "r";
+		stream->file_stream.flags = YK_STREAM_READ_BIT;
+	} else if (mode == yk_symbol_file_mode_binary_input) {
+		s_mode = "r";
+		stream->file_stream.flags = YK_STREAM_READ_BIT | YK_STREAM_BINARY_BIT;
+	} else if (mode == yk_symbol_file_mode_output) {
+		s_mode = "w";
+		stream->file_stream.flags = YK_STREAM_WRITE_BIT;
+	} else if (mode == yk_symbol_file_mode_binary_output) {
+		s_mode = "w";
+		stream->file_stream.flags = YK_STREAM_BINARY_BIT | YK_STREAM_WRITE_BIT;
+	} else if (mode == yk_symbol_file_mode_append) {
+		s_mode = "a";
+		stream->file_stream.flags = YK_STREAM_WRITE_BIT;
+	} else if (mode == yk_symbol_file_mode_binary_append) {
+		s_mode = "a";
+		stream->file_stream.flags = YK_STREAM_WRITE_BIT | YK_STREAM_BINARY_BIT;
+	}
+
+	YK_ASSERT(s_mode != NULL);
+
+	FILE* file = fopen(yk_string_to_c_str(path), s_mode);
+	YK_ASSERT(file != NULL);
+
+	stream->file_stream.file_ptr = file;
+
+	YK_GC_UNPROTECT;
+	return stream;
+}
+
+static YkObject yk_make_input_string_stream(char* data) {
+	YkObject stream = yk_alloc();
+	YK_GC_PROTECT1(stream);
+
+	stream->string_stream.t = yk_t_string_stream;
+	stream->string_stream.read_bytes = 0;
+	stream->string_stream.flags = YK_STREAM_READ_BIT;
+
+	size_t size = strlen(data);
+
+	stream->string_stream.size = size;
+	stream->string_stream.capacity = size;
+	stream->string_stream.buffer = data;
+
+	YK_GC_UNPROTECT;
+	return stream;
+}
+
+static YkObject yk_make_output_string_stream() {
+	YkObject stream = yk_alloc();
+	YK_GC_PROTECT1(stream);
+
+	stream->string_stream.t = yk_t_string_stream;
+	stream->string_stream.read_bytes = 0;
+	stream->string_stream.flags = YK_STREAM_WRITE_BIT;
+
+	stream->string_stream.size = 0;
+	stream->string_stream.capacity = 16;
+	stream->string_stream.buffer = yk_array_allocator_alloc(stream->string_stream.capacity);
+
+	YK_GC_UNPROTECT;
+	return stream;
+}
+
+static void yk_stream_write_byte(YkObject stream, YkInt byte) {
+	YK_GC_PROTECT1(stream);
+	YK_ASSERT(stream->t.t == yk_t_file_stream);
+	YK_ASSERT(stream->file_stream.flags & YK_STREAM_WRITE_BIT &&
+			  stream->file_stream.flags & YK_STREAM_BINARY_BIT);
+	YK_ASSERT(!(stream->file_stream.flags & YK_STREAM_FINISHED_BIT));
+	YK_ASSERT(byte >= 0 && byte <= 255);
+
+	if (putc(byte, stream->file_stream.file_ptr) == EOF)
+		YK_ASSERT(0);
+
+	YK_GC_UNPROTECT;
+}
+
+static YkInt yk_stream_read_byte(YkObject stream) {
+	YK_ASSERT(stream->t.t == yk_t_file_stream);
+	YK_ASSERT(!(stream->file_stream.flags & YK_STREAM_FINISHED_BIT));
+	YK_ASSERT(stream->file_stream.flags & YK_STREAM_READ_BIT &&
+			  stream->file_stream.flags & YK_STREAM_BINARY_BIT);
+
+	int c = getc(stream->file_stream.file_ptr);
+	if (c < 0)
+		return -1;
+
+	return c;
+}
+
+static void yk_stream_write_char(YkObject stream, YkInt byte) {
+	if (stream->t.t == yk_t_file_stream) {
+		YK_ASSERT(!(stream->file_stream.flags & YK_STREAM_FINISHED_BIT));
+		YK_ASSERT(stream->file_stream.flags & YK_STREAM_WRITE_BIT &&
+				  !(stream->file_stream.flags & YK_STREAM_BINARY_BIT));
+
+		char string[5] = { 0, 0, 0, 0, 0 };
+		u_codepoint_to_string(string, byte);
+
+		char* c = string;
+		do {
+			if (putc(*c, stream->file_stream.file_ptr) == EOF)
+				YK_ASSERT(0);
+		} while (*++c != '\0');
+	} else if (stream->t.t == yk_t_string_stream) {
+		YK_ASSERT(!(stream->string_stream.flags & YK_STREAM_FINISHED_BIT));
+		YK_ASSERT(stream->string_stream.flags & YK_STREAM_WRITE_BIT &&
+				  !(stream->string_stream.flags & YK_STREAM_BINARY_BIT));
+
+		char string[5] = { 0, 0, 0, 0, 0 };
+		u_codepoint_to_string(string, byte);
+
+		size_t s_size = strlen(string),
+			old_size = stream->string_stream.size;
+
+		stream->string_stream.size += s_size;
+
+		if (stream->string_stream.size >= stream->string_stream.capacity) {
+			stream->string_stream.capacity = stream->string_stream.size * 2;
+
+			char* new_buffer = yk_array_allocator_alloc(stream->string_stream.capacity);
+			memcpy(new_buffer, stream->string_stream.buffer, old_size);
+			stream->string_stream.buffer = new_buffer;
+		}
+
+		memcpy(stream->string_stream.buffer + old_size, string, s_size);
+		stream->string_stream.buffer[old_size + s_size] = 0;
+	}
+}
+
+static YkInt yk_stream_read_char(YkObject stream) {
+	if (stream->t.t == yk_t_file_stream) {
+		YK_ASSERT(!(stream->file_stream.flags & YK_STREAM_FINISHED_BIT));
+		YK_ASSERT(stream->file_stream.flags & YK_STREAM_READ_BIT &&
+				  !(stream->file_stream.flags & YK_STREAM_BINARY_BIT));
+
+		int c = getc(stream->file_stream.file_ptr);
+		if (c < 0)
+			return -1;
+
+		uint8_t byte = (uint8_t)c;
+		uint8_t utf8_string[4];
+
+		if (byte <= 0x7f) {
+			utf8_string[0] = byte;
+		} else if (byte >> 3 == 0x1e) {
+			utf8_string[0] = byte;
+			utf8_string[1] = (uint8_t)getc(stream->file_stream.file_ptr);
+			utf8_string[2] = (uint8_t)getc(stream->file_stream.file_ptr);
+			utf8_string[3] = (uint8_t)getc(stream->file_stream.file_ptr);
+		} else if (byte >> 4 == 0xe) {
+			utf8_string[0] = byte;
+			utf8_string[1] = (uint8_t)getc(stream->file_stream.file_ptr);
+			utf8_string[2] = (uint8_t)getc(stream->file_stream.file_ptr);
+		} else if (byte >> 5 == 6) {
+			utf8_string[0] = byte;
+			utf8_string[1] = (uint8_t)getc(stream->file_stream.file_ptr);
+		}
+
+		return u_string_to_codepoint(utf8_string);
+	} else {
+		YK_ASSERT(!(stream->string_stream.flags & YK_STREAM_FINISHED_BIT));
+		YK_ASSERT(stream->string_stream.flags & YK_STREAM_READ_BIT &&
+				  !(stream->string_stream.flags & YK_STREAM_BINARY_BIT));
+
+		YkStringStream* ss = &stream->string_stream;
+		if (ss->read_bytes >= ss->size)
+			return -1;
+
+		char a = ss->buffer[ss->read_bytes++];
+		return a;
+	}
+}
+
+static void yk_stream_close(YkObject stream) {
+	YK_ASSERT(YK_STREAMP(stream));
+
+	if (stream->t.t == yk_t_file_stream) {
+		YK_ASSERT(!(stream->file_stream.flags & YK_STREAM_FINISHED_BIT));
+
+		stream->file_stream.flags |= YK_STREAM_FINISHED_BIT;
+		fclose(stream->file_stream.file_ptr);
+	} else if (stream->t.t == yk_t_string_stream) {
+		YK_ASSERT(!(stream->string_stream.flags & YK_STREAM_FINISHED_BIT));
+		stream->string_stream.flags |= YK_STREAM_FINISHED_BIT;
+
+		stream->string_stream.size = 0;
+		stream->string_stream.capacity = 0;
+		stream->string_stream.buffer = NULL;
+	}
 }
 
 static YkObject yk_builtin_neq(YkUint nargs) {
@@ -1036,10 +1251,81 @@ static YkObject yk_builtin_aset(YkUint nargs) {
 	YkInt index = YK_INT(yk_lisp_stack_top[1]);
 	YkObject value = yk_lisp_stack_top[2];
 
+	YK_ASSERT(YK_TYPEOF(array) == yk_t_array);
+
 	YK_ASSERT(index < (YkInt)YK_PTR(array)->array.size && index >= 0);
 	YK_PTR(array)->array.data[index] = value;
 
 	return value;
+}
+
+static YkObject yk_builtin_make_file_stream(YkUint nargs) {
+	return yk_make_file_stream(yk_lisp_stack_top[0], yk_lisp_stack_top[1]);
+}
+
+static YkObject yk_builtin_make_input_string_stream(YkUint nargs) {
+	YK_ASSERT(yk_lisp_stack_top[0]->t.t == yk_t_string);
+
+	return yk_make_input_string_stream(yk_string_to_c_str(yk_lisp_stack_top[0]));
+}
+
+static YkObject yk_builtin_make_output_string_stream(YkUint nargs) {
+	return yk_make_output_string_stream();
+}
+
+static YkObject yk_builtin_stream_string(YkUint nargs) {
+	YK_ASSERT(yk_lisp_stack_top[0]->t.t == yk_t_string_stream);
+	YK_ASSERT(!(yk_lisp_stack_top[0]->string_stream.flags & YK_STREAM_FINISHED_BIT));
+
+	YkObject stream = yk_lisp_stack_top[0],
+		string = yk_alloc();
+
+	string->string.t = yk_t_string;
+	string->string.size = stream->string_stream.size;
+	string->string.data = stream->string_stream.buffer;
+
+	return string;
+}
+
+static YkObject yk_builtin_stream_read_byte(YkUint nargs) {
+	YkObject stream = yk_lisp_stack_top[0];
+	YkInt byte = yk_stream_read_byte(stream);
+
+	if (byte < 0)
+		return yk_symbol_eof;
+
+	return YK_MAKE_INT(byte);
+}
+
+static YkObject yk_builtin_stream_write_byte(YkUint nargs) {
+	YkObject stream = yk_lisp_stack_top[0],
+		byte = yk_lisp_stack_top[1];
+
+	yk_stream_write_byte(stream, YK_INT(byte));
+	return YK_NIL;
+}
+
+static YkObject yk_builtin_stream_read_char(YkUint nargs) {
+	YkObject stream = yk_lisp_stack_top[0];
+	YkInt character = yk_stream_read_char(stream);
+
+	if (character < 0)
+		return yk_symbol_eof;
+
+	return YK_MAKE_INT(character);
+}
+
+static YkObject yk_builtin_stream_write_char(YkUint nargs) {
+	YkObject stream = yk_lisp_stack_top[0],
+		character = yk_lisp_stack_top[1];
+
+	yk_stream_write_char(stream, YK_INT(character));
+	return YK_NIL;
+}
+
+static YkObject yk_builtin_stream_close(YkUint nargs) {
+	yk_stream_close(yk_lisp_stack_top[0]);
+	return YK_NIL;
 }
 
 static YkObject yk_arglist(YkUint nargs) {
@@ -1066,30 +1352,25 @@ static YkObject yk_default_debugger(YkUint nargs) {
 	printf("Unhandled error ");
 	yk_print(error);
 	printf("\n");
-/*
-	for (uint i = 0; i < YK_STACK_MAX_SIZE - (yk_return_stack_top - yk_return_stack); i++) {
-		YkObject* stack_pointer = yk_return_stack_top[i].stack_pointer;
-		uint nargs = YK_INT(stack_pointer[0]);
 
-		printf("(");
-		if (i == 0) {
-			yk_print(YK_PTR(yk_bytecode_register)->bytecode.name);
-		}
-		else {
-			YkObject bytecode = yk_return_stack_top[i - 1].bytecode_register;
-			yk_print(YK_PTR(bytecode)->bytecode.name);
+	YkObject *stack_ptr = yk_lisp_stack_top,
+		*frame_ptr = yk_lisp_frame_ptr;
+
+	while (stack_ptr < yk_lisp_stack + YK_STACK_MAX_SIZE) {
+		for (; stack_ptr != frame_ptr; stack_ptr++) {
+			printf("\t");
+			yk_print(*stack_ptr);
+			printf("\n");
 		}
 
-		printf(" ");
-		for (uint j = 0; j < nargs; j++) {
-			yk_print(stack_pointer[1 + j]);
+		if (frame_ptr < yk_lisp_stack + YK_STACK_MAX_SIZE) {
+			YkObject bytecode = frame_ptr[2];
+			printf("---%s----\n", YK_PTR(YK_PTR(bytecode)->bytecode.name)->symbol.name);
 
-			if (j != nargs - 1)
-				printf(" ");
+			frame_ptr = (YkObject*) *frame_ptr;
+			stack_ptr += 3;
 		}
-		printf(")\n");
 	}
-*/
 
 	printf("1] ABORT TO TOPLEVEL\n"
 		"2] DEBBUGER BREAKPOINT\n");
@@ -1220,6 +1501,15 @@ void yk_init() {
 	yk_keyword_exit = yk_make_symbol("exit");
 	yk_keyword_loop = yk_make_symbol("loop");
 
+	yk_symbol_file_mode_input = yk_make_symbol("input");
+	yk_symbol_file_mode_output = yk_make_symbol("output");
+	yk_symbol_file_mode_append = yk_make_symbol("append");
+	yk_symbol_file_mode_binary_input = yk_make_symbol("binary-input");
+	yk_symbol_file_mode_binary_output = yk_make_symbol("binary-output");
+	yk_symbol_file_mode_binary_append = yk_make_symbol("binary-append");
+
+	yk_symbol_eof = yk_make_symbol("eof");
+
 	/* Functions */
 	YkObject arglist_symbol = yk_make_symbol("arglist");
 
@@ -1264,6 +1554,19 @@ void yk_init() {
 	yk_make_builtin("aset!", 3, yk_builtin_aset);
 	yk_make_builtin("list->array", 1, yk_builtin_list_to_array);
 	yk_make_builtin("array->list", 1, yk_builtin_array_to_list);
+
+	yk_make_builtin("make-file-stream", 2, yk_builtin_make_file_stream);
+	yk_make_builtin("make-string-input-stream", 1, yk_builtin_make_input_string_stream);
+	yk_make_builtin("make-string-output-stream", 0, yk_builtin_make_output_string_stream);
+
+	yk_make_builtin("stream-string", 1, yk_builtin_stream_string);
+
+	yk_make_builtin("read-byte", 1, yk_builtin_stream_read_byte);
+	yk_make_builtin("write-byte!", 2, yk_builtin_stream_write_byte);
+	yk_make_builtin("read-char", 1, yk_builtin_stream_read_char);
+	yk_make_builtin("write-char!", 2, yk_builtin_stream_write_char);
+
+	yk_make_builtin("stream-close", 1, yk_builtin_stream_close);
 
 	yk_make_builtin("int?", 1, yk_builtin_intp);
 	yk_make_builtin("float?", 1, yk_builtin_floatp);
@@ -1707,6 +2010,12 @@ void yk_print(YkObject o) {
 	case yk_t_string:
 		printf("\"");
 		printf("%s\"", YK_PTR(o)->string.data);
+		break;
+	case yk_t_file_stream:
+		printf("<file stream at %p>", YK_PTR(o));
+		break;
+	case yk_t_string_stream:
+		printf("<string stream at %p>", YK_PTR(o));
 		break;
 	default:
 		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
@@ -2172,7 +2481,8 @@ void yk_compile_loop(YkObject expression, YkObject bytecode, YkObject continuati
 	case yk_t_float:
 	case yk_t_instance:
 	case yk_t_int:
-	case yk_t_stream:
+	case yk_t_file_stream:
+	case yk_t_string_stream:
 	case yk_t_string:
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, expression);
 		break;

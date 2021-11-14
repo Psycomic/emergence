@@ -23,7 +23,8 @@ typedef enum {
 	yk_t_class,
 	yk_t_array,
 	yk_t_string,
-	yk_t_stream,
+	yk_t_string_stream,
+	yk_t_file_stream
 } YkType;
 
 union YkUnion;
@@ -69,6 +70,10 @@ typedef union YkUnion *YkObject;
 #define YK_BYTECODEP(x) (YK_IMMEDIATE(x) == yk_t_bytecode)
 
 #define YK_CONTINUATIONP(x) ((x)->t.t == yk_t_continuation)
+
+#define YK_FILE_STREAMP(x) ((x)->t.t == yk_t_file_stream)
+#define YK_STRING_STREAMP(x) ((x)->t.t == yk_t_string_stream)
+#define YK_STREAMP(x) (YK_FILE_STREAMP(x) || YK_STRING_STREAMP(x))
 
 #define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? (x)->t.t : YK_IMMEDIATE(x))
 
@@ -239,17 +244,41 @@ typedef struct {
 typedef struct {
 	YkObject dummy;
 	YkType t;
-	YkUint size;
-	YkUint capacity;
+	uint32_t size;
+	uint32_t capacity;
 
 	YkObject* data;
 } YkArray;
+
+#define YK_STREAM_FINISHED_BIT 0x1
+#define YK_STREAM_BINARY_BIT   0x2
+#define YK_STREAM_READ_BIT     0x4
+#define YK_STREAM_WRITE_BIT    0x8
 
 typedef struct {
 	YkObject dummy;
 	YkType t;
 
-	YkUint size;
+	FILE* file_ptr;
+	uint8_t flags;
+} YkFileStream;
+
+typedef struct {
+	YkObject dummy;
+	YkType t;
+
+	char* buffer;
+	uint32_t capacity;
+	uint32_t size;
+	uint32_t read_bytes;
+	uint8_t flags;
+} YkStringStream;
+
+typedef struct {
+	YkObject dummy;
+	YkType t;
+
+	uint32_t size;
 	char* data;
 } YkString;
 
@@ -267,6 +296,8 @@ union YkUnion {
 	YkContinuation continuation;
 	YkArray array;
 	YkString string;
+	YkStringStream string_stream;
+	YkFileStream file_stream;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);

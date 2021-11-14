@@ -1,10 +1,10 @@
-* Le langage de programmation Yuki
+* Le langage de programmation YUKI
 ** Introduction
-   Yuki est le langage de programmation d'Emergence. C'est un langage
+   YUKI est le langage de programmation d'Emergence. C'est un langage
    de programmation dynamique, orienté objet, et il supporte la
    métaprogrammation.
 
-   Yuki est un membre de la famille LISP, qui se caractérise par un
+   YUKI est un membre de la famille LISP, qui se caractérise par un
    syntaxe qui peut paraître étrange aux débutants, mais qui est très
    élégante et permet de faire des choses que la plupart des langages
    de programmation sont incapables de faire.
@@ -12,34 +12,122 @@
    Si vous avez déjà programmé en Python, Perl, ou Ruby, le langage
    vous sera sans doute familier.
 
-** Syntaxe
-   En Yuki, tout est une expression. Il y a deux types d'expressions:
-   - Les appels de fonctions, qui sont formés entre parenthèses, et
-     dont le premier élément est la fonction à appliquer, et le reste
-     sont les arguments donnés à la fonction: =(fonction argument1
-     argument2)=
-   - Les atomes: tout ce qui n'est pas entre parenthèses: par exemple
-     les noms de variables, les nombres ou les chaînes de caractères.
+** Rapide aperçu
+*** Syntaxe
+	En YUKI, tout est une expression. Il y a deux types d'expressions:
+	- Les appels de fonctions, qui sont formés entre parenthèses, et
+      dont le premier élément est la fonction à appliquer, et le reste
+      sont les arguments donnés à la fonction: =(fonction argument1
+      argument2)=
+	- Les atomes: tout ce qui n'est pas entre parenthèses: par exemple
+      les noms de variables, les nombres ou les chaînes de caractères.
 
-   Voici des exemples d'expressions, suivis par le résultat qu'elles
-   produisent, indiqué par la flèche _=>_
-
-#+begin_src scheme
-65 => 65
-(+ 5 6) => 11
-(* (+ 9 5) 8) => 112
-#+end_src
-
-   Dans cette exemple, nous voyons l'application de la fonction +, qui
-   fait l'addition de ses arguments. Yuki peut être utilisé comme une
-   calculette, et faire des calculs arbitraires. Grâce à la syntaxe
-   très explicite, le programmeur n'a pas besoin de se soucier de la
-   précédence de la multiplication sur l'addition. L'expression
-   mathématique =2 * (3 + 4)= est exprimée comme =(* 2 (+ 3 4))=.
-
-   Pour continuer la tradition des livres de programmation, voici
-   un programme qui affiche "Hello, world!" dans la console:
+	Voici des exemples d'expressions, suivis par le résultat qu'elles
+	produisent, indiqué par la flèche _=>_
 
 #+begin_src scheme
-(format "Hello, world")
+  65 ; => 65
+  (+ 5 6) ; => 11
+  (* (+ 9 5) 8) ; => 112
 #+end_src
+
+	Dans cette exemple, nous voyons l'application de la fonction +,
+	qui fait l'addition de ses arguments. YUKI peut être utilisé comme
+	une calculette, et faire des calculs arbitraires. Grâce à la
+	syntaxe très explicite, le programmeur n'a pas besoin de se
+	soucier de la précédence de la multiplication sur
+	l'addition. L'expression mathématique =2 * (3 + 4)= est exprimée
+	comme =(* 2 (+ 3 4))=.
+
+*** Variables
+	Pour déclarer une variable globale, on peut utiliser ~define~, comme
+	ceci:
+
+#+begin_src scheme
+  (define pi 3.1415)
+#+end_src
+
+	Le code ci-dessus déclare la variable pi avec une valeur égale à
+	3.1415. On peut ensuite utiliser la variable dans des expressions:
+	~(* (/ 45 180) pi)~, qui donne la valeur de 45° en radians.
+
+	Souvent, on veut déclarer des variables qui vont être utilisées
+	que à un certain moment dans le programme, et qui deviennent
+	inutiles ensuite. Ces variables sont appelées des "variables
+	locales". Pour déclarer des variables locales en YUKI, on utilise
+	le mot-clé ~let~:
+
+#+begin_src scheme
+  (let ((x 42) (y 666) (z 69))
+	(+ (* x y) z)) ; => (+ (* 42 666) 69) => 28041
+#+end_src
+
+	La suite de variables qui suit le ~let~ est formée du nom de la
+	variable et de la valeur de celle-ci, donnant une paire entourée
+	par des parenthèses. Cette suite elle-même est entourée de
+	parenthèses, et suivie d'une expression. Dans cette expression,
+	les noms des variables sont remplacées par les valeurs des
+	variables elle-mêmes. ~let~ est très souvent utilisé et est un des
+	mots-clés les plus importants du langage.
+
+	On peut aussi modifier la valeur d'une variable en utilisant ~set!~,
+	avec le nom de la variable comme premier argument et sa nouvelle
+	valeur comme second argument.
+
+#+begin_src scheme
+  (define a 56)
+
+  (let ((b 42) (c 32))
+	(set! a 666)
+	(set! b c)
+	(+ (* a b) c)) ; => (+ (* 666 32) 32) => 21344
+#+end_src
+
+*** Conditions
+	Très souvent, en programmation, le moment arrive où votre
+	programme doit prendre des décisions: si quelque chose est vrai,
+	fait quelque chose, sinon, fait quelque-chose d'autre.
+
+	Cette idée est exprimée en YUKI par le mot-clé ~if~. Le premier
+	argument de ~if~ est le test à évaluer, le second argument sera
+	évalué si le test n'est pas égal à ~nil~ (représente la valeur
+	fausse), et le troisième argument si le test est égal à ~nil~.
+
+#+begin_src scheme
+  (if (= 3 4)
+	  1337 666) ; => 666
+#+end_src
+
+	Un autre mot-clé, plus avancé, peut être utile dans certaines
+	situations: ~cond~.
+
+#+begin_src scheme
+  (let ((age 18))
+	(cond ((<= age 10) "Bonjour bonhomme"))
+		  ((<= age 18) "Bonjour jeune homme"))
+          (t "Bonjour monsieur"))) ; => "Bonjour jeune homme"
+#+end_src
+
+	chaque partie du ~cond~ est entourée de parenthèses. Le premier
+	élément est le test à effectuer, et le second est les instructions
+	à évaluer si le test n'est pas égal à ~nil~. Le programme effectue
+	tous les tests dans l'ordre jusqu’à en trouver un vrai, et évalue
+	les instructions correspondantes. La dernière partie utilise la
+	variable ~t~, qui est une constante représentant la valeur vraie.
+
+*** Boucles
+	Souvent, il est utile d'automatiser des tâches qui se
+	répètent. C'est là où les boucles ont une grande utilité.
+
+	La boucle la plus simple est ~times~. Le premier argument est le nom
+	du compteur, et le second le nombre de fois qu'il faut répéter le
+	code. Le dernier argument est l'expression à répéter un certain
+	nombre de fois.
+
+#+begin_src scheme
+  (times i 10
+	(print i)) ; Va afficher les nombres de 0 à 9 dans la console
+#+end_src
+
+	_Exercice:_ Faire un programme qui affiche revoie le 20ième nombre
+	de Fibonacci.
