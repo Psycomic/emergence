@@ -212,4 +212,10 @@ and returns a list containing the results"
 		  (write-char! out 10)
 		  (let ((result (stream-string out)))
 			(stream-close out)
-			result))))
+			result)))
+
+  (func output-test ()
+		(let ((ss (make-string-output-stream)))
+		  (dynamic-let ((*output* ss))
+					   (print (quote (hello world))))
+		  (stream-string ss))))

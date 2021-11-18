@@ -115,6 +115,13 @@ extern YkUint yk_gc_stack_size;
 	yk_gc_stack[yk_gc_stack_size++] = &(w);								\
 	yk_gc_stack[yk_gc_stack_size++] = &(k);
 
+/* Macro utilites */
+
+#define YK_DLET_BEGIN(var, val) YkObject _old_value = YK_PTR(var)->symbol.value; \
+	YkObject _old_var = var;											\
+	YK_PTR(var)->symbol.value = (val)
+
+#define YK_DLET_END YK_PTR(_old_var)->symbol.value = _old_value
 
 /* Opcodes */
 typedef enum {
@@ -346,5 +353,12 @@ YkObject yk_read(const char* string);
 void yk_compile(YkObject forms, YkObject bytecode);
 YkObject yk_run(YkObject bytecode);
 void yk_repl();
+
+YkObject yk_make_output_string_stream();
+YkObject yk_stream_string(YkObject stream);
+char* yk_string_to_c_str(YkObject string);
+
+/* Public variables */
+extern YkObject yk_var_output;
 
 #endif

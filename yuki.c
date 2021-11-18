@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <time.h>
+#include <stdarg.h>
 
 #include "random.h"
 
@@ -32,7 +33,7 @@ static YkInstruction* yk_program_counter;
 static YkObject yk_bytecode_register;
 
 /* Symbols */
-YkObject yk_tee, yk_nil, yk_debugger;
+YkObject yk_tee, yk_nil, yk_debugger, yk_var_output;
 
 /* Stacks */
 YkObject *yk_gc_stack[YK_GC_STACK_MAX_SIZE];
@@ -407,11 +408,11 @@ static float yk_fixnum_to_float(YkObject fix) {
 	return (float)yk_signed_fixnum_to_long(YK_INT(fix));
 }
 
-static char* yk_string_to_c_str(YkObject string) {
+char* yk_string_to_c_str(YkObject string) {
 	return YK_PTR(string)->string.data;
 }
 
-static YkObject yk_make_file_stream(YkObject path, YkObject mode) {
+static YkObject yk_make_file_stream(YkObject path, YkObject mode, FILE* optional_fptr) {
 	YK_GC_PROTECT2(path, mode);
 
 	YkObject stream = yk_alloc();
@@ -440,10 +441,13 @@ static YkObject yk_make_file_stream(YkObject path, YkObject mode) {
 
 	YK_ASSERT(s_mode != NULL);
 
-	FILE* file = fopen(yk_string_to_c_str(path), s_mode);
-	YK_ASSERT(file != NULL);
-
-	stream->file_stream.file_ptr = file;
+	if (optional_fptr == NULL) {
+		FILE* file = fopen(yk_string_to_c_str(path), s_mode);
+		YK_ASSERT(file != NULL);
+		stream->file_stream.file_ptr = file;
+	} else {
+		stream->file_stream.file_ptr = optional_fptr;
+	}
 
 	YK_GC_UNPROTECT;
 	return stream;
@@ -467,7 +471,7 @@ static YkObject yk_make_input_string_stream(char* data) {
 	return stream;
 }
 
-static YkObject yk_make_output_string_stream() {
+YkObject yk_make_output_string_stream() {
 	YkObject stream = yk_alloc();
 	YK_GC_PROTECT1(stream);
 
@@ -594,6 +598,46 @@ static YkInt yk_stream_read_char(YkObject stream) {
 	}
 }
 
+static void yk_stream_format(YkObject stream, const char* format, ...) {
+	YK_ASSERT(YK_STREAMP(stream));
+
+	va_list arguments;
+
+	if (stream->t.t == yk_t_file_stream) {
+		YK_ASSERT(!(stream->file_stream.flags & YK_STREAM_BINARY_BIT));
+		YK_ASSERT(stream->file_stream.flags & YK_STREAM_WRITE_BIT);
+
+		va_start(arguments, format);
+		vfprintf(stream->file_stream.file_ptr, format, arguments);
+		va_end(arguments);
+	} else if (stream->t.t == yk_t_string_stream) {
+		YK_ASSERT(!(stream->string_stream.flags & YK_STREAM_BINARY_BIT));
+		YK_ASSERT(stream->string_stream.flags & YK_STREAM_WRITE_BIT);
+
+		size_t size, old_size = stream->string_stream.size;
+
+		va_start(arguments, format);
+		size = vsnprintf(NULL, 0, format, arguments);
+		va_end(arguments);
+
+		stream->string_stream.size += size;
+
+		if (stream->string_stream.size >= stream->string_stream.capacity) {
+			stream->string_stream.capacity = stream->string_stream.size * 2;
+
+			char* new_buffer = yk_array_allocator_alloc(stream->string_stream.capacity);
+			memcpy(new_buffer, stream->string_stream.buffer, old_size);
+			stream->string_stream.buffer = new_buffer;
+		}
+
+		va_start(arguments, format);
+		vsprintf(stream->string_stream.buffer + old_size, format, arguments);
+		va_end(arguments);
+
+		stream->string_stream.buffer[old_size + size] = 0;
+	}
+}
+
 static void yk_stream_close(YkObject stream) {
 	YK_ASSERT(YK_STREAMP(stream));
 
@@ -610,6 +654,16 @@ static void yk_stream_close(YkObject stream) {
 		stream->string_stream.capacity = 0;
 		stream->string_stream.buffer = NULL;
 	}
+}
+
+YkObject yk_stream_string(YkObject stream) {
+	YkObject string = yk_alloc();
+
+	string->string.t = yk_t_string;
+	string->string.size = stream->string_stream.size;
+	string->string.data = stream->string_stream.buffer;
+
+	return string;
 }
 
 static YkObject yk_builtin_neq(YkUint nargs) {
@@ -1260,7 +1314,7 @@ static YkObject yk_builtin_aset(YkUint nargs) {
 }
 
 static YkObject yk_builtin_make_file_stream(YkUint nargs) {
-	return yk_make_file_stream(yk_lisp_stack_top[0], yk_lisp_stack_top[1]);
+	return yk_make_file_stream(yk_lisp_stack_top[0], yk_lisp_stack_top[1], NULL);
 }
 
 static YkObject yk_builtin_make_input_string_stream(YkUint nargs) {
@@ -1277,14 +1331,7 @@ static YkObject yk_builtin_stream_string(YkUint nargs) {
 	YK_ASSERT(yk_lisp_stack_top[0]->t.t == yk_t_string_stream);
 	YK_ASSERT(!(yk_lisp_stack_top[0]->string_stream.flags & YK_STREAM_FINISHED_BIT));
 
-	YkObject stream = yk_lisp_stack_top[0],
-		string = yk_alloc();
-
-	string->string.t = yk_t_string;
-	string->string.size = stream->string_stream.size;
-	string->string.data = stream->string_stream.buffer;
-
-	return string;
+	return yk_stream_string(yk_lisp_stack_top[0]);
 }
 
 static YkObject yk_builtin_stream_read_byte(YkUint nargs) {
@@ -1463,7 +1510,8 @@ YkObject yk_apply(YkObject function, YkObject args) {
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
 	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_dynamic_let,
-	yk_keyword_with_cont, yk_keyword_exit, yk_keyword_loop;
+	yk_keyword_with_cont, yk_keyword_exit, yk_keyword_loop,
+	yk_stream_console_output, yk_stream_console_input;
 
 void yk_init() {
 	yk_gc_stack_size = 0;
@@ -1509,6 +1557,14 @@ void yk_init() {
 	yk_symbol_file_mode_binary_append = yk_make_symbol("binary-append");
 
 	yk_symbol_eof = yk_make_symbol("eof");
+
+	/* Streams */
+	yk_stream_console_output = yk_make_file_stream(YK_NIL, yk_symbol_file_mode_output, stdout);
+	yk_stream_console_input = yk_make_file_stream(YK_NIL, yk_symbol_file_mode_input, stdin);
+
+	yk_var_output = yk_make_symbol("*output*");
+	YK_PTR(yk_var_output)->symbol.declared = true;
+	YK_PTR(yk_var_output)->symbol.value = yk_stream_console_output;
 
 	/* Functions */
 	YkObject arglist_symbol = yk_make_symbol("arglist");
@@ -1945,80 +2001,82 @@ YkObject yk_read(const char* string) {
 }
 
 void yk_print(YkObject o) {
+	YkObject output = YK_PTR(yk_var_output)->symbol.value;
+
 	switch (YK_TYPEOF(o)) {
 	case yk_t_list:
 		if (YK_NULL(o)) {
-			printf("nil");
+			yk_stream_format(output, "nil");
 		} else {
 			YkObject c;
-			printf("(");
+			yk_stream_format(output, "(");
 
 			for (c = o; YK_CONSP(c); c = YK_CDR(c)) {
 				yk_print(YK_CAR(c));
 
 				if (YK_CONSP(YK_CDR(c)))
-					printf(" ");
+					yk_stream_format(output, " ");
 			}
 
 			if (!YK_NULL(c)) {
-				printf(" . ");
+				yk_stream_format(output, " . ");
 				yk_print(c);
 			}
 
-			printf(")");
+			yk_stream_format(output, ")");
 		}
 		break;
 	case yk_t_int:
-		printf("%ld", yk_signed_fixnum_to_long(YK_INT(o)));
+		yk_stream_format(output, "%ld", yk_signed_fixnum_to_long(YK_INT(o)));
 		break;
 	case yk_t_float:
-		printf("%f", YK_FLOAT(o));
+		yk_stream_format(output, "%f", YK_FLOAT(o));
 		break;
 	case yk_t_symbol:
-		printf("%s", YK_PTR(o)->symbol.name);
+		yk_stream_format(output, "%s", YK_PTR(o)->symbol.name);
 		break;
 	case yk_t_bytecode:
-		printf("<bytecode %s at %p>",
+		yk_stream_format(output, "<bytecode %s at %p>",
 			   YK_PTR(YK_PTR(o)->bytecode.name)->symbol.name,
 			   YK_PTR(o));
 		break;
 	case yk_t_closure:
-		printf("<closure at %p>", YK_PTR(o));
+		yk_stream_format(output, "<closure at %p>", YK_PTR(o));
 		break;
 	case yk_t_c_proc:
 #if YK_PROFILE
-		printf("<compiled-function %s at %p (called %ld times totaling %g s)>",
+		yk_stream_format(output, "<compiled-function %s at %p (called %ld times totaling %g s)>",
 			   YK_PTR(YK_PTR(o)->c_proc.name)->symbol.name,
 			   YK_PTR(o), YK_PTR(o)->c_proc.calls,
 			   (YK_PTR(o)->c_proc.time_called) / CLOCKS_PER_SEC);
 #else
-		printf("<compiled-function %s at %p>",
+		yk_stream_format(output, "<compiled-function %s at %p>",
 			   YK_PTR(YK_PTR(o)->c_proc.name)->symbol.name,
 			   YK_PTR(o));
 #endif
 		break;
 	case yk_t_array:
-		printf("[");
+		yk_stream_format(output, "[");
 		for (uint i = 0; i < YK_PTR(o)->array.size; i++) {
 			yk_print(YK_PTR(o)->array.data[i]);
 
 			if (i != YK_PTR(o)->array.size - 1)
-				printf(" ");
+				yk_stream_format(output, " ");
 		}
-		printf("]");
+		yk_stream_format(output, "]");
 		break;
 	case yk_t_string:
-		printf("\"");
-		printf("%s\"", YK_PTR(o)->string.data);
+		yk_stream_format(output, "\"");
+		yk_stream_format(output, "%s\"", YK_PTR(o)->string.data);
 		break;
 	case yk_t_file_stream:
-		printf("<file stream at %p>", YK_PTR(o));
+		yk_stream_format(output, "<file stream at %p>", YK_PTR(o));
 		break;
 	case yk_t_string_stream:
-		printf("<string stream at %p>", YK_PTR(o));
+		yk_stream_format(output, "<string stream at %p>", YK_PTR(o));
 		break;
 	default:
-		printf("Unknown type 0x%lx!\n", YK_TYPEOF(o));
+		yk_stream_format(output, "Unknown type 0x%lx!\n", YK_TYPEOF(o));
 	}
 }
 

@@ -164,20 +164,24 @@ void update() {
 	}
 
 	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
-		YkObject forms = YK_NIL;
-		YK_GC_PROTECT1(forms);
+		YkObject forms = YK_NIL, stream = YK_NIL, bytecode = YK_NIL, r = YK_NIL;
+		YK_GC_PROTECT2(forms, stream);
 
 		forms = yk_read(ps_input_value(lisp_input));
 
-		YkObject bytecode = yk_make_bytecode_begin(yk_make_symbol("input"), 0);
+		bytecode = yk_make_bytecode_begin(yk_make_symbol("input"), 0);
 		yk_compile(forms, bytecode);
 
-		YK_GC_UNPROTECT;
+		r = yk_run(bytecode);
+		stream = yk_make_output_string_stream();
 
-		YkObject r = yk_run(bytecode);
-		printf("< ");
+		YK_DLET_BEGIN(yk_var_output, stream);
 		yk_print(r);
-		printf("\n");
+		YK_DLET_END;
+
+		ps_label_set_text(result_label, yk_string_to_c_str(yk_stream_string(stream)));
+
+		YK_GC_UNPROTECT;
 	}
 
 	if (scene->flags & SCENE_GUI_MODE)
