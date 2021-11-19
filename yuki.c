@@ -71,6 +71,7 @@ static bool yk_member(YkObject element, YkObject list);
 
 static void yk_mark_block_data(void* data);
 static void yk_array_allocator_sweep();
+static void yk_array_allocator_print();
 
 static YkObject yk_make_array(YkUint size, YkObject element);
 static void yk_assert(const char* expression, const char* file, uint32_t line);
@@ -148,6 +149,7 @@ mark:
 	}
 	else if (YK_BYTECODEP(o)) {
 		YkObject bytecode = YK_PTR(o);
+		yk_mark_block_data(bytecode->bytecode.code);
 
 		YkObject docstring = bytecode->bytecode.docstring;
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
@@ -330,18 +332,27 @@ static void yk_array_allocator_print() {
 
 static void yk_array_allocator_sweep() {
 	char* block_ptr = yk_array_allocator;
-	YkArrayAllocatorBlock* last_block = NULL;
+	YkArrayAllocatorBlock *last_block = NULL, *last_unused_block = NULL;
 	uint freed = 0;
 
 	while(block_ptr < yk_array_allocator_top) {
 		YkArrayAllocatorBlock* block = (YkArrayAllocatorBlock*)block_ptr;
 
+		if (!YK_BLOCK_USED(block)) {
+			if (last_unused_block) {
+				last_unused_block->size += YK_BLOCK_SIZE(block) + sizeof(YkArrayAllocatorBlock);
+			} else {
+				last_unused_block = block;
+			}
+		} else {
+			last_unused_block = NULL;
+		}
+
 		if (!block->marked && YK_BLOCK_USED(block)) {
 			block->size &= ~0x80000000;
 
 			if (last_block) {
-				last_block->size += YK_BLOCK_SIZE(block) +
-					sizeof(YkArrayAllocatorBlock);
+				last_block->size += YK_BLOCK_SIZE(block) + sizeof(YkArrayAllocatorBlock);
 			} else {
 				last_block = block;
 			}
@@ -1780,7 +1791,7 @@ YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs) {
 	YkObject bytecode = yk_alloc();
 	bytecode->bytecode.name = name;
 	bytecode->bytecode.docstring = YK_NIL;
-	bytecode->bytecode.code = malloc(8 * sizeof(YkInstruction));
+	bytecode->bytecode.code = yk_array_allocator_alloc(8 * sizeof(YkInstruction));
 	bytecode->bytecode.code_size = 0;
 	bytecode->bytecode.code_capacity = 8;
 	bytecode->bytecode.nargs = nargs;
@@ -1795,9 +1806,9 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 
 	if (bytecode_ptr->bytecode.code_size >= bytecode_ptr->bytecode.code_capacity) {
 		bytecode_ptr->bytecode.code_capacity += 8;
-		bytecode_ptr->bytecode.code =
-			realloc(bytecode_ptr->bytecode.code,
-					sizeof(YkInstruction) *	bytecode_ptr->bytecode.code_capacity);
+		YkInstruction* old_code = bytecode_ptr->bytecode.code;
+		bytecode_ptr->bytecode.code = yk_array_allocator_alloc(sizeof(YkInstruction) * bytecode_ptr->bytecode.code_capacity);
+		memcpy(bytecode_ptr->bytecode.code, old_code, bytecode_ptr->bytecode.code_size * sizeof(YkInstruction));
 	}
 
 	YkInstruction* last_i = bytecode_ptr->bytecode.code + bytecode_ptr->bytecode.code_size++;
