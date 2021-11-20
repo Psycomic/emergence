@@ -54,6 +54,8 @@ static YkDynamicBinding* yk_dynamic_bindings_stack_top;
 static YkObject yk_continuations_stack[YK_STACK_MAX_SIZE];
 static YkObject* yk_continuations_stack_top;
 
+static YkObject yk_current_exit_cont = YK_NIL;
+
 #define YK_PUSH(stack, x) *(--(stack)) = ((void*)x)
 #define YK_POP(stack, type, x) x = *((type)((stack)++))
 
@@ -225,6 +227,7 @@ static void yk_permanent_gc_protect(YkObject object) {
 static void yk_gc() {
 	yk_mark(yk_value_register);
 	yk_mark(yk_bytecode_register);
+	yk_mark(yk_current_exit_cont);
 
 	for (size_t i = 0; i < yk_gc_protected_stack_size; i++) {
 		yk_mark(yk_gc_protected_stack[i]);
@@ -2091,14 +2094,14 @@ void yk_print(YkObject o) {
 	}
 }
 
-static inline void yk_exit_continuation(YkObject exit) {
+static inline void yk_exit_continuation(YkObject exit, YkObject* cont_stack_top) {
 	YK_ASSERT(!(YK_PTR(exit)->continuation.exited));
 
-	for (uint i = 0; i < yk_program_counter->modifier; i--) {
-		YkObject cont;
-		YK_POP(yk_continuations_stack_top, YkObject*, cont);
-		YK_PTR(cont)->continuation.exited = 1;
+	for (YkObject* o_ptr = yk_continuations_stack_top; o_ptr != cont_stack_top; o_ptr++) {
+		YK_PTR(*o_ptr)->continuation.exited = 1;
 	}
+
+	yk_continuations_stack_top = cont_stack_top;
 
 	YkDynamicBinding* ptr = yk_dynamic_bindings_stack_top;
 	YkDynamicBinding* next_ptr = YK_PTR(exit)->continuation.dynamic_bindings_stack_pointer;
@@ -2155,12 +2158,11 @@ YkObject yk_run(YkObject bytecode) {
 	yk_program_counter = YK_PTR(bytecode)->bytecode.code;
 	yk_bytecode_register = bytecode;
 
-	YkObject cont = yk_make_continuation(YK_PTR(bytecode)->bytecode.code_size - 1);
-
-	YK_PUSH(yk_continuations_stack_top, cont);
+	YkObject previous_exit_cont = yk_current_exit_cont;
+	yk_current_exit_cont = yk_make_continuation(YK_PTR(bytecode)->bytecode.code_size - 1);
 
 	if (setjmp(yk_jump_buf) != 0) {
-		yk_exit_continuation(*(yk_continuations_stack + YK_STACK_MAX_SIZE - 1));
+		yk_exit_continuation(yk_current_exit_cont, yk_continuations_stack + YK_STACK_MAX_SIZE);
 		goto end;
 	}
 
@@ -2336,7 +2338,7 @@ start:
 	case YK_OP_EXIT_CONT:
 	{
 		YkObject exit = yk_continuations_stack_top[yk_program_counter->modifier];
-		yk_exit_continuation(exit);
+		yk_exit_continuation(exit, yk_continuations_stack_top + yk_program_counter->modifier);
 		yk_continuations_stack_top++;
 	}
 		break;
@@ -2369,6 +2371,8 @@ start:
 	goto start;
 
 end:
+	yk_current_exit_cont = previous_exit_cont;
+
 #if YK_RUN_DEBUG
 	yk_debug_info();
 #endif
