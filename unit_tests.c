@@ -47,27 +47,33 @@ void execute_tests(void) {
 		value_four = 40,
 		value_five = 50;
 
-	hash_table_set(table, "one", &value_one, sizeof(uint));
-	hash_table_set(table, "two", &value_two, sizeof(uint));
-	hash_table_set(table, "three", &value_three, sizeof(uint));
-	hash_table_set(table, "four", &value_four, sizeof(uint));
-	hash_table_set(table, "five", &value_five, sizeof(uint));
+	char key_one[] = "one",
+		key_two[] = "two",
+		key_three[] = "three",
+		key_four[] = "four",
+		key_five[] = "five";
+
+	hash_table_set(table, key_one, sizeof(key_one), &value_one, sizeof(uint));
+	hash_table_set(table, key_two, sizeof(key_two), &value_two, sizeof(uint));
+	hash_table_set(table, key_three, sizeof(key_three), &value_three, sizeof(uint));
+	hash_table_set(table, key_four, sizeof(key_four), &value_four, sizeof(uint));
+	hash_table_set(table, key_five, sizeof(key_five), &value_five, sizeof(uint));
 
 	value_five = 20;
-	hash_table_set(table, "five", &value_five, sizeof(uint));
+	hash_table_set(table, key_five, sizeof(key_five), &value_five, sizeof(uint));
 
-	assert(*(uint*)hash_table_get(table, "one") == value_one);
-	assert(*(uint*)hash_table_get(table, "two") == value_two);
-	assert(*(uint*)hash_table_get(table, "three") == value_three);
-	assert(*(uint*)hash_table_get(table, "four") == value_four);
-	assert(*(uint*)hash_table_get(table, "five") == value_five);
+	assert(*(uint*)hash_table_get(table, key_one, sizeof(key_one)) == value_one);
+	assert(*(uint*)hash_table_get(table, key_two, sizeof(key_two)) == value_two);
+	assert(*(uint*)hash_table_get(table, key_three, sizeof(key_three)) == value_three);
+	assert(*(uint*)hash_table_get(table, key_four, sizeof(key_four)) == value_four);
+	assert(*(uint*)hash_table_get(table, key_five, sizeof(key_five)) == value_five);
 
 	long val;
 	double floating;
 
-	assert(parse_number("12345", &val, &floating) >= 0);
+	assert(parse_number("12345", 5, &val, &floating) >= 0);
 	assert(val == 12345);
-	assert(parse_number("1hello, there", &val, &floating) < 0);
+	assert(parse_number("1hello, there", 14, &val, &floating) < 0);
 
 	for (uint64_t i = 0; i < 10; i++) {
 		printf("Random float: %.2f\n", random_float());
@@ -185,11 +191,11 @@ void execute_tests(void) {
 
 		char* core_file = read_file("yuki/core.yk");
 
-		bytecode = yk_make_bytecode_begin(yk_make_symbol("toplevel"), 0);
+		bytecode = yk_make_bytecode_begin(yk_make_symbol_cstr("toplevel"), 0);
 		yk_compile(yk_read(core_file), bytecode);
 		yk_run(bytecode);
 
-		bytecode2 = yk_make_bytecode_begin(yk_make_symbol("test"), 0);
+		bytecode2 = yk_make_bytecode_begin(yk_make_symbol_cstr("test"), 0);
 		yk_compile(yk_read("(benchmark)"), bytecode2);
 
 		result = yk_run(bytecode2);

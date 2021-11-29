@@ -141,17 +141,16 @@ void dynamic_array_destroy(DynamicArray* arr) {
 	arr->data = NULL;
 }
 
-uint64_t hash_string(uchar *str) {
+uint64_t hash_string(uchar *str, uint size) {
     uint64_t hash = 5381;
-    int c;
 
-    while ((c = *str++))
-        hash = ((hash << 5) + hash) + c;
+    for (uint i = 0; i < size; i++)
+        hash = ((hash << 5) + hash) + str[i];
 
     return hash;
 }
 
-HashTable* hash_table_create(uint size, uint (*hash)(void*)) {
+HashTable* hash_table_create(uint size, uint (*hash)(void*, uint)) {
 	assert(size >= 1);
 
 	HashTable* hash_table = malloc(sizeof(HashTable));
@@ -171,8 +170,8 @@ HashTable* hash_table_create(uint size, uint (*hash)(void*)) {
 	return hash_table;
 }
 
-int hash_table_set(HashTable* table, void* key, void* value, uint value_size) {
-	uint key_hash = table->hash_function(key);
+int hash_table_set(HashTable* table, void* key, uint key_size, void* value, uint value_size) {
+	uint key_hash = table->hash_function(key, key_size);
 	uint index = key_hash % table->size;
 
 	if (table->entries[index] == NULL) {	// If no collisions
@@ -219,8 +218,8 @@ int hash_table_set(HashTable* table, void* key, void* value, uint value_size) {
 	return 0;
 }
 
-void* hash_table_get(HashTable* table, void* key) {
-	uint key_hash = table->hash_function(key);
+void* hash_table_get(HashTable* table, void* key, uint key_size) {
+	uint key_hash = table->hash_function(key, key_size);
 	uint index = key_hash % table->size;
 
 	HashTableEntry* entry = table->entries[index];
@@ -294,8 +293,8 @@ char* m_snprintf_dup(const char* fmt, ...) {
 	return string;
 }
 
-int parse_number(const char* str, long* integer, double* floating) {
-	int str_len = strlen(str);
+int parse_number(const char* str, uint size, long* integer, double* floating) {
+	int str_len = size;
 	GLboolean is_floating = GL_FALSE;
 	GLboolean is_negative = GL_FALSE;
 
@@ -306,7 +305,7 @@ int parse_number(const char* str, long* integer, double* floating) {
 
 	long base = 1;
 	if (*str == '-') {
-		if (str[1] == '\0')
+		if (size == 1)
 			return -1;
 
 		base = -1;
@@ -315,7 +314,7 @@ int parse_number(const char* str, long* integer, double* floating) {
 		str_len--;
 	}
 
-	for (char* c = str + str_len; c-- != str;) {
+	for (const char* c = str + str_len; c-- != str;) {
 		if (!is_floating && *c == '.') {
 			is_floating = GL_TRUE;
 			*floating = ((double)*integer) / base;

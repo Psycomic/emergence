@@ -83,7 +83,7 @@ typedef struct HashTableEntry {
 typedef struct {
 	HashTableEntry** entries;
 	uint size;
-	uint (*hash_function)(void*);
+	uint (*hash_function)(void*, uint);
 } HashTable;
 
 typedef struct {
@@ -124,19 +124,19 @@ uint u_string_to_codepoint(const uchar* string);
 char16_t* u_utf8_to_utf16(const char* str);
 
 // Returns 0 if integer, 1 if float, and -1 if error
-int parse_number(const char* str, long* integer, double* floating);
+int parse_number(const char* str, uint size, long* integer, double* floating);
 
 void m_bzero(void* dst, size_t size);
 
-uint64_t hash_string(uchar *str);
+uint64_t hash_string(uchar *str, uint size);
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);
 void* debug_realloc(void* ptr, size_t size, const char* file, const uint line);
 
-HashTable* hash_table_create(uint size, uint (*hash)(void*));
-int hash_table_set(HashTable* table, void* key, void* value, uint value_size);
-void* hash_table_get(HashTable* table, void* key);
+HashTable* hash_table_create(uint size, uint (*hash)(void*, uint));
+int hash_table_set(HashTable* table, void* key, uint key_size, void* value, uint value_size);
+void* hash_table_get(HashTable* table, void* key, uint key_size);
 
 void stack_init(Stack* stack);
 void stack_push(Stack* stack, void* value);

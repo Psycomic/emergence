@@ -17,11 +17,11 @@ static HashTable* p7_inbound_nodes;
 
 static clock_t p7_clock;
 
-uint p7_addr_hash(struct sockaddr* addr) {
+uint p7_addr_hash(struct sockaddr* addr, uint size) {
 	uchar* as_bytes = (uchar*)addr;
 
 	uint hash = as_bytes[0];
-	for (uint i = 0; i < sizeof(struct sockaddr); i++) {
+	for (uint i = 0; i < size; i++) {
 		hash += (as_bytes[i] ^ as_bytes[(i + 5) % sizeof(struct sockaddr)]) << (as_bytes[i] / 50);
 	}
 
@@ -220,13 +220,13 @@ void p7_loop() {
 	if ((s = recvfrom(p7_server_socket, buffer, sizeof(buffer),
 					  0, (struct sockaddr*)&client_addr, &client_addr_size)) >= 0)
 	{
-		P7Node* node = hash_table_get(p7_inbound_nodes, &client_addr);
+		P7Node* node = hash_table_get(p7_inbound_nodes, &client_addr, sizeof(struct sockaddr_in));
 		if (node == NULL) {
 			P7Node new_node;
 			p7_node_init(&new_node, p7_server_socket, &client_addr);
 
-			hash_table_set(p7_inbound_nodes, &client_addr, &new_node, sizeof(P7Node));
-			node = hash_table_get(p7_inbound_nodes, &client_addr);
+			hash_table_set(p7_inbound_nodes, &client_addr, sizeof(struct sockaddr_in), &new_node, sizeof(P7Node));
+			node = hash_table_get(p7_inbound_nodes, &client_addr, sizeof(struct sockaddr_in));
 		}
 
 		p7_handle_packet(buffer, s, (struct sockaddr*)&client_addr, node);

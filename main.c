@@ -169,7 +169,7 @@ void update() {
 
 		forms = yk_read(ps_input_value(lisp_input));
 
-		bytecode = yk_make_bytecode_begin(yk_make_symbol("input"), 0);
+		bytecode = yk_make_bytecode_begin(yk_make_symbol_cstr("input"), 0);
 		yk_compile(forms, bytecode);
 
 		r = yk_run(bytecode);

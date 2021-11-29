@@ -41,7 +41,7 @@ typedef union YkUnion *YkObject;
 #define YK_NIL YK_TAG(NULL, yk_t_list)
 #define YK_NULL(x) ((x) == YK_NIL)
 
-#define YK_IMMEDIATE(x) ((YkUint)(x) & 15)
+#define YK_IMMEDIATE(x) ((YkUint)(x) & 14)
 #define YK_PTR(x) ((YkObject)((YkUint)(x) & ~(YkUint)15))
 #define YK_TAG(x, t) ((YkObject)(((YkUint)x) | (t)))
 
@@ -75,7 +75,7 @@ typedef union YkUnion *YkObject;
 #define YK_STRING_STREAMP(x) ((x)->t.t == yk_t_string_stream)
 #define YK_STREAMP(x) (YK_FILE_STREAMP(x) || YK_STRING_STREAMP(x))
 
-#define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? (x)->t.t : YK_IMMEDIATE(x))
+#define YK_TYPEOF(x) ((YK_IMMEDIATE(x) == 0) ? YK_PTR(x)->t.t : YK_IMMEDIATE(x))
 
 #define YK_LIST_FOREACH(list, l) for (YkObject l = list; l != YK_NIL; l = YK_CDR(l))
 
@@ -164,7 +164,6 @@ typedef struct {
 			uint32_t size;
 		} string_info;
 
-		char* symbol_string;
 		YkInt integer;
 		float floating;
 	} data;
@@ -187,7 +186,7 @@ typedef struct {
 		yk_s_function,
 		yk_s_macro
 	} type;
-	char* name;
+	YkObject name;
 	uint64_t hash;
 	int32_t function_nargs;
 	uint8_t declared;
@@ -243,7 +242,7 @@ typedef struct {
 } YkContinuation;
 
 typedef struct {
-	uint8_t marked;
+	uint8_t flags;
 	uint32_t size;
 	char data[];
 } YkArrayAllocatorBlock;
@@ -345,7 +344,7 @@ typedef struct {
 void yk_init();
 YkObject yk_cons(YkObject car, YkObject cdr);
 void yk_print(YkObject o);
-YkObject yk_make_symbol(char* name);
+YkObject yk_make_symbol(const char* name, uint size);
 YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 void yk_bytecode_disassemble(YkObject bytecode);
@@ -357,6 +356,7 @@ void yk_repl();
 YkObject yk_make_output_string_stream();
 YkObject yk_stream_string(YkObject stream);
 char* yk_string_to_c_str(YkObject string);
+YkObject yk_make_symbol_cstr(const char* cstr);
 
 /* Public variables */
 extern YkObject yk_var_output;
