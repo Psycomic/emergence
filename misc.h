@@ -141,6 +141,7 @@ void* hash_table_get(HashTable* table, void* key, uint key_size);
 void stack_init(Stack* stack);
 void stack_push(Stack* stack, void* value);
 void stack_pop(Stack* stack, uint64_t count);
+void stack_destroy(Stack* stack);
 
 int powi(int base, int exp);
 uint powu(uint base, uint exp);

@@ -218,4 +218,10 @@ and returns a list containing the results"
 		(let ((ss (make-string-output-stream)))
 		  (dynamic-let ((*output* ss))
 					   (print (quote (hello world))))
-		  (stream-string ss))))
+		  (stream-string ss)))
+
+  (func make-person (name age)
+		(lambda (msg . args)
+		  (cond ((eq? msg (quote get-name)) name)
+				((eq? msg (quote get-age)) age)
+				(t (quote message-not-understood))))))

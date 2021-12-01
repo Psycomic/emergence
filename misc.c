@@ -364,6 +364,12 @@ void stack_pop(Stack* stack, uint64_t count) {
 	stack->top -= count;
 }
 
+void stack_destroy(Stack* stack) {
+	stack->top = 0;
+	stack->capacity = 0;
+	free(stack->data);
+}
+
 void strinsert(char* dest, const char* src, const char* substr, size_t index, size_t n) {
 	m_bzero(dest, n);
 
