@@ -221,7 +221,13 @@ and returns a list containing the results"
 		  (stream-string ss)))
 
   (func make-person (name age)
-		(lambda (msg . args)
+		(lambda (msg)
 		  (cond ((eq? msg (quote get-name)) name)
+				((eq? msg (quote set-name))
+				 (set! name (head args)))
 				((eq? msg (quote get-age)) age)
-				(t (quote message-not-understood))))))
+				((eq? msg (quote set-age))
+				 (set! age (head args)))
+				(t (quote message-not-understood)))))
+
+  (define ewen (make-person "Ewen" 16)))

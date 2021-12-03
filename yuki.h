@@ -144,6 +144,7 @@ typedef enum {
 	YK_OP_LEXICAL_SET,
 	YK_OP_GLOBAL_SET,
 	YK_OP_CLOSED_VAR,
+	YK_OP_CLOSED_SET,
 	YK_OP_END
 } YkOpcode;
 
