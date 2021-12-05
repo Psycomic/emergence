@@ -221,7 +221,7 @@ and returns a list containing the results"
 		  (stream-string ss)))
 
   (func make-person (name age)
-		(lambda (msg)
+		(lambda (msg . args)
 		  (cond ((eq? msg (quote get-name)) name)
 				((eq? msg (quote set-name))
 				 (set! name (head args)))
