@@ -17,7 +17,7 @@ static HashTable* p7_inbound_nodes;
 
 static clock_t p7_clock;
 
-uint p7_addr_hash(struct sockaddr* addr, uint size) {
+uint p7_addr_hash(void* addr, uint size) {
 	uchar* as_bytes = (uchar*)addr;
 
 	uint hash = as_bytes[0];

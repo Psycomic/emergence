@@ -13,12 +13,12 @@
 #include <time.h>
 
 void sig(void* data) {
-	printf("Recieved %d!\n", (int)data);
+	printf("Recieved %ld!\n", (uint64_t)data);
 }
 
 int signal_test(WorkerData* data) {
-	for (uint i = 0; i < 100; i++) {
-		printf("I: %d\n", i);
+	for (uint64_t i = 0; i < 100; i++) {
+		printf("I: %lu\n", i);
 		worker_emit(data, sig, (void*)i);
 	}
 
@@ -114,7 +114,7 @@ void execute_tests(void) {
 		uint64_t first_count = bits_count((uint8_t*)hash, (sizeof(uint64_t) * 32) / 2);
 		uint64_t second_count = bits_count((uint8_t*)hash + 32 / 2, (sizeof(uint64_t) * 32) / 2);
 
-		printf("Ratio: %llu / %llu = %.4f\n", first_count, second_count, (float) first_count / second_count);
+		printf("Ratio: %lu / %lu = %.4f\n", first_count, second_count, (float) first_count / second_count);
 
 		for (uint i = 0; i < ARRAY_SIZE(hash); i += sizeof(uint64_t))
 			printf("hash: 0x%016lx\n", *(uint64_t*)&hash[i]);
@@ -122,10 +122,10 @@ void execute_tests(void) {
 
 	{
 		uint64_t random_sequence[32];
-		random_csprng_bytes(random_sequence, sizeof(random_sequence));
+		random_csprng_bytes((uint8_t*)random_sequence, sizeof(random_sequence));
 
 		for (uint i = 0; i < ARRAY_SIZE(random_sequence); i++)
-			printf("random: %016llx\n", random_sequence[i]);
+			printf("random: %016lx\n", random_sequence[i]);
 
 		randomness_test(random_csprng_randint, 2048);
 	}

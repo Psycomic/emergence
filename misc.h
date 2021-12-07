@@ -128,7 +128,7 @@ int parse_number(const char* str, uint size, long* integer, double* floating);
 
 void m_bzero(void* dst, size_t size);
 
-uint64_t hash_string(uchar *str, uint size);
+uint hash_string(void *data, uint size);
 
 void* debug_malloc(size_t size, const char* file, const uint line);
 void debug_free(void* ptr, const char* file, const uint line);

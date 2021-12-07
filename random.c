@@ -74,7 +74,9 @@ static uint8_t csprng_key[32];
 static entropy_t csprng_entropy;
 static entropy_t csprng_last_entropy;
 
-void entropy_hook(void* data, uint character) {
+void entropy_hook(void* data, Key key) {
+	uint character = key.code;
+
 	if (character != csprng_entropy.characters[modi(csprng_entropy.character_capacity - 1, 32)]) {
 		csprng_entropy.characters[csprng_entropy.character_capacity] = character;
 		csprng_entropy.character_capacity = (csprng_entropy.character_capacity + 1) % 32;

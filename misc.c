@@ -141,7 +141,8 @@ void dynamic_array_destroy(DynamicArray* arr) {
 	arr->data = NULL;
 }
 
-uint64_t hash_string(uchar *str, uint size) {
+uint hash_string(void *data, uint size) {
+	uchar* str = data;
     uint64_t hash = 5381;
 
     for (uint i = 0; i < size; i++)

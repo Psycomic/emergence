@@ -189,6 +189,10 @@ mark:
 	}
 	else if (YK_TYPEOF(o) == yk_t_array) {
 		yk_mark_block_data(YK_PTR(o)->array.data);
+		for (uint i = 0; i < YK_PTR(o)->array.size; i++) {
+			yk_mark(YK_PTR(o)->array.data[i]);
+		}
+
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
 	else if (YK_TYPEOF(o) == yk_t_string) {
@@ -273,7 +277,11 @@ static void yk_gc() {
 		yk_mark(yk_dynamic_bindings_stack_top[i].old_value);
 	}
 
+	printf("==========Before==========\n");
+	yk_array_allocator_print();
 	yk_array_allocator_sweep();
+	printf("==========After==========\n");
+	yk_array_allocator_print();
 	yk_sweep();
 }
 
@@ -306,7 +314,6 @@ start:
 			if (new_block_size > 0) {
 				YkArrayAllocatorBlock* next_block =
 					(YkArrayAllocatorBlock*)(block_ptr + sizeof(YkArrayAllocatorBlock) + size);
-
 
 				next_block->size = original_size - (sizeof(YkArrayAllocatorBlock) + size);
 				next_block->flags = 0x0;
@@ -1431,6 +1438,11 @@ static YkObject yk_builtin_stream_close(YkUint nargs) {
 	return YK_NIL;
 }
 
+static YkObject yk_builtin_gc(YkUint nargs) {
+	yk_gc();
+	return YK_NIL;
+}
+
 static YkObject yk_arglist(YkUint nargs) {
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
@@ -1695,6 +1707,8 @@ void yk_init() {
 	yk_make_builtin("write-char!", 2, yk_builtin_stream_write_char);
 
 	yk_make_builtin("stream-close", 1, yk_builtin_stream_close);
+
+	yk_make_builtin("gc", 0, yk_builtin_gc);
 
 	yk_make_builtin("int?", 1, yk_builtin_intp);
 	yk_make_builtin("float?", 1, yk_builtin_floatp);
@@ -2229,7 +2243,7 @@ static void yk_debug_info() {
 	printf("\n");
 }
 
-#define YK_RUN_DEBUG 1
+#define YK_RUN_DEBUG 0
 
 YkObject yk_run(YkObject bytecode) {
 	YK_ASSERT(YK_BYTECODEP(bytecode));
@@ -2891,9 +2905,10 @@ void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
 			YkObject body = YK_CDR(YK_CDR(YK_CDR(state->expr)));
 
 			YkObject lambda_lexical_stack = YK_NIL,
-				lambda_bytecode = YK_NIL;
+				lambda_bytecode = YK_NIL,
+				new_closed_vars = YK_NIL;
 
-			YK_GC_PROTECT2(lambda_lexical_stack, lambda_bytecode);
+			YK_GC_PROTECT3(lambda_lexical_stack, lambda_bytecode, new_closed_vars);
 
 			YkObject l;
 			YkInt argcount = 0;
@@ -2931,7 +2946,13 @@ void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
 				lambda_lexical_stack = yk_cons(l, lambda_lexical_stack);
 			}
 
-			YkObject new_closed_vars = yk_append(state->lexical_stack, state->closed_vars);
+			printf("Closed vars: ");
+			yk_print(state->closed_vars);
+			printf(", lexical stack: ");
+			yk_print(state->lexical_stack);
+			printf("\n");
+
+			new_closed_vars = yk_append(state->lexical_stack, state->closed_vars);
 
 			uint32_t old_top = state->closed_stack->top,
 				old_code_size = YK_PTR(lambda_bytecode)->bytecode.code_size;
@@ -2979,7 +3000,7 @@ void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
 				uint new_stack_offset = state->stack_offset + 6;
 				for (uint i = old_top; i < state->closed_stack->top; i++) {
 					int k = yk_lexical_offset(state->closed_stack->data[state->closed_stack->top - i - 1],
-											  state->lexical_stack);
+											  new_closed_vars);
 					assert(k >= 0);
 
 					yk_bytecode_emit(bytecode, YK_OP_LEXICAL_VAR, k + new_stack_offset, YK_NIL);

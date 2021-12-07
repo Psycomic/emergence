@@ -246,8 +246,6 @@ void window_mainloop() {
 	double start = glfwGetTime(),
 		end = 0.0;
 
-	clock_t spf = (clock_t)((double)CLOCKS_PER_SEC / 60.0);
-
 	while (!g_window.should_close) {
 		window_update();
 		g_window.update();
@@ -264,11 +262,7 @@ void window_mainloop() {
 			g_window.fps = (clock_t)(1.0 / delta);
 			g_window.delta = delta;
 		}
-/*
-		if (count % 100 == 0) {
-			printf("FPS: %ld, delta %gms\n", g_window.fps, g_window.delta * 1000);
-		}
-*/
+
 		start = glfwGetTime();
 	}
 

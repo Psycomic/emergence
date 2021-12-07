@@ -230,4 +230,10 @@ and returns a list containing the results"
 				 (set! age (head args)))
 				(t (quote message-not-understood)))))
 
-  (define ewen (make-person "Ewen" 16)))
+  (define ewen (make-person "Ewen" 16))
+
+  (define Y                 ; (Y f) = (g g) where
+	(lambda (f)             ;         (g g) = (f  (lambda a (apply (g g) a)))
+      ((lambda (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
+       (lambda (g)
+		 (f  (lambda (a) ((g g) a))))))))
