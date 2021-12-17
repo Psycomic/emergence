@@ -233,13 +233,27 @@ and returns a list containing the results"
   (define ewen (make-person "Ewen" 16))
 
   (define Y                 ; (Y f) = (g g) where
-	(named-lambda x (f)             ;         (g g) = (f  (lambda a (apply (g g) a)))
-      ((named-lambda y (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
-       (named-lambda z (g)
-		 (f (named-lambda w (a) ((g g) a)))))))
+	(lambda (f)             ;         (g g) = (f  (lambda a (apply (g g) a)))
+      ((lambda (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
+       (lambda (g)
+		 (f (lambda (a) ((g g) a)))))))
 
   (define fact
-	(Y (named-lambda captured (r)
-		 (named-lambda fact (x)
+	(Y (lambda (r)
+		 (lambda (x)
 		   (if (< x 2) 1
-			   (* x (r (- x 1)))))))))
+			   (* x (r (- x 1))))))))
+
+  (func test-closure-cont ()
+		(let ((i 0)
+			  (fn nil))
+		  (with-cont c
+					 (let ((a (lambda (x)
+								(if (> x (+ i 5))
+									(exit c 5)
+									nil))))
+					   (set! fn a)
+					   (loop
+						(a i)
+						(set! i (1+ i)))))
+		  (list i fn))))
