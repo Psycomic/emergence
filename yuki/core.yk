@@ -155,6 +155,12 @@ and returns a list containing the results"
   (func 1+ (x) "Add one to `x'" (+ x 1))
   (func 1- (x) "Substract one to `x'" (- x 1))
 
+(func search (lst element key)
+		(cond ((null? lst) nil)
+			  ((eq? (key (first lst)) element)
+			   (first lst))
+			  (t (search (tail lst) element key))))
+
   (func make-board (size)
 		"Makes a Game of Life board of size `size'"
 		(let ((board (make-array (* size size) 0)))
@@ -269,23 +275,36 @@ and returns a list containing the results"
   (macro handler-bind (bindings . forms)
 		 (let ((make-binding
 				(lambda (binding)
-				  (list (quote :)
-						(list (quote quote)
-							  (first binding))
-						(second binding)))))
+				  (quasiquote
+				   (list (quote (unquote (first binding)))
+						 (unquote (second binding)))))))
 		   (let ((cluster (map make-binding bindings)))
 			 (append (list (quote dynamic-let)
 						   (list (list (quote *handler-clusters*)
-									   (list (quote :)
+									   (list (quote append)
 											 (append (list (quote list))
 													 cluster)
 											 (quote *handler-clusters*)))))
 					 forms))))
 
+  (macro handler-case (form . cases)
+		 (let ((cont-sym (gensym)))
+		   (let ((make-binding
+				  (lambda (binding)
+					(list (first binding)
+						  (append (list (quote lambda) (second binding))
+								  (list (list (quote exit) cont-sym
+											  (append (list (quote do)) (tail (tail binding))))))))))
+			 (list (quote with-cont) cont-sym
+				   (list (quote handler-bind)
+						 (map make-binding cases)
+						 form)))))
+
   (func error (type . args)
-		(for pair *handler-clusters*
-			 (when (eq? (first pair) (quote type))
-			   (exit nil ((second pair) args)))))
+		(let ((handler (search *handler-clusters* type first)))
+		  (if handler
+			  ((second handler) args)
+			  (invoke-debugger))))
 
   (func divide (a b)
 		(if (= b 0)
@@ -297,4 +316,5 @@ and returns a list containing the results"
 						(lambda (args)
 						  (print "Division by zero occured!")
 						  (quote division-by-zero))))
+					  (print *handler-clusters*)
 					  (divide 10 x))))

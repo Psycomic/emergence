@@ -2467,12 +2467,20 @@ start:
 		yk_value_register = yk_continuations_stack_top[yk_program_counter->modifier];
 		yk_program_counter++;
 		break;
-	case YK_OP_EXIT_CONT:
+	case YK_OP_EXIT_LEXICAL_CONT:
 	{
-		YK_ASSERT(YK_CONTINUATIONP(yk_value_register));
-		yk_exit_continuation(yk_value_register, yk_continuations_stack_top +
-							 yk_program_counter->modifier);
+		YkObject cont = yk_continuations_stack_top[yk_program_counter->modifier];
+		yk_exit_continuation(cont, yk_continuations_stack_top + yk_program_counter->modifier);
 		yk_continuations_stack_top++;
+	}
+		break;
+	case YK_OP_EXIT_CLOSED_CONT:
+	{
+		YkInt offset = YK_INT(yk_program_counter->ptr);
+		YkObject envt = yk_lisp_stack_top[yk_program_counter->modifier];
+		assert(offset < YK_PTR(envt)->array.size);
+		YkObject cont = YK_PTR(envt)->array.data[offset];
+		yk_exit_continuation(cont, yk_continuations_stack_top + yk_program_counter->modifier);
 	}
 		break;
 	case YK_OP_EXIT:
@@ -2547,7 +2555,8 @@ char* yk_opcode_names[] = {
 	[YK_OP_BIND_DYNAMIC] = "bind-dynamic",
 	[YK_OP_UNBIND_DYNAMIC] = "unbind-dynamic",
 	[YK_OP_WITH_CONT] = "with-cont",
-	[YK_OP_EXIT_CONT] = "exit-cont",
+	[YK_OP_EXIT_LEXICAL_CONT] = "exit-lexical-cont",
+	[YK_OP_EXIT_CLOSED_CONT] = "exit-lexical-cont",
 	[YK_OP_LEXICAL_SET] = "lexical-set",
 	[YK_OP_GLOBAL_SET] = "global-set",
 	[YK_OP_CLOSED_VAR] = "closed-var",
@@ -3090,10 +3099,8 @@ void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
 					lexical_closed_size++;
 				}
 
-				for (uint i = 0; i < YK_PTR(lambda_bytecode)->bytecode.code_size - 1; i++) {
-					if (YK_PTR(lambda_bytecode)->bytecode.code[i].opcode == YK_OP_CLOSED_VAR &&
-						YK_PTR(lambda_bytecode)->bytecode.code[i + 1].opcode == YK_OP_EXIT_CONT)
-					{
+				for (uint i = 0; i < YK_PTR(lambda_bytecode)->bytecode.code_size; i++) {
+					if (YK_PTR(lambda_bytecode)->bytecode.code[i].opcode == YK_OP_EXIT_CLOSED_CONT) {
 						YK_PTR(lambda_bytecode)->bytecode.code[i].ptr
 							= YK_MAKE_INT(YK_INT(YK_PTR(lambda_bytecode)->bytecode.code[i].ptr) +
 										  lexical_closed_size);
@@ -3212,12 +3219,10 @@ void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
 					stack_push(state->closed_cont_stack, symbol);
 				}
 
-				yk_bytecode_emit(bytecode, YK_OP_CLOSED_VAR, environnement_offset, YK_MAKE_INT(offset));
+				yk_bytecode_emit(bytecode, YK_OP_EXIT_CLOSED_CONT, environnement_offset, YK_MAKE_INT(offset));
 			} else {
-				yk_bytecode_emit(bytecode, YK_OP_CONT, cont_offset, YK_NIL);
+				yk_bytecode_emit(bytecode, YK_OP_EXIT_LEXICAL_CONT, cont_offset, YK_NIL);
 			}
-
-			yk_bytecode_emit(bytecode, YK_OP_EXIT_CONT, 0, YK_NIL);
 		} else if (first == yk_keyword_loop) {
 			YkUint begin_size = YK_PTR(bytecode)->bytecode.code_size;
 			YkObject body = YK_CDR(state->expr);
