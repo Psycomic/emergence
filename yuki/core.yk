@@ -69,6 +69,11 @@ and returns a list containing the results"
 		 (quasiquote
 		  (if (unquote a) (unquote b) nil)))
 
+  (macro when (condition . body)
+		 (list (quote if) condition
+			   (append (list (quote do)) body)
+			   nil))
+
   (macro define (symbol value)
 		 (quasiquote
 		  (do (comptime (register-global! (quote (unquote symbol))))
@@ -116,13 +121,14 @@ and returns a list containing the results"
 		   (quasiquote
 			(let (((unquote list-sym) (unquote lst)))
 			  (with-cont (unquote cont-sym)
-						 (loop
-						  (if (null? (tail (unquote list-sym)))
-							  (exit (unquote cont-sym) nil)
-							  (do (let (((unquote e) (head (unquote list-sym))))
-									(unquote (head body)))
-								  (set! (unquote list-sym)
-										(tail (unquote list-sym)))))))))))
+						 (with-cont nil
+									(loop
+									 (if (null? (tail (unquote list-sym)))
+										 (exit (unquote cont-sym) nil)
+										 (do (let (((unquote e) (head (unquote list-sym))))
+											   (unquote (head body)))
+											 (set! (unquote list-sym)
+												   (tail (unquote list-sym))))))))))))
 
   (macro times (i count . body)
 		 (let ((count-sym (gensym))
@@ -256,4 +262,39 @@ and returns a list containing the results"
 					   (loop
 						(a i)
 						(set! i (1+ i)))))
-		  (list i fn))))
+		  (list i fn)))
+
+  (define *handler-clusters* nil)
+
+  (macro handler-bind (bindings . forms)
+		 (let ((make-binding
+				(lambda (binding)
+				  (list (quote :)
+						(list (quote quote)
+							  (first binding))
+						(second binding)))))
+		   (let ((cluster (map make-binding bindings)))
+			 (append (list (quote dynamic-let)
+						   (list (list (quote *handler-clusters*)
+									   (list (quote :)
+											 (append (list (quote list))
+													 cluster)
+											 (quote *handler-clusters*)))))
+					 forms))))
+
+  (func error (type . args)
+		(for pair *handler-clusters*
+			 (when (eq? (first pair) (quote type))
+			   (exit nil ((second pair) args)))))
+
+  (func divide (a b)
+		(if (= b 0)
+			(error (quote division-by-zero) nil)
+			(/ a b)))
+
+  (func test-errors (x)
+		(handler-bind ((division-by-zero
+						(lambda (args)
+						  (print "Division by zero occured!")
+						  (quote division-by-zero))))
+					  (divide 10 x))))

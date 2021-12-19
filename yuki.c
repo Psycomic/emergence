@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #include "random.h"
 
@@ -310,13 +311,15 @@ start:
 			block->size = size;
 			block->flags = YK_BLOCK_USED_BIT;
 
-			YkInt new_block_size = original_size - size - sizeof(YkArrayAllocatorBlock);
-			if (new_block_size > 0) {
+			YkUint new_block_size = original_size - size;
+			if (new_block_size > sizeof(YkArrayAllocatorBlock)) {
 				YkArrayAllocatorBlock* next_block =
 					(YkArrayAllocatorBlock*)(block_ptr + sizeof(YkArrayAllocatorBlock) + size);
 
-				next_block->size = original_size - (sizeof(YkArrayAllocatorBlock) + size);
+				next_block->size = new_block_size - sizeof(YkArrayAllocatorBlock);
 				next_block->flags = 0x0;
+			} else {
+				block->size = original_size;
 			}
 
 			return block->data;
@@ -374,6 +377,7 @@ static void yk_array_allocator_sweep() {
 
 		if (!YK_BLOCK_MARKED(block) || !YK_BLOCK_USED(block)) {
 			block->flags &= ~YK_BLOCK_USED_BIT;
+			memset(block->data, 0x66, block->size);
 
 			if (last_block != NULL) {
 				last_block->size += block->size + sizeof(YkArrayAllocatorBlock);
@@ -1460,6 +1464,11 @@ static YkObject yk_arglist(YkUint nargs) {
 	return list;
 }
 
+static YkObject yk_builtin_breakpoint(YkUint nargs) {
+	raise(SIGINT);
+	return YK_NIL;
+}
+
 static YkObject yk_default_debugger(YkUint nargs) {
 	YkObject error = yk_lisp_stack_top[0];
 
@@ -1527,8 +1536,11 @@ static bool yk_member(YkObject element, YkObject list) {
 }
 
 YkObject yk_apply(YkObject function, YkObject args) {
+	YkObject result = YK_NIL;
+
+	YK_GC_PROTECT2(args, result);
+
 	YkInt argcount = 0;
-	YkObject result;
 
 	static YkInstruction yk_end = {YK_NIL, 0, YK_OP_END};
 
@@ -1574,6 +1586,7 @@ YkObject yk_apply(YkObject function, YkObject args) {
 		assert(0);
 	}
 
+	YK_GC_UNPROTECT;
 	return result;
 }
 
@@ -1736,6 +1749,7 @@ void yk_init() {
 
 	yk_make_builtin("print", 1, yk_builtin_print);
 
+	yk_make_builtin("breakpoint", 0, yk_builtin_breakpoint);
 	yk_make_builtin("invoke-debugger", 1, yk_default_debugger);
 }
 
@@ -1882,9 +1896,10 @@ YkObject yk_cons(YkObject car, YkObject cdr) {
 #define BYTECODE_DEFAULT_SIZE 8
 
 YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs) {
-	YK_GC_PROTECT1(name);		/* This function can GC */
+	YkObject bytecode = YK_NIL;
+	YK_GC_PROTECT2(bytecode, name);		/* This function can GC */
 
-	YkObject bytecode = yk_alloc();
+	bytecode = yk_alloc();
 	bytecode->bytecode.name = name;
 	bytecode->bytecode.docstring = YK_NIL;
 	bytecode->bytecode.code = yk_array_allocator_alloc(8 * sizeof(YkInstruction));
@@ -1897,6 +1912,8 @@ YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs) {
 }
 
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr) {
+	YK_GC_PROTECT1(bytecode);
+
 	YK_ASSERT(YK_BYTECODEP(bytecode));
 	YkObject bytecode_ptr = YK_PTR(bytecode);
 
@@ -1911,6 +1928,7 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 	last_i->ptr = ptr;
 	last_i->modifier = modifier;
 	last_i->opcode = op;
+	YK_GC_UNPROTECT;
 }
 
 static YkObject yk_nreverse(YkObject list) {
@@ -2494,6 +2512,8 @@ start:
 		yk_lisp_stack_top = yk_lisp_frame_ptr;
 		goto end;
 		break;
+	default:
+		raise(SIGINT);
 	}
 
 #if YK_RUN_DEBUG
