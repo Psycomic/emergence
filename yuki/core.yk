@@ -294,7 +294,8 @@ and returns a list containing the results"
 					(list (first binding)
 						  (append (list (quote lambda) (second binding))
 								  (list (list (quote exit) cont-sym
-											  (append (list (quote do)) (tail (tail binding))))))))))
+											  (append (list (quote do))
+													  (tail (tail binding))))))))))
 			 (list (quote with-cont) cont-sym
 				   (list (quote handler-bind)
 						 (map make-binding cases)
@@ -304,7 +305,7 @@ and returns a list containing the results"
 		(let ((handler (search *handler-clusters* type first)))
 		  (if handler
 			  ((second handler) args)
-			  (invoke-debugger))))
+			  (invoke-debugger type))))
 
   (func divide (a b)
 		(if (= b 0)
