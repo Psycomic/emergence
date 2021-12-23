@@ -19,6 +19,7 @@ typedef enum {
 	yk_t_bytecode = 7 << 1,
 	/* Tagged values end */
 	yk_t_continuation,
+	yk_t_boxed,
 	yk_t_instance,
 	yk_t_class,
 	yk_t_array,
@@ -147,6 +148,8 @@ typedef enum {
 	YK_OP_GLOBAL_SET,
 	YK_OP_CLOSED_VAR,
 	YK_OP_CLOSED_SET,
+	YK_OP_BOX,
+	YK_OP_UNBOX,
 	YK_OP_END
 } YkOpcode;
 
@@ -292,6 +295,11 @@ typedef struct {
 	char* data;
 } YkString;
 
+typedef struct {
+	YkObject ptr;
+	YkType t;
+} YkBoxed;
+
 union YkUnion {
 	struct {
 		YkObject dummy;
@@ -308,6 +316,7 @@ union YkUnion {
 	YkString string;
 	YkStringStream string_stream;
 	YkFileStream file_stream;
+	YkBoxed boxed;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);
