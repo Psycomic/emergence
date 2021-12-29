@@ -242,6 +242,10 @@ and returns a list containing the results"
 				 (set! age (head args)))
 				(t (quote message-not-understood)))))
 
+  (macro send (obj message . args)
+		 (append (list obj (list (quote quote) message))
+				 args))
+
   (define ewen (make-person "Ewen" 16))
 
   (define Y                 ; (Y f) = (g g) where

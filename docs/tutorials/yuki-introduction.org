@@ -52,7 +52,7 @@
 
 	Le code ci-dessus déclare la variable pi avec une valeur égale à
 	3.1415. On peut ensuite utiliser la variable dans des expressions:
-	~(* (/ 45 180) pi)~, qui donne la valeur de 45° en radians.
+	~(* (/ 45.0 180.0) pi)~, qui donne la valeur de 45° en radians.
 
 	Souvent, on veut déclarer des variables qui vont être utilisées
 	que à un certain moment dans le programme, et qui deviennent
