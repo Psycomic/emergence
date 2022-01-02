@@ -248,78 +248,84 @@ and returns a list containing the results"
 
   (define ewen (make-person "Ewen" 16))
 
+  (define 2+5 (((let ((x 5))
+				  (lambda (y) (lambda () (+ x y)))) 2)))
+
   (define Y                 ; (Y f) = (g g) where
-	(lambda (f)             ;         (g g) = (f  (lambda a (apply (g g) a)))
-      ((lambda (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
-       (lambda (g)
-		 (f (lambda (a) ((g g) a)))))))
+	(named-lambda x (f)             ;         (g g) = (f  (lambda a (apply (g g) a)))
+      ((named-lambda y (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
+       (named-lambda z (g)
+		 (f (named-lambda w (a) ((g g) a)))))))
 
   (define fact
-	(Y (lambda (r)
-		 (lambda (x)
+	(Y (named-lambda fugg (r)
+		 (named-lambda DDDD (x)
 		   (if (< x 2) 1
 			   (* x (r (- x 1))))))))
 
-  (func test-closure-cont ()
-		(let ((i 0)
-			  (fn nil))
-		  (with-cont c
-					 (let ((a (lambda (x)
-								(if (> x (+ i 5))
-									(exit c 5)
-									nil))))
-					   (set! fn a)
-					   (loop
-						(a i)
-						(set! i (1+ i)))))
-		  (list i fn)))
 
-  (define *handler-clusters* nil)
 
-  (macro handler-bind (bindings . forms)
-		 (let ((make-binding
-				(lambda (binding)
-				  (quasiquote
-				   (list (quote (unquote (first binding)))
-						 (unquote (second binding)))))))
-		   (let ((cluster (map make-binding bindings)))
-			 (append (list (quote dynamic-let)
-						   (list (list (quote *handler-clusters*)
-									   (list (quote append)
-											 (append (list (quote list))
-													 cluster)
-											 (quote *handler-clusters*)))))
-					 forms))))
+  ;; (func test-closure-cont ()
+  ;; 		(let ((i 0)
+  ;; 			  (fn nil))
+  ;; 		  (with-cont c
+  ;; 					 (let ((a (lambda (x)
+  ;; 								(if (> x (+ i 5))
+  ;; 									(exit c 5)
+  ;; 									nil))))
+  ;; 					   (set! fn a)
+  ;; 					   (loop
+  ;; 						(a i)
+  ;; 						(set! i (1+ i)))))
+  ;; 		  (list i fn)))
 
-  (macro handler-case (form . cases)
-		 (let ((cont-sym (gensym)))
-		   (let ((make-binding
-				  (lambda (binding)
-					(list (first binding)
-						  (append (list (quote lambda) (second binding))
-								  (list (list (quote exit) cont-sym
-											  (append (list (quote do))
-													  (tail (tail binding))))))))))
-			 (list (quote with-cont) cont-sym
-				   (list (quote handler-bind)
-						 (map make-binding cases)
-						 form)))))
+  ;; (define *handler-clusters* nil)
 
-  (func error (type . args)
-		(let ((handler (search *handler-clusters* type first)))
-		  (if handler
-			  ((second handler) args)
-			  (invoke-debugger type))))
+  ;; (macro handler-bind (bindings . forms)
+  ;; 		 (let ((make-binding
+  ;; 				(lambda (binding)
+  ;; 				  (quasiquote
+  ;; 				   (list (quote (unquote (first binding)))
+  ;; 						 (unquote (second binding)))))))
+  ;; 		   (let ((cluster (map make-binding bindings)))
+  ;; 			 (append (list (quote dynamic-let)
+  ;; 						   (list (list (quote *handler-clusters*)
+  ;; 									   (list (quote append)
+  ;; 											 (append (list (quote list))
+  ;; 													 cluster)
+  ;; 											 (quote *handler-clusters*)))))
+  ;; 					 forms))))
 
-  (func divide (a b)
-		(if (= b 0)
-			(error (quote division-by-zero) nil)
-			(/ a b)))
+  ;; (macro handler-case (form . cases)
+  ;; 		 (let ((cont-sym (gensym)))
+  ;; 		   (let ((make-binding
+  ;; 				  (lambda (binding)
+  ;; 					(list (first binding)
+  ;; 						  (append (list (quote lambda) (second binding))
+  ;; 								  (list (list (quote exit) cont-sym
+  ;; 											  (append (list (quote do))
+  ;; 													  (tail (tail binding))))))))))
+  ;; 			 (list (quote with-cont) cont-sym
+  ;; 				   (list (quote handler-bind)
+  ;; 						 (map make-binding cases)
+  ;; 						 form)))))
 
-  (func test-errors (x)
-		(handler-bind ((division-by-zero
-						(lambda (args)
-						  (print "Division by zero occured!")
-						  (quote division-by-zero))))
-					  (print *handler-clusters*)
-					  (divide 10 x))))
+  ;; (func error (type . args)
+  ;; 		(let ((handler (search *handler-clusters* type first)))
+  ;; 		  (if handler
+  ;; 			  ((second handler) args)
+  ;; 			  (invoke-debugger type))))
+
+  ;; (func divide (a b)
+  ;; 		(if (= b 0)
+  ;; 			(error (quote division-by-zero) nil)
+  ;; 			(/ a b)))
+
+  ;; (func test-errors (x)
+  ;; 		(handler-bind ((division-by-zero
+  ;; 						(lambda (args)
+  ;; 						  (print "Division by zero occured!")
+  ;; 						  (quote division-by-zero))))
+  ;; 					  (print *handler-clusters*)
+  ;; 					  (divide 10 x)))
+  )

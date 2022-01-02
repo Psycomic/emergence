@@ -1969,6 +1969,28 @@ static YkObject yk_reverse(YkObject list) {
 	return new_list;
 }
 
+static YkObject yk_delete(YkObject element, YkObject partial_list) {
+	YkObject final_list = partial_list,
+		previous = YK_NIL;
+
+	if (partial_list == YK_NIL)
+		return YK_NIL;
+
+	for (YkObject pair = partial_list; pair != YK_NIL; pair = YK_CDR(pair)) {
+		if (YK_CAR(pair) == element) {
+			if (pair == final_list) {
+				final_list = YK_CDR(pair);
+			} else {
+				YK_CDR(previous) = YK_CDR(pair);
+			}
+		}
+
+		previous = pair;
+	}
+
+	return final_list;
+}
+
 #define IS_BLANK(x) ((x) == ' ' || (x) == '\n' || (x) == '\t')
 
 static YkToken yk_read_get_token(const char* string, uint32_t *offset) {
@@ -2726,14 +2748,9 @@ typedef struct {
 
 	DynamicArray* warnings;
 
-	YkClosedVar* closed_vars;
-	YkCompilerVar* closed_conts;
+	YkClosedVar* var_upenvs;
 
-	Stack* closed_stack;
-	YkUint closed_stack_offset;
-
-	Stack* closed_cont_stack;
-	YkUint closed_cont_stack_offset;
+	YkObject closed_vars;
 
 	bool is_tail;
 } YkCompilerState;
@@ -2848,58 +2865,23 @@ YkObject yk_normalize_list(YkObject list) {
 	return yk_nreverse(normal);
 }
 
-void yk_compiler_state_init(YkCompilerState* state, YkObject expr, DynamicArray* warnings,
-							Stack* closed_stack, Stack* closed_cont_stack)
-{
+void yk_compiler_state_init(YkCompilerState* state, YkObject expr, DynamicArray* warnings) {
 	state->expr = expr;
+
 	state->cont_stack = NULL;
 	state->lexical_stack = NULL;
+
 	state->stack_offset = 0;
 
 	state->warnings = warnings;
 
-	state->closed_vars = NULL;
-	state->closed_conts = NULL;
-
-	state->closed_stack = closed_stack;
-	state->closed_stack_offset = closed_stack->top;
-
-	state->closed_cont_stack = closed_cont_stack;
-	state->closed_cont_stack_offset = closed_cont_stack->top;
+	state->var_upenvs = NULL;
+	state->closed_vars = YK_NIL;
 
 	state->is_tail = false;
 }
 
 static void yk_compile_loop(YkObject bytecode, YkCompilerState* state);
-
-static void yk_compile_closure(YkObject symbol, Stack* closed_stack, YkUint closed_stack_offset,
-							   YkCompilerVar* lexical_stack, YkUint lexical_stack_offset,
-							   YkInt* out_offset, int* out_environnement_offset)
-{
-	YkInt offset;
-	bool closed = false;
-
-	for (uint i = 0; i < closed_stack->top; i++) {
-		if (closed_stack->data[i] == symbol) {
-			closed = true;
-			offset = i;
-			break;
-		}
-	}
-
-	if (!closed) {
-		offset = closed_stack->top - closed_stack_offset;
-		stack_push(closed_stack, symbol);
-	}
-
-	int environnement_offset = yk_lexical_environnement_offset(lexical_stack);
-
-	if (out_offset != NULL)
-		*out_offset = offset;
-
-	if (out_environnement_offset != NULL)
-		*out_environnement_offset = environnement_offset + lexical_stack_offset;
-}
 
 static void yk_compile_with_push(YkObject bytecode, YkCompilerState* state) {
 	state->is_tail = false;
@@ -2934,22 +2916,21 @@ static void yk_compile_variable(YkObject bytecode, YkCompilerState* state,
 		YkOpcode op = is_assign ? YK_OP_LEXICAL_SET : YK_OP_LEXICAL_VAR;
 		yk_bytecode_emit(bytecode, op, offset + state->stack_offset, YK_NIL);
 	} else {
-		int k = -1, j = 0;
-		for (YkClosedVar* cvar = state->closed_vars; cvar != NULL; cvar = cvar->next) {
-			k = yk_lexical_offset(symbol, cvar->lexical_stack);
-			if (k >= 0)
+		int k = -1, i = 0;
+		YK_LIST_FOREACH(state->closed_vars, e) {
+			if (YK_CAR(e) == symbol) {
+				k = i;
 				break;
-			j++;
+			}
+			i++;
 		}
 
 		if (k >= 0) {
-			YkInt offset;
-			int environnement_offset;
-			yk_compile_closure(symbol, state->closed_stack, state->closed_stack_offset,
-							   state->lexical_stack, state->stack_offset, &offset, &environnement_offset);
+			YkInt offset = k;
+			int environnement_offset = yk_lexical_environnement_offset(state->lexical_stack);
 
 			YkOpcode op = is_assign ? YK_OP_CLOSED_SET : YK_OP_CLOSED_VAR;
-			yk_bytecode_emit(bytecode, op, environnement_offset, YK_MAKE_INT(offset));
+			yk_bytecode_emit(bytecode, op, environnement_offset + state->stack_offset, YK_MAKE_INT(offset));
 		} else if (YK_PTR(symbol)->symbol.type == yk_s_constant) {
 			yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, YK_PTR(symbol)->symbol.value);
 		} else {
@@ -3039,13 +3020,11 @@ static void yk_compile_comptime(YkCompilerState* state, YkObject forms) {
 	YK_ASSERT(state->lexical_stack == NULL && state->cont_stack == NULL &&
 			  state->stack_offset == 0);
 
-	YkObject comptime_bytecode =
-		yk_make_bytecode_begin(yk_make_symbol_cstr("compile-time-bytecode"), 0);
+	YkObject comptime_bytecode = yk_make_bytecode_begin(yk_make_symbol_cstr("compile-time-bytecode"), 0);
 	YK_GC_PROTECT1(comptime_bytecode);
 
 	YkCompilerState new_state;
-	yk_compiler_state_init(&new_state, YK_NIL, state->warnings,
-						   state->closed_stack, state->closed_cont_stack);
+	yk_compiler_state_init(&new_state, YK_NIL, state->warnings);
 
 	yk_compile_combo(comptime_bytecode, &new_state, forms, false);
 	yk_bytecode_emit(comptime_bytecode, YK_OP_END, 0, YK_NIL);
@@ -3057,12 +3036,21 @@ static void yk_compile_comptime(YkCompilerState* state, YkObject forms) {
 
 static YkObject yk_find_closed_vars_combo(YkObject exprs, YkObject upenvs, YkObject env) {
 	YkObject closed = YK_NIL;
+	YK_GC_PROTECT1(closed);
 
 	YK_LIST_FOREACH(exprs, e) {
 		closed = yk_append(yk_find_closed_vars(YK_CAR(e), upenvs, env), closed);
 	}
 
-	return closed;
+	YkObject partial_list = closed, final_list = YK_NIL;
+
+	while (partial_list != YK_NIL) {
+		final_list = yk_cons(YK_CAR(partial_list), final_list);
+		partial_list = yk_delete(YK_CAR(partial_list), partial_list);
+	}
+
+	YK_GC_UNPROTECT;
+	return final_list;
 }
 
 static YkObject yk_find_closed_vars(YkObject expr, YkObject upenvs, YkObject env) {
@@ -3090,11 +3078,12 @@ static YkObject yk_find_closed_vars(YkObject expr, YkObject upenvs, YkObject env
 			YK_GC_UNPROTECT;
 		} else if (first == yk_keyword_lambda) {
 			YkObject lambda_env = yk_normalize_list(YK_CAR(YK_CDR(YK_CDR(expr))));
+			YK_GC_PROTECT1(lambda_env);
+
 			YkObject lambda_body = YK_CDR(YK_CDR(YK_CDR(expr)));
 
-			YkObject new_upenvs = yk_append(env, upenvs);
-
-			closed = yk_find_closed_vars_combo(lambda_body, new_upenvs, lambda_env);
+			closed = yk_find_closed_vars_combo(lambda_body, upenvs, lambda_env);
+			YK_GC_UNPROTECT;
 		} else if (first == yk_keyword_dynamic_let) {
 			YkObject bindings = YK_CAR(YK_CDR(expr));
 			YkObject body = YK_CDR(YK_CDR(expr));
@@ -3153,11 +3142,11 @@ static YkObject yk_find_closed_vars(YkObject expr, YkObject upenvs, YkObject env
 static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObject name,
 							  YkObject arglist, YkObject body)
 {
-	YkObject lambda_bytecode = YK_NIL;
-	YK_GC_PROTECT1(lambda_bytecode);
+	YkObject lambda_bytecode = YK_NIL, found_closed_vars = YK_NIL,
+		reversed_closed_vars = YK_NIL;
+	YK_GC_PROTECT3(lambda_bytecode, found_closed_vars, reversed_closed_vars);
 
-	YkCompilerVar *lambda_lexical_stack = NULL,
-		*new_closed_conts = NULL;
+	YkCompilerVar *lambda_lexical_stack = NULL;
 
 	YkObject l;
 	YkInt argcount = 0;
@@ -3195,44 +3184,27 @@ static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObjec
 		lambda_lexical_stack = yk_make_compiler_var(l, lambda_lexical_stack);
 	}
 
-	YkClosedVar* new_closed_vars = yk_make_closed_var(state->lexical_stack, state->closed_vars);
+	YkClosedVar* new_var_upenvs = yk_make_closed_var(state->lexical_stack, state->var_upenvs);
 
-	YkObject upenvs = yk_closed_vars_to_upenvs(new_closed_vars);
-	YkObject found_closed_vars = yk_find_closed_vars_combo(body, upenvs, YK_NIL);
+	YkObject upenvs = yk_closed_vars_to_upenvs(new_var_upenvs);
+	found_closed_vars = yk_find_closed_vars_combo(body, upenvs, YK_NIL);
 
 	printf("Closed vars: ");
 	yk_print(found_closed_vars);
+	printf(" for ");
+	yk_print(state->expr);
 	printf("\n");
-
-	new_closed_conts = state->cont_stack;
-
-	uint32_t old_top = state->closed_stack->top,
-		old_cont_top = state->closed_cont_stack->top,
-		old_code_size = YK_PTR(lambda_bytecode)->bytecode.code_size;
 
 	YkCompilerState new_state = *state;
 	new_state.lexical_stack = lambda_lexical_stack;
 	new_state.stack_offset = 0;
-	new_state.closed_vars = new_closed_vars;
-	new_state.closed_conts = new_closed_conts;
-	new_state.closed_stack_offset = old_top;
+	new_state.var_upenvs = new_var_upenvs;
 	new_state.cont_stack = NULL;
-	new_state.closed_cont_stack_offset = old_cont_top;
+	new_state.closed_vars = found_closed_vars;
 
-	YK_LIST_FOREACH(body, e) {
-		new_state.expr = YK_CAR(e);
-		new_state.is_tail = !YK_CONSP(YK_CDR(e));
+	if (found_closed_vars != YK_NIL) {
+		reversed_closed_vars = yk_reverse(found_closed_vars);
 
-		yk_compile_loop(lambda_bytecode, &new_state);
-	}
-
-	if (state->closed_stack->top > old_top ||
-		state->closed_cont_stack->top > old_cont_top)
-	{
-		state->closed_stack->top = old_top;
-		state->closed_cont_stack->top = old_cont_top;
-
-		YK_PTR(lambda_bytecode)->bytecode.code_size = old_code_size;
 		if (argcount < 0) {
 			YK_PTR(lambda_bytecode)->bytecode.code[argcount_index + 1].ptr = YK_MAKE_INT(-argcount);
 
@@ -3244,7 +3216,7 @@ static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObjec
 
 		new_state.lexical_stack = lambda_lexical_stack;
 
-		YK_LIST_FOREACH(body, e) {
+		YK_LIST_FOREACH(body, e) { /* COMBO */
 			new_state.expr = YK_CAR(e);
 			new_state.is_tail = !YK_CONSP(YK_CDR(e));
 
@@ -3258,45 +3230,22 @@ static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObjec
 		yk_bytecode_emit(bytecode, YK_OP_PREPARE_CALL, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_PREPARE_CALL, 0, YK_NIL);
 
-		uint new_stack_offset = state->stack_offset + 6;
-		for (uint i = 0; i < state->closed_cont_stack->top - old_cont_top; i++) {
-			YkObject var_symbol = state->closed_cont_stack->data[state->closed_cont_stack->top - i - 1];
-
-			int k = yk_lexical_offset(var_symbol, new_closed_conts);
-			assert(k >= 0);
-
-			yk_bytecode_emit(bytecode, YK_OP_CONT, k, YK_NIL);
-			yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-
-			new_stack_offset++;
-		}
-
-		YkCompilerState new_state = *state;
+		new_state = *state;
+		new_state.stack_offset += 6;
 
 		uint lexical_closed_size = 0;
-		for (uint i = 0; i < state->closed_stack->top - old_top; i++) {
-			YkObject var_symbol = state->closed_stack->data[state->closed_stack->top - i - 1];
+		YK_LIST_FOREACH(reversed_closed_vars, e) {
+			YkObject var_symbol = YK_CAR(e);
 
-			new_state.stack_offset = new_stack_offset++;
 			yk_compile_variable(bytecode, &new_state, var_symbol, false);
 			yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
-
+			new_state.stack_offset++;
 			lexical_closed_size++;
 		}
 
-		for (uint i = 0; i < YK_PTR(lambda_bytecode)->bytecode.code_size; i++) {
-			if (YK_PTR(lambda_bytecode)->bytecode.code[i].opcode == YK_OP_EXIT_CLOSED_CONT) {
-				YK_PTR(lambda_bytecode)->bytecode.code[i].ptr
-					= YK_MAKE_INT(YK_INT(YK_PTR(lambda_bytecode)->bytecode.code[i].ptr) +
-								  lexical_closed_size);
-			}
-		}
-
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_array_cfun);
-		yk_bytecode_emit(bytecode, YK_OP_CALL, state->closed_stack->top - old_top +
-						 state->closed_cont_stack->top - old_cont_top, YK_NIL);
-		YK_PTR(bytecode)->bytecode.code[prep_call_index + 1].modifier =
-			YK_PTR(bytecode)->bytecode.code_size;
+		yk_bytecode_emit(bytecode, YK_OP_CALL, yk_length(found_closed_vars), YK_NIL);
+		YK_PTR(bytecode)->bytecode.code[prep_call_index + 1].modifier = YK_PTR(bytecode)->bytecode.code_size;
 
 		yk_bytecode_emit(bytecode, YK_OP_PUSH, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, lambda_bytecode);
@@ -3304,12 +3253,15 @@ static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObjec
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_make_closure_cfun);
 		yk_bytecode_emit(bytecode, YK_OP_CALL, 2, YK_NIL);
 
-		YK_PTR(bytecode)->bytecode.code[prep_call_index].modifier =
-			YK_PTR(bytecode)->bytecode.code_size;
+		YK_PTR(bytecode)->bytecode.code[prep_call_index].modifier =	YK_PTR(bytecode)->bytecode.code_size;
+	} else {
+		YK_LIST_FOREACH(body, e) { /* COMBO */
+			new_state.expr = YK_CAR(e);
+			new_state.is_tail = !YK_CONSP(YK_CDR(e));
 
-		state->closed_stack->top = old_top;
-		state->closed_cont_stack->top = old_cont_top;
-	}  else {
+			yk_compile_loop(lambda_bytecode, &new_state);
+		}
+
 		yk_bytecode_emit(lambda_bytecode, YK_OP_RET, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, lambda_bytecode);
 	}
@@ -3371,18 +3323,9 @@ static void yk_compile_exit(YkObject bytecode, YkCompilerState* state,
 	yk_compile_loop(bytecode, &new_state);
 	int cont_offset = yk_lexical_offset(symbol, state->cont_stack);
 
-	if (cont_offset < 0) { /* Closed continuation */
-		YkInt offset;
-		int environnement_offset;
+	YK_ASSERT(cont_offset >= 0);
 
-		yk_compile_closure(symbol, state->closed_cont_stack, state->closed_cont_stack_offset,
-						   state->lexical_stack, state->stack_offset, &offset, &environnement_offset);
-
-		yk_bytecode_emit(bytecode, YK_OP_EXIT_CLOSED_CONT, environnement_offset, YK_MAKE_INT(offset));
-	} else {
-		yk_bytecode_emit(bytecode, YK_OP_EXIT_LEXICAL_CONT, cont_offset, YK_NIL);
-	}
-
+	yk_bytecode_emit(bytecode, YK_OP_EXIT_LEXICAL_CONT, cont_offset, YK_NIL);
 }
 
 static void yk_compile_call(YkObject bytecode, YkCompilerState* state) {
@@ -3453,7 +3396,7 @@ static void yk_compile_call(YkObject bytecode, YkCompilerState* state) {
 }
 
 static void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
-	YK_GC_PROTECT2(bytecode, state->expr);
+	YK_GC_PROTECT3(bytecode, state->expr, state->closed_vars);
 
 	switch (YK_TYPEOF(state->expr)) {
 	case yk_t_array:
@@ -3565,19 +3508,11 @@ void yk_compile(YkObject forms, YkObject bytecode) {
 	DynamicArray warnings;
 	DYNAMIC_ARRAY_CREATE(&warnings, YkWarning);
 
-	Stack closed_stack;
-	stack_init(&closed_stack);
-
-	Stack closed_cont_stack;
-	stack_init(&closed_cont_stack);
-
 	YkCompilerState state;
-	yk_compiler_state_init(&state, forms, &warnings, &closed_stack, &closed_cont_stack);
+	yk_compiler_state_init(&state, forms, &warnings);
 
 	yk_compile_loop(bytecode, &state);
 	yk_bytecode_emit(bytecode, YK_OP_END, 0, YK_NIL);
-
-	stack_destroy(&closed_stack);
 
 	yk_w_remove_untrue(&warnings);
 	if (warnings.size != 0) {
