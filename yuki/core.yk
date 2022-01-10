@@ -263,69 +263,71 @@ and returns a list containing the results"
 		   (if (< x 2) 1
 			   (* x (r (- x 1))))))))
 
+  (func test-closure-cont ()
+		(let ((i 0)
+			  (fn nil))
+		  (with-cont c
+					 (let ((a (lambda (x)
+								(if (> x (+ i 5))
+									(exit c 5)
+									nil))))
+					   (set! fn a)
+					   (loop
+						(a i)
+						(set! i (1+ i)))))
+		  (list i fn)))
 
+  (define *handler-clusters* nil)
 
-  ;; (func test-closure-cont ()
-  ;; 		(let ((i 0)
-  ;; 			  (fn nil))
-  ;; 		  (with-cont c
-  ;; 					 (let ((a (lambda (x)
-  ;; 								(if (> x (+ i 5))
-  ;; 									(exit c 5)
-  ;; 									nil))))
-  ;; 					   (set! fn a)
-  ;; 					   (loop
-  ;; 						(a i)
-  ;; 						(set! i (1+ i)))))
-  ;; 		  (list i fn)))
+  (macro handler-bind (bindings . forms)
+		 (let ((make-binding
+				(lambda (binding)
+				  (quasiquote
+				   (list (quote (unquote (first binding)))
+						 (unquote (second binding)))))))
+		   (let ((cluster (map make-binding bindings)))
+			 (append (list (quote dynamic-let)
+						   (list (list (quote *handler-clusters*)
+									   (list (quote append)
+											 (append (list (quote list))
+													 cluster)
+											 (quote *handler-clusters*)))))
+					 forms))))
 
-  ;; (define *handler-clusters* nil)
+  (macro handler-case (form . cases)
+		 (let ((cont-sym (gensym)))
+		   (let ((make-binding
+				  (lambda (binding)
+					(list (first binding)
+						  (append (list (quote lambda) (second binding))
+								  (list (list (quote exit) cont-sym
+											  (append (list (quote do))
+													  (tail (tail binding))))))))))
+			 (list (quote with-cont) cont-sym
+				   (list (quote handler-bind)
+						 (map make-binding cases)
+						 form)))))
 
-  ;; (macro handler-bind (bindings . forms)
-  ;; 		 (let ((make-binding
-  ;; 				(lambda (binding)
-  ;; 				  (quasiquote
-  ;; 				   (list (quote (unquote (first binding)))
-  ;; 						 (unquote (second binding)))))))
-  ;; 		   (let ((cluster (map make-binding bindings)))
-  ;; 			 (append (list (quote dynamic-let)
-  ;; 						   (list (list (quote *handler-clusters*)
-  ;; 									   (list (quote append)
-  ;; 											 (append (list (quote list))
-  ;; 													 cluster)
-  ;; 											 (quote *handler-clusters*)))))
-  ;; 					 forms))))
+  (func error (type . args)
+		(let ((handler (search *handler-clusters* type first)))
+		  (if handler
+			  ((second handler) args)
+			  (invoke-debugger type))))
 
-  ;; (macro handler-case (form . cases)
-  ;; 		 (let ((cont-sym (gensym)))
-  ;; 		   (let ((make-binding
-  ;; 				  (lambda (binding)
-  ;; 					(list (first binding)
-  ;; 						  (append (list (quote lambda) (second binding))
-  ;; 								  (list (list (quote exit) cont-sym
-  ;; 											  (append (list (quote do))
-  ;; 													  (tail (tail binding))))))))))
-  ;; 			 (list (quote with-cont) cont-sym
-  ;; 				   (list (quote handler-bind)
-  ;; 						 (map make-binding cases)
-  ;; 						 form)))))
+  (func divide (a b)
+		(if (= b 0)
+			(error (quote division-by-zero) nil)
+			(/ a b)))
 
-  ;; (func error (type . args)
-  ;; 		(let ((handler (search *handler-clusters* type first)))
-  ;; 		  (if handler
-  ;; 			  ((second handler) args)
-  ;; 			  (invoke-debugger type))))
+  (func test-errors (x)
+		(handler-bind ((division-by-zero
+						(lambda (args)
+						  (print "Division by zero occured!")
+						  (quote division-by-zero))))
+					  (print *handler-clusters*)
+					  (divide 10 x)))
 
-  ;; (func divide (a b)
-  ;; 		(if (= b 0)
-  ;; 			(error (quote division-by-zero) nil)
-  ;; 			(/ a b)))
-
-  ;; (func test-errors (x)
-  ;; 		(handler-bind ((division-by-zero
-  ;; 						(lambda (args)
-  ;; 						  (print "Division by zero occured!")
-  ;; 						  (quote division-by-zero))))
-  ;; 					  (print *handler-clusters*)
-  ;; 					  (divide 10 x)))
+  (with-cont a
+			 (lambda (e)
+			   (lambda () (exit a e))))
   )
