@@ -194,7 +194,7 @@ void execute_tests(void) {
 		bytecode = yk_make_bytecode_begin(yk_make_symbol_cstr("toplevel"), 0);
 		yk_compile(yk_read(core_file), bytecode);
 		yk_run(bytecode);
-
+/*
 		bytecode2 = yk_make_bytecode_begin(yk_make_symbol_cstr("test"), 0);
 		yk_compile(yk_read("(benchmark)"), bytecode2);
 
@@ -202,7 +202,7 @@ void execute_tests(void) {
 		printf("=====BENCHMARK RESULTS======\n");
 		yk_print(result);
 		printf("\n===========================\n");
-
+*/
 		YK_GC_UNPROTECT;
 	}
 

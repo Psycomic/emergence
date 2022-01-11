@@ -326,8 +326,4 @@ and returns a list containing the results"
 						  (quote division-by-zero))))
 					  (print *handler-clusters*)
 					  (divide 10 x)))
-
-  (with-cont a
-			 (lambda (e)
-			   (lambda () (exit a e))))
   )
