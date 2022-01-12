@@ -16,6 +16,41 @@
 
 #define YK_WORKSPACE_SIZE 4096
 
+typedef struct YkCompilerVar {
+	YkObject symbol;
+	enum {
+		YK_VAR_NORMAL,
+		YK_VAR_BOXED,
+		YK_VAR_ENVIRONNEMENT,
+		YK_VAR_RETURN,
+		YK_VAR_UNUSED
+	} type;
+	YkType value_type;
+	struct YkCompilerVar* next;
+} YkCompilerVar;
+
+typedef struct YkClosedVar {
+	YkCompilerVar* lexical_stack;
+	struct YkClosedVar* next;
+} YkClosedVar;
+
+typedef struct {
+	YkObject expr;
+
+	YkCompilerVar* cont_stack;
+	YkCompilerVar* lexical_stack;
+
+	DynamicArray* warnings;
+
+	YkClosedVar* var_upenvs;
+	YkClosedVar* cont_upenvs;
+
+	YkCompilerVar* closed_vars;
+	YkCompilerVar* closed_conts;
+
+	bool is_tail;
+} YkCompilerState;
+
 static union YkUnion* yk_workspace;
 static union YkUnion* yk_free_list;
 static YkUint yk_workspace_size;
@@ -81,6 +116,9 @@ static void yk_assert(const char* expression, const char* file, uint32_t line);
 void yk_bytecode_disassemble(YkObject bytecode);
 static YkObject yk_make_string(const char* cstr, size_t cstr_size);
 inline static char* yk_symbol_cstr(YkObject sym);
+
+static YkCompilerVar* yk_find_closed_vars(YkObject expr, YkClosedVar* upenvs, YkObject env);
+static YkCompilerVar* yk_find_closed_conts(YkObject expr, YkClosedVar* upenvs, YkObject env);
 
 static YkObject yk_arglist_cfun,
 	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
@@ -2725,45 +2763,7 @@ void yk_w_remove_untrue(DynamicArray* warnings) {
 	}
 }
 
-typedef struct YkCompilerVar {
-	YkObject symbol;
-	enum {
-		YK_VAR_NORMAL,
-		YK_VAR_BOXED,
-		YK_VAR_ENVIRONNEMENT,
-		YK_VAR_RETURN,
-		YK_VAR_UNUSED
-	} type;
-	YkType value_type;
-	struct YkCompilerVar* next;
-} YkCompilerVar;
-
-typedef struct YkClosedVar {
-	YkCompilerVar* lexical_stack;
-	struct YkClosedVar* next;
-} YkClosedVar;
-
-typedef struct {
-	YkObject expr;
-
-	YkCompilerVar* cont_stack;
-	YkCompilerVar* lexical_stack;
-
-	DynamicArray* warnings;
-
-	YkClosedVar* var_upenvs;
-	YkClosedVar* cont_upenvs;
-
-	YkCompilerVar* closed_vars;
-	YkCompilerVar* closed_conts;
-
-	bool is_tail;
-} YkCompilerState;
-
-static YkCompilerVar* yk_find_closed_vars(YkObject expr, YkClosedVar* upenvs, YkObject env);
-static YkCompilerVar* yk_find_closed_conts(YkObject expr, YkClosedVar* upenvs, YkObject env);
-
-YkCompilerVar* yk_make_compiler_var(YkObject sym, YkCompilerVar* next) {
+static YkCompilerVar* yk_make_compiler_var(YkObject sym, YkCompilerVar* next) {
 	YkCompilerVar* var = malloc(sizeof(YkCompilerVar));
 	var->symbol = sym;
 	var->type = YK_VAR_NORMAL;
@@ -2773,7 +2773,7 @@ YkCompilerVar* yk_make_compiler_var(YkObject sym, YkCompilerVar* next) {
 	return var;
 }
 
-YkCompilerVar* yk_compiler_var_copy(YkCompilerVar* model, YkCompilerVar* next) {
+static YkCompilerVar* yk_compiler_var_copy(YkCompilerVar* model, YkCompilerVar* next) {
 	YkCompilerVar* var = malloc(sizeof(YkCompilerVar));
 	var->symbol = model->symbol;
 	var->type = model->type;
@@ -2783,7 +2783,7 @@ YkCompilerVar* yk_compiler_var_copy(YkCompilerVar* model, YkCompilerVar* next) {
 	return var;
 }
 
-YkCompilerVar* yk_make_environnement_var(YkCompilerVar* next) {
+static YkCompilerVar* yk_make_environnement_var(YkCompilerVar* next) {
 	YkCompilerVar* var = malloc(sizeof(YkCompilerVar));
 	var->symbol = yk_symbol_environnement;
 	var->type = YK_VAR_ENVIRONNEMENT;
@@ -2793,7 +2793,7 @@ YkCompilerVar* yk_make_environnement_var(YkCompilerVar* next) {
 	return var;
 }
 
-YkCompilerVar* yk_make_return_var(YkCompilerVar* next) {
+static YkCompilerVar* yk_make_return_var(YkCompilerVar* next) {
 	YkCompilerVar* var = malloc(sizeof(YkCompilerVar));
 	var->symbol = YK_NIL;
 	var->type = YK_VAR_RETURN;
@@ -2803,7 +2803,7 @@ YkCompilerVar* yk_make_return_var(YkCompilerVar* next) {
 	return var;
 }
 
-YkCompilerVar* yk_make_unused_var(YkCompilerVar* next) {
+static YkCompilerVar* yk_make_unused_var(YkCompilerVar* next) {
 	YkCompilerVar* var = malloc(sizeof(YkCompilerVar));
 	var->symbol = YK_NIL;
 	var->type = YK_VAR_UNUSED;
@@ -2813,12 +2813,23 @@ YkCompilerVar* yk_make_unused_var(YkCompilerVar* next) {
 	return var;
 }
 
-YkClosedVar* yk_make_closed_var(YkCompilerVar* lexical_stack, YkClosedVar* next) {
+static YkClosedVar* yk_make_closed_var(YkCompilerVar* lexical_stack, YkClosedVar* next) {
 	YkClosedVar* closed_vars = malloc(sizeof(YkClosedVar));
 	closed_vars->lexical_stack = lexical_stack;
 	closed_vars->next = next;
 
 	return closed_vars;
+}
+
+static void yk_closed_vars_destroy_until(YkClosedVar* vars, YkClosedVar* limit) {
+	while (vars != limit) {
+		YkClosedVar* next = vars->next;
+#ifdef _DEBUG
+		m_bzero(vars, sizeof(YkClosedVar));
+#endif
+		free(vars);
+		vars = next;
+	}
 }
 
 static bool yk_closed_vars_member(YkObject element, YkClosedVar* closed) {
@@ -2894,7 +2905,7 @@ static YkCompilerVar* yk_compiler_vars_delete(YkObject element, YkCompilerVar* p
 	return final_list;
 }
 
-YkCompilerVar* yk_compiler_vars_append(YkCompilerVar* a, YkCompilerVar* b) {
+static YkCompilerVar* yk_compiler_vars_append(YkCompilerVar* a, YkCompilerVar* b) {
 	YkCompilerVar* result = NULL;
 
 	for (YkCompilerVar* v = a; v != NULL; v = v->next) {
@@ -2906,6 +2917,21 @@ YkCompilerVar* yk_compiler_vars_append(YkCompilerVar* a, YkCompilerVar* b) {
 	}
 
 	return yk_compiler_vars_nreverse(result);
+}
+
+static void yk_compiler_vars_destroy_until(YkCompilerVar* vars, YkCompilerVar* limit) {
+	while (vars != limit) {
+		YkCompilerVar* next = vars->next;
+#ifdef _DEBUG
+		m_bzero(vars, sizeof(YkClosedVar));
+#endif
+		free(vars);
+		vars = next;
+	}
+}
+
+static void yk_compiler_vars_destroy(YkCompilerVar* vars) {
+	yk_compiler_vars_destroy_until(vars, NULL);
 }
 
 YkInt yk_lexical_offset(YkObject symbol, YkCompilerVar* lexical_stack) {
@@ -3085,6 +3111,8 @@ static void yk_compile_let(YkObject bytecode, YkCompilerState* state,
 
 	yk_compile_combo(bytecode, &new_state, body, state->is_tail);
 	yk_bytecode_emit(bytecode, YK_OP_UNBIND, bindings_count, YK_NIL);
+
+	yk_compiler_vars_destroy_until(body_lexical_stack, state->lexical_stack);
 }
 
 static void yk_compile_dynamic_let(YkObject bytecode, YkCompilerState* state,
@@ -3475,6 +3503,9 @@ static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObjec
 			closed_size++;
 		}
 
+		yk_compiler_vars_destroy(reversed_closed_vars);
+		yk_compiler_vars_destroy(reversed_closed_conts);
+
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, yk_array_cfun);
 		yk_bytecode_emit(bytecode, YK_OP_CALL, closed_size, YK_NIL);
 		YK_PTR(bytecode)->bytecode.code[prep_call_index + 1].modifier = YK_PTR(bytecode)->bytecode.code_size;
@@ -3497,6 +3528,13 @@ static void yk_compile_lambda(YkObject bytecode, YkCompilerState* state, YkObjec
 		yk_bytecode_emit(lambda_bytecode, YK_OP_RET, 0, YK_NIL);
 		yk_bytecode_emit(bytecode, YK_OP_FETCH_LITERAL, 0, lambda_bytecode);
 	}
+
+	yk_compiler_vars_destroy(found_closed_vars);
+	yk_compiler_vars_destroy(found_closed_conts);
+	yk_compiler_vars_destroy(lambda_lexical_stack);
+
+	yk_closed_vars_destroy_until(new_var_upenvs, state->var_upenvs);
+	yk_closed_vars_destroy_until(new_cont_upenvs, state->cont_upenvs);
 
 	YK_GC_UNPROTECT;
 }
