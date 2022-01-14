@@ -51,6 +51,8 @@ void ps_window_set_root(PsWindow* window, PsWidget* root_widget);
 
 void ps_container_add(PsWidget* container_widget, PsWidget* widget);
 
+uint8_t ps_widget_state(PsWidget* widget);
+
 PsWidget* ps_box_create(PsDirection direction, float spacing);
 
 PsWidget* ps_label_create(char* text, float size);
@@ -58,7 +60,6 @@ char* ps_label_text(PsWidget* label);
 void ps_label_set_text(PsWidget* label, char* text);
 
 PsWidget* ps_button_create(char* text, float size);
-uint8_t ps_button_state(PsWidget* button);
 
 PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_size, void (*callback)());
 
@@ -66,6 +67,8 @@ PsWidget* ps_input_create(char* value, float text_size);
 void ps_input_insert_at_point(PsWidget* input, char* string);
 char* ps_input_value(PsWidget* input);
 void ps_input_set_value(PsWidget* input, const char* value);
+
+PsWidget* ps_canvas_create(float width, float height, void (*draw_fn)(PsWidget*, Vector2, Vector2));
 
 void ps_draw_gui();
 #endif

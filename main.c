@@ -134,7 +134,7 @@ void update() {
 	p7_loop();
 	scene_draw(scene, background_color);
 
-	if (ps_button_state(randomize_btn) & PS_WIDGET_CLICKED) {
+	if (ps_widget_state(randomize_btn) & PS_WIDGET_CLICKED) {
 		random_arrayf((float*)&hopalong_subsets, SUBSET_NUMBER * 3);
 		hopalong_a = clampf(gaussian_random(), -1.f, 1.f);
 		hopalong_b = clampf(gaussian_random(), -1.f, 1.f);
@@ -143,7 +143,7 @@ void update() {
 		update_fractal();
 	}
 
-	if (ps_button_state(wireframe_button) & PS_WIDGET_CLICKED) {
+	if (ps_widget_state(wireframe_button) & PS_WIDGET_CLICKED) {
 		scene_toggle_wireframe(scene);
 	}
 
@@ -153,7 +153,7 @@ void update() {
 		terrain_worker = NULL;
 	}
 
-	if (ps_button_state(regenerate_button) & PS_WIDGET_CLICKED) {
+	if (ps_widget_state(regenerate_button) & PS_WIDGET_CLICKED) {
 		if (terrain_worker == NULL) {
 			terrain_worker = worker_create(update_terrain, NULL);
 			printf("Started worker!\n");
@@ -163,7 +163,7 @@ void update() {
 		}
 	}
 
-	if (ps_button_state(eval_button) & PS_WIDGET_CLICKED) {
+	if (ps_widget_state(eval_button) & PS_WIDGET_CLICKED) {
 		YkObject forms = YK_NIL, stream = YK_NIL, bytecode = YK_NIL, r = YK_NIL;
 		YK_GC_PROTECT2(forms, stream);
 
@@ -200,6 +200,20 @@ void update() {
 void setup() {
 	scene = scene_create((Vector3) { { 0.f, 0.f, 0.f } });
 	ps_init();
+}
+
+static Vector4 canvas_draw_color = { { 1.f, 0.f, 0.f, 1.f } };
+
+void canvas_draw(PsWidget* canvas, Vector2 anchor, Vector2 size) {
+	float x = anchor.x + 10,
+		y = anchor.y + 20;
+
+	if (ps_widget_state(canvas) & PS_WIDGET_HOVERED) {
+		x = g_window.cursor_position.x;
+		y = g_window.cursor_position.y;
+	}
+
+	ps_fill_rect(x, y, 100, 100, canvas_draw_color);
 }
 
 int do_main(int argc, char** argv) {
@@ -370,9 +384,25 @@ int do_main(int argc, char** argv) {
 	eval_button = ps_button_create("Eval", 15);
 	result_label = ps_label_create("Results will be here", 16);
 
-
 	ps_container_add(hbox, eval_button);
 	ps_container_add(hbox, result_label);
+
+	PsWindow* canvas_window = ps_window_create("Canvas");
+	PsWidget* canvas_window_vbox = ps_box_create(PS_DIRECTION_VERTICAL, 5);
+
+	ps_window_set_root(canvas_window, canvas_window_vbox);
+
+	slider = ps_slider_create(&canvas_draw_color.x, 0.f, 1.f, 16, NULL);
+	ps_container_add(canvas_window_vbox, slider);
+
+	slider = ps_slider_create(&canvas_draw_color.y, 0.f, 1.f, 16, NULL);
+	ps_container_add(canvas_window_vbox, slider);
+
+	slider = ps_slider_create(&canvas_draw_color.z, 0.f, 1.f, 16, NULL);
+	ps_container_add(canvas_window_vbox, slider);
+
+	PsWidget* canvas = ps_canvas_create(300, 200, canvas_draw);
+	ps_container_add(canvas_window_vbox, canvas);
 
 	window_mainloop();
 

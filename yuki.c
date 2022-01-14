@@ -1,4 +1,5 @@
 #include "yuki.h"
+#include "psyche.h"
 
 #include <stdio.h>
 #include <string.h>

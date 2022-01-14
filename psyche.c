@@ -164,6 +164,13 @@ typedef struct {
 	BOOL selected;
 } PsInput;
 
+typedef struct {
+	PsWidget header;
+	float width, height;
+
+	void (*draw_fn)(PsWidget*, Vector2, Vector2);
+} PsCanvas;
+
 #define PS_MAX_WINDOWS 255
 
 PsInput* ps_current_input = NULL;
@@ -1409,8 +1416,8 @@ void ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	ps_text(button->text, anchor, button->text_size, txt_color);
 }
 
-uint8_t ps_button_state(PsButton* button) {
-	return PS_WIDGET(button)->flags;
+uint8_t ps_widget_state(PsWidget* widget) {
+	return widget->flags;
 }
 
 PsWidget* ps_button_create(char* text, float size) {
@@ -1428,8 +1435,8 @@ PsWidget* ps_button_create(char* text, float size) {
 }
 
 static float slider_margin = 3.f;
-static Vector4 slider_background_color = { { 0.1f, 0.1f, 0.1f, 1.f } },
-	slider_foreground_color = { { 0.5f, 0.1f, 1.f, 1.f } },
+static Vector4 slider_background_color = { { 0.05f, 0.05f, 0.05f, 1.f } },
+	slider_foreground_color =  { { 0.8f, 0.0f, 0.5f, 1.f } },
 	slider_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
 Vector2 ps_slider_min_size(PsWidget* widget) {
@@ -1745,4 +1752,30 @@ PsWidget* ps_input_create(char* value, float text_size) {
 
 	ps_input_set_value(input, value);
 	return PS_WIDGET(input);
+}
+
+Vector2 ps_canvas_min_size(PsWidget* widget) {
+	PsCanvas* canvas = (PsCanvas*)widget;
+
+	return (Vector2) { { canvas->width, canvas->height } };
+}
+
+void ps_canvas_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+	PsCanvas* canvas = (PsCanvas*)widget;
+
+	anchor.y -= canvas->height;
+
+	ps_fill_rect(anchor.x, anchor.y, canvas->width, canvas->height, (Vector4) { { 0.f, 0.f, 0.f, 1.f } });
+	canvas->draw_fn(widget, anchor, (Vector2) { { canvas->width, canvas->height } });
+}
+
+PsWidget* ps_canvas_create(float width, float height, void (*draw_fn)(PsWidget*, Vector2, Vector2)) {
+	PsCanvas* canvas = malloc(sizeof(PsCanvas));
+
+	canvas->width = width;
+	canvas->height = height;
+	canvas->draw_fn = draw_fn;
+
+	ps_widget_init(PS_WIDGET(canvas), ps_canvas_draw, ps_canvas_min_size);
+	return PS_WIDGET(canvas);
 }
