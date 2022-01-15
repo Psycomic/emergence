@@ -71,6 +71,13 @@ typedef struct {
 } PsPath;
 
 typedef struct {
+	GLboolean active;
+
+	Vector2 position;
+	Vector2 size;
+} PsScissors;
+
+typedef struct {
 	Image text_atlas;
 
 	uint32_t glyph_width;
@@ -191,6 +198,7 @@ static PsDrawData ps_ctx;
 static PsAtlas ps_atlas;
 
 static PsPath ps_current_path;
+static PsScissors ps_current_scissors;
 
 static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
@@ -308,6 +316,9 @@ void ps_init() {
 	DYNAMIC_ARRAY_CREATE(&ps_current_path.points, Vector2);
 	ps_current_path.thickness = 5.f;
 
+	m_bzero(&ps_current_scissors, sizeof(ps_current_scissors));
+	ps_current_scissors.active = GL_FALSE;
+
 	ps_font_init(&ps_monospaced_font, "./fonts/Monospace.bmp", 19, 32, 304, 512);
 	ps_current_font = ps_monospaced_font;
 
@@ -395,6 +406,19 @@ void ps_render() {
 		glEnable(GL_CULL_FACE);
 
 	get_opengl_errors();
+}
+
+void ps_begin_scissors(float x, float y, float w, float h) {
+	ps_current_scissors.active = GL_TRUE;
+
+	ps_current_scissors.position.x = x;
+	ps_current_scissors.position.y = y;
+	ps_current_scissors.size.x = w;
+	ps_current_scissors.size.y = h;
+}
+
+void ps_end_scissors() {
+	ps_current_scissors.active = GL_FALSE;
 }
 
 void ps_begin_path() {
@@ -617,6 +641,32 @@ void ps_fill(Vector4 color, uint32_t flags) {
 }
 
 void ps_fill_rect(float x, float y, float w, float h, Vector4 color) {
+	if (ps_current_scissors.active) {
+		if (x + w < ps_current_scissors.position.x ||
+			x > ps_current_scissors.position.x + ps_current_scissors.size.x ||
+			y + h < ps_current_scissors.position.y ||
+			y > ps_current_scissors.position.y + ps_current_scissors.size.y)
+			return;
+
+		if (x < ps_current_scissors.position.x) {
+			w -= ps_current_scissors.position.x - x;
+			x = ps_current_scissors.position.x;
+		}
+
+		if (y < ps_current_scissors.position.y) {
+			h -= ps_current_scissors.position.y - y;
+			y = ps_current_scissors.position.y;
+		}
+
+		if (x + w > ps_current_scissors.position.x + ps_current_scissors.size.x) {
+			w -= (x + w) - (ps_current_scissors.position.x + ps_current_scissors.size.x);
+		}
+
+		if (y + h > ps_current_scissors.position.y + ps_current_scissors.size.y) {
+			h -= (y + h) - (ps_current_scissors.position.y + ps_current_scissors.size.y);
+		}
+	}
+
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
@@ -655,6 +705,32 @@ void ps_fill_rect(float x, float y, float w, float h, Vector4 color) {
 }
 
 void ps_fill_rect_vertical_gradient(float x, float y, float w, float h, Vector4 top_color, Vector4 bottom_color) {
+	if (ps_current_scissors.active) {
+		if (x + w < ps_current_scissors.position.x ||
+			x > ps_current_scissors.position.x + ps_current_scissors.size.x ||
+			y + h < ps_current_scissors.position.y ||
+			y > ps_current_scissors.position.y + ps_current_scissors.size.y)
+			return;
+
+		if (x < ps_current_scissors.position.x) {
+			w -= ps_current_scissors.position.x - x;
+			x = ps_current_scissors.position.x;
+		}
+
+		if (y < ps_current_scissors.position.y) {
+			h -= ps_current_scissors.position.y - y;
+			y = ps_current_scissors.position.y;
+		}
+
+		if (x + w > ps_current_scissors.position.x + ps_current_scissors.size.x) {
+			w -= (x + w) - (ps_current_scissors.position.x + ps_current_scissors.size.x);
+		}
+
+		if (y + h > ps_current_scissors.position.y + ps_current_scissors.size.y) {
+			h -= (y + h) - (ps_current_scissors.position.y + ps_current_scissors.size.y);
+		}
+	}
+
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
@@ -693,6 +769,32 @@ void ps_fill_rect_vertical_gradient(float x, float y, float w, float h, Vector4 
 }
 
 void ps_fill_rect_horizontal_gradient(float x, float y, float w, float h, Vector4 left_color, Vector4 right_color) {
+	if (ps_current_scissors.active) {
+		if (x + w < ps_current_scissors.position.x ||
+			x > ps_current_scissors.position.x + ps_current_scissors.size.x ||
+			y + h < ps_current_scissors.position.y ||
+			y > ps_current_scissors.position.y + ps_current_scissors.size.y)
+			return;
+
+		if (x < ps_current_scissors.position.x) {
+			w -= ps_current_scissors.position.x - x;
+			x = ps_current_scissors.position.x;
+		}
+
+		if (y < ps_current_scissors.position.y) {
+			h -= ps_current_scissors.position.y - y;
+			y = ps_current_scissors.position.y;
+		}
+
+		if (x + w > ps_current_scissors.position.x + ps_current_scissors.size.x) {
+			w -= (x + w) - (ps_current_scissors.position.x + ps_current_scissors.size.x);
+		}
+
+		if (y + h > ps_current_scissors.position.y + ps_current_scissors.size.y) {
+			h -= (y + h) - (ps_current_scissors.position.y + ps_current_scissors.size.y);
+		}
+	}
+
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
@@ -744,9 +846,6 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 	PsDrawList* list = ps_ctx.draw_lists[0];
 	PsDrawCmd* cmd = dynamic_array_at(&list->commands, 0);
 
-	PsVert* text_vertices = dynamic_array_push_back(&list->vbo, text_length * 4);
-	PsIndex* text_indexes = dynamic_array_push_back(&list->ibo, text_length * 6);
-
 	const float	glyph_width = ps_current_font.glyph_width,
 		glyph_height = ps_current_font.glyph_height,
 		height = ps_current_font.texture_height,
@@ -762,7 +861,8 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 	const float size_height = size,
 		size_width = size * (glyph_width / glyph_height);
 
-	float max_width = 0.f;
+	uint32_t new_index = 0,
+		new_count = 0;
 
 	for (uint64_t i = 0, j = 0; str[j] != '\0'; j++) {
 		if (str[j] == '\n') {
@@ -783,51 +883,96 @@ void ps_text(const char* str, Vector2 position, float size, Vector4 color) {
 			Vector2 uv_down_left = { { x_pos, (y_pos + (1.f / half_height)) } };
 			Vector2 uv_down_right = { { x_pos + 1.f / half_width, (y_pos + (1.f / half_height)) } };
 
-			float width = i * size_width + size_width;
+			float x = position.x + i * size_width,
+				y = position.y + y_stride * size_height - size_height,
+				w = size_width,
+				h = size_height;
 
-			Vector2 vertex_up_left = { { position.x + i * size_width, position.y + (-size_height + y_stride * size_height) } };
-			Vector2 vertex_up_right = { { position.x + width, position.y + (-size_height + y_stride * size_height) } };
-			Vector2 vertex_down_left = { { position.x + i * size_width, position.y + y_stride * size_height } };
-			Vector2 vertex_down_right = { { position.x + width, position.y + y_stride * size_height } };
+			if (ps_current_scissors.active) {
+				if (x + w < ps_current_scissors.position.x ||
+					x > ps_current_scissors.position.x + ps_current_scissors.size.x ||
+					y + h < ps_current_scissors.position.y ||
+					y > ps_current_scissors.position.y + ps_current_scissors.size.y) {
+					i++;
+					continue;
+				}
 
-			max_width = width > max_width ? width : max_width;
+				if (x < ps_current_scissors.position.x) {
+					float old_w = w;
+					w -= ps_current_scissors.position.x - x;
+					uv_up_left.x += (1.f - (w / old_w)) / half_width;
+					uv_down_left.x += (1.f - (w / old_w)) / half_width;
 
-#define VERTEX(x) text_vertices[element_index * 4 + x]
-#define INDEX(x)  text_indexes[element_index * 6 + x]
+					x = ps_current_scissors.position.x;
+				}
 
-			VERTEX(0).color = color;
-			VERTEX(0).position = vertex_up_left;
-			VERTEX(0).uv_coords = uv_up_left;
+				if (y < ps_current_scissors.position.y) {
+					float old_h = h;
+					h -= ps_current_scissors.position.y - y;
+					uv_up_left.y += (1.f - (h / old_h)) / half_height;
+					uv_up_right.y += (1.f - (h / old_h)) / half_height;
 
-			VERTEX(1).color = color;
-			VERTEX(1).position = vertex_down_left;
-			VERTEX(1).uv_coords = uv_down_left;
+					y = ps_current_scissors.position.y;
+				}
 
-			VERTEX(2).color = color;
-			VERTEX(2).position = vertex_down_right;
-			VERTEX(2).uv_coords = uv_down_right;
+				if (x + w > ps_current_scissors.position.x + ps_current_scissors.size.x) {
+					float old_w = w;
+					w -= (x + w) - (ps_current_scissors.position.x + ps_current_scissors.size.x);
 
-			VERTEX(3).color = color;
-			VERTEX(3).position = vertex_up_right;
-			VERTEX(3).uv_coords = uv_up_right;
+					uv_up_right.x -= (1.f - (w / old_w)) / half_width;
+					uv_down_right.x -= (1.f - (w / old_w)) / half_width;
+				}
 
-			INDEX(0) = list->ibo_last_index + element_index * 4 + 0;
-			INDEX(1) = list->ibo_last_index + element_index * 4 + 3;
-			INDEX(2) = list->ibo_last_index + element_index * 4 + 1;
-			INDEX(3) = list->ibo_last_index + element_index * 4 + 3;
-			INDEX(4) = list->ibo_last_index + element_index * 4 + 2;
-			INDEX(5) = list->ibo_last_index + element_index * 4 + 1;
+				if (y + h > ps_current_scissors.position.y + ps_current_scissors.size.y) {
+					float old_h = h;
+					h -= (y + h) - (ps_current_scissors.position.y + ps_current_scissors.size.y);
 
-#undef VERTEX
-#undef INDEX
+					uv_down_right.y -= (1.f - (h / old_h)) / half_height;
+					uv_down_left.y -= (1.f - (h / old_h)) / half_height;
+				}
+			}
 
-			i++;
+			Vector2 vertex_up_left = { { x, y } };
+			Vector2 vertex_up_right = { { x + w, y } };
+			Vector2 vertex_down_left = { { x, y + h } };
+			Vector2 vertex_down_right = { { x + w, y + h } };
+
+			PsVert* vertices = dynamic_array_push_back(&list->vbo, 4);
+			PsIndex* indexes = dynamic_array_push_back(&list->ibo, 6);
+
+			vertices[0].color = color;
+			vertices[0].position = vertex_up_left;
+			vertices[0].uv_coords = uv_up_left;
+
+			vertices[1].color = color;
+			vertices[1].position = vertex_down_left;
+			vertices[1].uv_coords = uv_down_left;
+
+			vertices[2].color = color;
+			vertices[2].position = vertex_down_right;
+			vertices[2].uv_coords = uv_down_right;
+
+			vertices[3].color = color;
+			vertices[3].position = vertex_up_right;
+			vertices[3].uv_coords = uv_up_right;
+
+			indexes[0] = list->ibo_last_index + element_index * 4 + 0;
+			indexes[1] = list->ibo_last_index + element_index * 4 + 3;
+			indexes[2] = list->ibo_last_index + element_index * 4 + 1;
+			indexes[3] = list->ibo_last_index + element_index * 4 + 3;
+			indexes[4] = list->ibo_last_index + element_index * 4 + 2;
+			indexes[5] = list->ibo_last_index + element_index * 4 + 1;
+
 			element_index++;
+			i++;
+
+			new_index += 4;
+			new_count += 6;
 		}
 	}
 
-	list->ibo_last_index += text_length * 4;
-	cmd->elements_count += text_length * 6;
+	list->ibo_last_index += new_index;
+	cmd->elements_count += new_count;
 }
 
 float ps_font_width(float size) {
@@ -916,6 +1061,27 @@ Vector2 ps_window_anchor(PsWindow* window) {
 			window->position.y + window->size.y - 5.f
 		}
 	};
+}
+
+void ps_widget_update(PsWidget* widget, float x, float y, float w, float h) {
+	widget->flags &= ~PS_WIDGET_CLICKED;
+
+	if (widget->flags & PS_WIDGET_SELECTED) {
+		if (!g_window.mouse_button_left_state && widget->flags & PS_WIDGET_CLICKING)
+			widget->flags |= PS_WIDGET_CLICKED;
+
+		widget->flags &= ~PS_WIDGET_CLICKING;
+
+		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
+			widget->flags |= PS_WIDGET_HOVERED;
+
+			if (g_window.mouse_button_left_state)
+				widget->flags |= PS_WIDGET_CLICKING;
+		}
+		else {
+			widget->flags &= ~(PS_WIDGET_HOVERED | PS_WIDGET_CLICKING);
+		}
+	}
 }
 
 static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 0.1f, 0.9f } };
@@ -1367,39 +1533,22 @@ void ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		w = button_width,
 		h = button_height;
 
-	PS_WIDGET(button)->flags &= ~PS_WIDGET_CLICKED;
+	ps_widget_update(widget, x, y, w, h);
 
 	Vector4 bc_color = button_background_color,
 		txt_color = button_text_color;
 
-	if (PS_WIDGET(button)->flags & PS_WIDGET_SELECTED) {
-		if (!g_window.mouse_button_left_state && PS_WIDGET(button)->flags & PS_WIDGET_CLICKING)
-			PS_WIDGET(button)->flags |= PS_WIDGET_CLICKED;
-
-		PS_WIDGET(button)->flags &= ~PS_WIDGET_CLICKING;
-
-		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
-			PS_WIDGET(button)->flags |= PS_WIDGET_HOVERED;
-
-			if (g_window.mouse_button_left_state)
-				PS_WIDGET(button)->flags |= PS_WIDGET_CLICKING;
+	if (PS_WIDGET(button)->flags & PS_WIDGET_HOVERED) {
+		for (uint i = 0; i < 4; i++) {
+			bc_color.D[i] *= 1.4;
+			txt_color.D[i] *= 0.8;
 		}
-		else {
-			PS_WIDGET(button)->flags &= ~(PS_WIDGET_HOVERED | PS_WIDGET_CLICKING);
-		}
+	}
 
-		if (PS_WIDGET(button)->flags & PS_WIDGET_HOVERED) {
-			for (uint i = 0; i < 4; i++) {
-				bc_color.D[i] *= 1.4;
-				txt_color.D[i] *= 0.8;
-			}
-		}
-
-		if (PS_WIDGET(button)->flags & PS_WIDGET_CLICKING) {
-			for (uint i = 0; i < 4; i++) {
-				bc_color.D[i] *= 0.5;
-				txt_color.D[i] *= 1.5;
-			}
+	if (PS_WIDGET(button)->flags & PS_WIDGET_CLICKING) {
+		for (uint i = 0; i < 4; i++) {
+			bc_color.D[i] *= 0.5;
+			txt_color.D[i] *= 1.5;
 		}
 	}
 
@@ -1464,34 +1613,25 @@ void ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		bg_color = slider_background_color,
 		txt_color = slider_text_color;
 
-	if (PS_WIDGET(slider)->flags & PS_WIDGET_SELECTED) {
-		PS_WIDGET(slider)->flags &= ~(PS_WIDGET_HOVERED | PS_WIDGET_CLICKING);
+	ps_widget_update(widget, x, y, w, h);
 
-		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
-			PS_WIDGET(slider)->flags |= PS_WIDGET_HOVERED;
-
-			if (g_window.mouse_button_left_state)
-				PS_WIDGET(slider)->flags |= PS_WIDGET_CLICKING;
+	if (PS_WIDGET(slider)->flags & PS_WIDGET_CLICKING) {
+		for (uint i = 0; i < 4; i++) {
+			fg_color.D[i] *= 1.6;
+			bg_color.D[i] *= 1.6;
+			txt_color.D[i] *= 0.7;
 		}
 
-		if (PS_WIDGET(slider)->flags & PS_WIDGET_CLICKING) {
-			for (uint i = 0; i < 4; i++) {
-				fg_color.D[i] *= 1.6;
-				bg_color.D[i] *= 1.6;
-				txt_color.D[i] *= 0.7;
-			}
+		*slider->val = slider->min_val + ((g_window.cursor_position.x - x) / slider_width) *
+			(slider->max_val - slider->min_val);
 
-			*slider->val = slider->min_val + ((g_window.cursor_position.x - x) / slider_width) *
-				(slider->max_val - slider->min_val);
-
-			if (slider->callback)
-				slider->callback();
-		}
-		else if (PS_WIDGET(slider)->flags & PS_WIDGET_HOVERED) {
-			for (uint i = 0; i < 4; i++) {
-				fg_color.D[i] *= 1.4;
-				bg_color.D[i] *= 1.6;
-			}
+		if (slider->callback)
+			slider->callback();
+	}
+	else if (PS_WIDGET(slider)->flags & PS_WIDGET_HOVERED) {
+		for (uint i = 0; i < 4; i++) {
+			fg_color.D[i] *= 1.4;
+			bg_color.D[i] *= 1.6;
 		}
 	}
 
@@ -1597,38 +1737,33 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 
 	Vector4 bc_color = input_background_color;
 
+	ps_widget_update(widget, x, y, w, h);
+
 	if (PS_WIDGET(input)->flags & PS_WIDGET_SELECTED) {
-		if (is_in_box(g_window.cursor_position, x, y, w, h)) {
-			if (g_window.mouse_button_left_state) {
-				PS_WIDGET(input)->flags |= PS_WIDGET_CLICKING;
+		if (PS_WIDGET(input)->flags & PS_WIDGET_CLICKING) {
+			uint y_cursor_pos = input->lines_count - (g_window.cursor_position.y - y) / input->text_size;
 
-				uint y_cursor_pos = input->lines_count - (g_window.cursor_position.y - y) / input->text_size;
-
-				uint i = 0, j = 0;
-				char* c = input->value;
-				while (*c != '\0' && j < y_cursor_pos) {
-					if (*c++ == '\n')
-						j++;
-					i++;
-				}
-
-				uint line_size = 0;
-				while (*c != '\0' && *c++ != '\n')
-					line_size++;
-
-				uint x_cursor_pos = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
-				x_cursor_pos = min(x_cursor_pos, line_size);
-
-				input->cursor_position = x_cursor_pos + i;
-
-				last_character_read = GL_TRUE;
-				ps_current_input = input;
-
-				input->selected = GL_TRUE;
+			uint i = 0, j = 0;
+			char* c = input->value;
+			while (*c != '\0' && j < y_cursor_pos) {
+				if (*c++ == '\n')
+					j++;
+				i++;
 			}
-			else {
-				PS_WIDGET(input)->flags |= PS_WIDGET_HOVERED;
-			}
+
+			uint line_size = 0;
+			while (*c != '\0' && *c++ != '\n')
+				line_size++;
+
+			uint x_cursor_pos = roundf((g_window.cursor_position.x - x) / ps_font_width(input->text_size));
+			x_cursor_pos = min(x_cursor_pos, line_size);
+
+			input->cursor_position = x_cursor_pos + i;
+
+			last_character_read = GL_TRUE;
+			ps_current_input = input;
+
+			input->selected = GL_TRUE;
 		}
 		else if (g_window.mouse_button_left_state) {
 			input->selected = GL_FALSE;
@@ -1728,8 +1863,6 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 
 	if (input->selected)
 		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, input_cursor_color);
-
- 	PS_WIDGET(input)->flags &= ~(PS_WIDGET_CLICKING | PS_WIDGET_HOVERED);
 }
 
 char* ps_input_value(PsInput* input) {
@@ -1762,11 +1895,14 @@ Vector2 ps_canvas_min_size(PsWidget* widget) {
 
 void ps_canvas_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsCanvas* canvas = (PsCanvas*)widget;
-
 	anchor.y -= canvas->height;
 
+	ps_widget_update(widget, anchor.x, anchor.y, canvas->width, canvas->height);
 	ps_fill_rect(anchor.x, anchor.y, canvas->width, canvas->height, (Vector4) { { 0.f, 0.f, 0.f, 1.f } });
+
+	ps_begin_scissors(anchor.x, anchor.y, canvas->width, canvas->height);
 	canvas->draw_fn(widget, anchor, (Vector2) { { canvas->width, canvas->height } });
+	ps_end_scissors();
 }
 
 PsWidget* ps_canvas_create(float width, float height, void (*draw_fn)(PsWidget*, Vector2, Vector2)) {

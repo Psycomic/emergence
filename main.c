@@ -208,12 +208,11 @@ void canvas_draw(PsWidget* canvas, Vector2 anchor, Vector2 size) {
 	float x = anchor.x + 10,
 		y = anchor.y + 20;
 
-	if (ps_widget_state(canvas) & PS_WIDGET_HOVERED) {
-		x = g_window.cursor_position.x;
-		y = g_window.cursor_position.y;
-	}
+	x = g_window.cursor_position.x;
+	y = g_window.cursor_position.y;
 
 	ps_fill_rect(x, y, 100, 100, canvas_draw_color);
+	ps_text("Hello, world!", (Vector2) { { x, y } }, 14.f, (Vector4) { { 1.f, 1.f, 1.f, 1.f } });
 }
 
 int do_main(int argc, char** argv) {
