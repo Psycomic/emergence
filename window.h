@@ -32,8 +32,6 @@ typedef struct {
 	uint keys_delay[GLFW_KEY_LAST + 1];
 	BOOL should_close;
 
-	uint last_key_pressed;
-
 	int mouse_button_left_state;
 	int mouse_button_right_state;
 

@@ -8,7 +8,7 @@
 #include "crypto.h"
 #include "window.h"
 
-static uint64_t x = 123456789, y = 362436069, z = 521288629;
+static uint64_t x = 0x1ae3115edea5002f, y = 0xa0072cc46969ffff, z = 0xeab57973700fff;
 extern uint32_t last_character;
 
 void random_seed(uint64_t seed) {
@@ -32,6 +32,23 @@ uint64_t random_randint() {
 
 float random_float() {
 	return ((float)random_randint()) / (float)RANDOM_MAX_RAND;
+}
+
+float random_float_seed(uint64_t seed) {
+	uint64_t x = 123456789 + seed, y = 362436069, z = 521288629, t;
+
+	for (uint i = 0; i < 10; i++) {
+		x ^= x << 16;
+		x ^= x >> 5;
+		x ^= x << 1;
+
+		t = x;
+		x = y;
+		y = z;
+		z = t ^ x ^ y;
+	}
+
+	return ((float)z) / (float)RANDOM_MAX_RAND;
 }
 
 float random_uniform(float min, float max) {

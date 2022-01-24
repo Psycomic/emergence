@@ -203,6 +203,8 @@ static PsScissors ps_current_scissors;
 static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
 
+static BOOL ps_wireframe;
+
 Key psyche_last_key;
 static BOOL last_character_read = GL_TRUE;
 
@@ -298,6 +300,8 @@ void ps_init() {
 	glGenBuffers(1, &ps_vbo);
 	glGenBuffers(1, &ps_ibo);
 
+	ps_wireframe = GL_FALSE;
+
 	ps_shader = shader_create("shaders/vertex_psyche.glsl", "shaders/fragment_psyche.glsl");
 	ps_matrix_location = glGetUniformLocation(ps_shader, "matrix_transform");
 	ps_texture_location = glGetUniformLocation(ps_shader, "tex");
@@ -339,6 +343,10 @@ void ps_draw_cmd_clear(PsDrawCmd* cmd) {
 	cmd->elements_count = 0;
 }
 
+void ps_toggle_wireframe() {
+	ps_wireframe = !ps_wireframe;
+}
+
 void ps_render() {
 	ps_draw_gui();
 
@@ -364,7 +372,12 @@ void ps_render() {
 						   -ps_ctx.display_size.y / 2, ps_ctx.display_size.y / 2, -1.f, 1.f);
 
 	glUseProgram(ps_shader);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	if (ps_wireframe)
+		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	else
+		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
 	glDisable(GL_CULL_FACE);
 
 	glUniformMatrix4fv(ps_matrix_location, 1, GL_FALSE, ortho_matrix);
@@ -443,7 +456,8 @@ void ps_close_path() {
 }
 
 void ps_stroke(Vector4 color, float thickness) {
-	assert(ps_current_path.flags & PS_PATH_BEING_USED);
+	assert(ps_current_path.flags & PS_PATH_BEING_USED &&
+		   !ps_current_scissors.active);
 
 	if (ps_current_path.flags & PS_PATH_CLOSED) {
 		Vector2* last_point = dynamic_array_push_back(&ps_current_path.points, 1);
@@ -589,6 +603,54 @@ void ps_stroke(Vector4 color, float thickness) {
 	ps_current_path.flags &= ~(PS_PATH_BEING_USED | PS_PATH_CLOSED);
 }
 
+Vector2* ps_fill_previous_point(int64_t i, Vector2* position) {
+	Vector2* previous_position;
+
+	int64_t j = i;
+
+	if (ps_current_scissors.active) {
+	previous:
+		previous_position = dynamic_array_at(&ps_current_path.points, modi(--j, ps_current_path.points.size));
+		if (((position->x < ps_current_scissors.position.x &&
+			  previous_position->x < ps_current_scissors.position.x) ||
+			 (position->y < ps_current_scissors.position.y &&
+			  previous_position->y < ps_current_scissors.position.y)) &&
+			(i - j) < (int64_t)ps_current_path.points.size)
+		{
+			goto previous;
+		}
+
+	} else {
+		return dynamic_array_at(&ps_current_path.points, modi(++i, ps_current_path.points.size));
+	}
+
+	return previous_position;
+}
+
+Vector2* ps_fill_next_point(int64_t i, Vector2* position) {
+	Vector2* next_position;
+
+	int64_t j = i;
+
+	if (ps_current_scissors.active) {
+	next:
+		next_position = dynamic_array_at(&ps_current_path.points, modi(++j, ps_current_path.points.size));
+		if (((position->x < ps_current_scissors.position.x &&
+			  next_position->x < ps_current_scissors.position.x) ||
+			 (position->y < ps_current_scissors.position.y &&
+			  next_position->y < ps_current_scissors.position.y)) &&
+			(j - i) < (int64_t)ps_current_path.points.size)
+		{
+			goto next;
+		}
+
+	} else {
+		return dynamic_array_at(&ps_current_path.points, modi(++i, ps_current_path.points.size));
+	}
+
+	return next_position;
+}
+
 void ps_fill(Vector4 color, uint32_t flags) {
 	assert(ps_current_path.flags & PS_PATH_BEING_USED);
 
@@ -601,41 +663,147 @@ void ps_fill(Vector4 color, uint32_t flags) {
 	float width = aabb.z - aabb.x,
 		height = aabb.w - aabb.y;
 
-	PsVert* new_verts = dynamic_array_push_back(&list->vbo, ps_current_path.points.size);
-	Vector2 mean_pos;
+	Vector2 mean_pos = { 0 };
 
-	uint64_t i;
-	for (i = 0; i < ps_current_path.points.size; i++) {
+	uint64_t count = 0;
+	for (uint64_t i = 0; i < ps_current_path.points.size; i++) {
 		Vector2* position = dynamic_array_at(&ps_current_path.points, i);
 		vector2_add(&mean_pos, mean_pos, *position);
 
-		new_verts[i].color = color;
-		new_verts[i].position = *position;
+		Vector2 i1, i2, i3, i4;
+		GLboolean x_touched = GL_FALSE,
+			y_touched = GL_FALSE;
 
-		if (flags & PS_TEXTURED_POLY) {
-			new_verts[i].uv_coords.x = (position->x - aabb.x) / width;
-			new_verts[i].uv_coords.y = (position->y - aabb.y) / height;
+		if (ps_current_scissors.active) {
+			Vector2 *previous_position, *next_position;
+			previous_position = ps_fill_previous_point(i, position);
+			next_position = ps_fill_next_point(i, position);
+
+			Vector2 sc_down_left = ps_current_scissors.position,
+				sc_down_right = { { ps_current_scissors.position.x + ps_current_scissors.size.x,
+					ps_current_scissors.position.y } },
+				sc_up_right = { { ps_current_scissors.position.x + ps_current_scissors.size.x,
+					ps_current_scissors.position.y + ps_current_scissors.size.y } },
+				sc_up_left = { { ps_current_scissors.position.x,
+					ps_current_scissors.position.y + ps_current_scissors.size.y } };
+
+			if (position->x < ps_current_scissors.position.x) {
+				if (previous_position->x < ps_current_scissors.position.x &&
+					next_position->x < ps_current_scissors.position.x)
+				{
+					continue;
+				}
+
+				x_touched = GL_TRUE;
+
+				i1 = vector2_line_intersection(*previous_position, *position, sc_up_left, sc_down_left);
+				i2 = vector2_line_intersection(*next_position, *position, sc_up_left, sc_down_left);
+			}
+
+			if (position->y < ps_current_scissors.position.y) {
+				if (previous_position->y < ps_current_scissors.position.y &&
+					next_position->y < ps_current_scissors.position.y)
+				{
+					continue;
+				}
+
+				y_touched = GL_TRUE;
+
+				i3 = vector2_line_intersection(*previous_position, *position, sc_down_left, sc_down_right);
+				i4 = vector2_line_intersection(*next_position, *position, sc_down_left, sc_down_right);
+			}
 		}
-		else {
-			new_verts[i].uv_coords = ps_white_pixel;
+
+		i1.x = fmax(i1.x, ps_current_scissors.position.x);
+		i1.y = fmax(i1.y, ps_current_scissors.position.y);
+		i2.x = fmax(i2.x, ps_current_scissors.position.x);
+		i2.y = fmax(i2.y, ps_current_scissors.position.y);
+
+		i3.x = fmax(i3.x, ps_current_scissors.position.x);
+		i3.y = fmax(i3.y, ps_current_scissors.position.y);
+		i4.x = fmax(i4.x, ps_current_scissors.position.x);
+		i4.y = fmax(i4.y, ps_current_scissors.position.y);
+
+		if (x_touched) {
+			PsVert* new_vert = dynamic_array_push_back(&list->vbo, 2);
+			count += 2;
+
+			new_vert[0].color = color;
+			new_vert[1].color = color;
+
+			new_vert[0].position = i1;
+			new_vert[1].position = i2;
+
+			if (flags & PS_TEXTURED_POLY) {
+				new_vert[0].uv_coords.x = (position->x - aabb.x) / width;
+				new_vert[0].uv_coords.y = (position->y - aabb.y) / height;
+
+				new_vert[1].uv_coords.x = (position->x - aabb.x) / width;
+				new_vert[1].uv_coords.y = (position->y - aabb.y) / height;
+			}
+			else {
+				new_vert[0].uv_coords = ps_white_pixel;
+				new_vert[1].uv_coords = ps_white_pixel;
+			}
+		}
+
+		if (y_touched) {
+			PsVert* new_vert = dynamic_array_push_back(&list->vbo, 2);
+			count += 2;
+
+			new_vert[0].color = color;
+			new_vert[1].color = color;
+
+			new_vert[0].position = i3;
+			new_vert[1].position = i4;
+
+			if (flags & PS_TEXTURED_POLY) {
+				new_vert[0].uv_coords.x = (position->x - aabb.x) / width;
+				new_vert[0].uv_coords.y = (position->y - aabb.y) / height;
+
+				new_vert[1].uv_coords.x = (position->x - aabb.x) / width;
+				new_vert[1].uv_coords.y = (position->y - aabb.y) / height;
+			}
+			else {
+				new_vert[0].uv_coords = ps_white_pixel;
+				new_vert[1].uv_coords = ps_white_pixel;
+			}
+		}
+
+		if (!x_touched && !y_touched) {
+			PsVert* new_vert = dynamic_array_push_back(&list->vbo, 1);
+			count++;
+
+			new_vert->color = color;
+			new_vert->position = *position;
+
+			if (flags & PS_TEXTURED_POLY) {
+				new_vert->uv_coords.x = (position->x - aabb.x) / width;
+				new_vert->uv_coords.y = (position->y - aabb.y) / height;
+			}
+			else {
+				new_vert->uv_coords = ps_white_pixel;
+			}
 		}
 	}
 
-	uint64_t elements_count = 3 + (ps_current_path.points.size - 3) * 3;
-	PsIndex* new_elements = dynamic_array_push_back(&list->ibo, elements_count);
+	int64_t elements_count = 3 + (count - 3) * 3;
+	if (elements_count > 0) {
+		PsIndex* new_elements = dynamic_array_push_back(&list->ibo, elements_count);
 
-	new_elements[0] = list->ibo_last_index + 1;
-	new_elements[1] = list->ibo_last_index + 2;
-	new_elements[2] = list->ibo_last_index;
+		new_elements[0] = list->ibo_last_index + 1;
+		new_elements[1] = list->ibo_last_index + 2;
+		new_elements[2] = list->ibo_last_index;
 
-	for (uint64_t j = 0; j < elements_count / 3 - 1; j++) {
-		new_elements[j * 3 + 3] = list->ibo_last_index + j + 2;
-		new_elements[j * 3 + 4] = list->ibo_last_index + j + 3;
-		new_elements[j * 3 + 5] = list->ibo_last_index;
+		for (int64_t j = 0; j < elements_count / 3 - 1; j++) {
+			new_elements[j * 3 + 3] = list->ibo_last_index + j + 2;
+			new_elements[j * 3 + 4] = list->ibo_last_index + j + 3;
+			new_elements[j * 3 + 5] = list->ibo_last_index;
+		}
+
+		list->ibo_last_index += count;
+		cmd->elements_count += elements_count;
 	}
-
-	list->ibo_last_index += ps_current_path.points.size;
-	cmd->elements_count += elements_count;
 
 	ps_current_path.flags &= ~PS_PATH_BEING_USED;
 }
@@ -1085,8 +1253,8 @@ void ps_widget_update(PsWidget* widget, float x, float y, float w, float h) {
 }
 
 static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 0.1f, 0.9f } };
-static Vector4 ps_window_border_active_color = { { 0.f, 0.f, 1.f, 1.f } };
-static Vector4 ps_window_border_inactive_color = { { 0.5f, 0.5f, 0.5f, 1.f } };
+static Vector4 ps_window_border_active_color = { { 0.5f, 0.5f, 0.5f, 1.f } };
+static Vector4 ps_window_border_inactive_color = { { 0.f, 0.f, 1.f, 1.f } };
 static Vector4 resize_triangle_color = { { 0.3f, 0.3f, 0.35f, 0.7f } };
 static float ps_window_border_size = 2.f;
 
@@ -1585,7 +1753,7 @@ PsWidget* ps_button_create(char* text, float size) {
 
 static float slider_margin = 3.f;
 static Vector4 slider_background_color = { { 0.05f, 0.05f, 0.05f, 1.f } },
-	slider_foreground_color =  { { 0.8f, 0.0f, 0.5f, 1.f } },
+	slider_foreground_color =  { { 0.3f, 0.1f, 0.3f, 1.f } },
 	slider_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
 Vector2 ps_slider_min_size(PsWidget* widget) {

@@ -37,6 +37,8 @@ void ps_resized_callback(void* data, int width, int height);
 void ps_character_callback(uint codepoint);
 void ps_scroll_callback(float yoffset);
 
+void ps_toggle_wireframe();
+
 void ps_begin_scissors(float x, float y, float w, float h);
 void ps_end_scissors();
 

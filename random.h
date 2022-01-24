@@ -8,6 +8,7 @@ uint64_t random_randint();
 float gaussian_random();
 float random_normal(float mean, float deviation);
 float random_float();
+float random_float_seed(uint64_t seed);
 void random_arrayf(float* destination, uint64_t size);
 float random_uniform(float min, float max);
 void randomness_test(uint64_t (*random_fn)(), uint32_t size);
