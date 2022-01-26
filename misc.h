@@ -108,6 +108,7 @@ int dynamic_array_pop(DynamicArray* arr, uint count);
 void dynamic_array_swap(DynamicArray* arr, uint src, uint dst);
 void dynamic_array_remove(DynamicArray* arr, uint id);
 void dynamic_array_clear(DynamicArray* arr);
+void dynamic_array_copy(DynamicArray* src, DynamicArray* dst);
 void dynamic_array_destroy(DynamicArray* arr);
 
 FILE* m_fopen(const char* filename, const char* mode);

@@ -603,52 +603,28 @@ void ps_stroke(Vector4 color, float thickness) {
 	ps_current_path.flags &= ~(PS_PATH_BEING_USED | PS_PATH_CLOSED);
 }
 
-Vector2* ps_fill_previous_point(int64_t i, Vector2* position) {
-	Vector2* previous_position;
+void clip(DynamicArray* new_points, Vector2* points, uint64_t poly_size, Vector2 v1, Vector2 v2) {
+	for (uint i = 0; i < poly_size; i++) {
+		int k = (i + 1) % poly_size;
+		Vector2 ivec = points[i],
+			kvec = points[k];
 
-	int64_t j = i;
+		float i_pos = (v2.x - v1.x) * (ivec.y - v1.y) - (v2.y - v1.y) * (ivec.x - v1.x);
+		float k_pos = (v2.x - v1.x) * (kvec.y - v1.y) - (v2.y - v1.y) * (kvec.x - v1.x);
 
-	if (ps_current_scissors.active) {
-	previous:
-		previous_position = dynamic_array_at(&ps_current_path.points, modi(--j, ps_current_path.points.size));
-		if (((position->x < ps_current_scissors.position.x &&
-			  previous_position->x < ps_current_scissors.position.x) ||
-			 (position->y < ps_current_scissors.position.y &&
-			  previous_position->y < ps_current_scissors.position.y)) &&
-			(i - j) < (int64_t)ps_current_path.points.size)
-		{
-			goto previous;
+		if (i_pos < 0.f && k_pos < 0.f) {
+			Vector2* new_point = dynamic_array_push_back(new_points, 1);
+			*new_point = kvec;
+		} else if (i_pos >= 0.f && k_pos < 0.f) {
+			Vector2* points = dynamic_array_push_back(new_points, 2);
+
+			points[0] = vector2_line_intersection(v1, v2, ivec, kvec);
+			points[1] = kvec;
+		} else if (i_pos < 0.f && k_pos >= 0.f) {
+			Vector2* new_point = dynamic_array_push_back(new_points, 1);
+			*new_point = vector2_line_intersection(v1, v2, ivec, kvec);
 		}
-
-	} else {
-		return dynamic_array_at(&ps_current_path.points, modi(++i, ps_current_path.points.size));
 	}
-
-	return previous_position;
-}
-
-Vector2* ps_fill_next_point(int64_t i, Vector2* position) {
-	Vector2* next_position;
-
-	int64_t j = i;
-
-	if (ps_current_scissors.active) {
-	next:
-		next_position = dynamic_array_at(&ps_current_path.points, modi(++j, ps_current_path.points.size));
-		if (((position->x < ps_current_scissors.position.x &&
-			  next_position->x < ps_current_scissors.position.x) ||
-			 (position->y < ps_current_scissors.position.y &&
-			  next_position->y < ps_current_scissors.position.y)) &&
-			(j - i) < (int64_t)ps_current_path.points.size)
-		{
-			goto next;
-		}
-
-	} else {
-		return dynamic_array_at(&ps_current_path.points, modi(++i, ps_current_path.points.size));
-	}
-
-	return next_position;
 }
 
 void ps_fill(Vector4 color, uint32_t flags) {
@@ -659,131 +635,55 @@ void ps_fill(Vector4 color, uint32_t flags) {
 
 	assert(ps_current_path.points.size >= 3 && (ps_current_path.flags & PS_PATH_CLOSED));
 
+	if (ps_current_scissors.active) {
+	}
+
 	Vector4 aabb = get_aabb(ps_current_path.points.data, ps_current_path.points.size);
 	float width = aabb.z - aabb.x,
 		height = aabb.w - aabb.y;
 
 	Vector2 mean_pos = { 0 };
 
+	DynamicArray new_points;
+	DYNAMIC_ARRAY_CREATE(&new_points, Vector2);
+
+	const Vector2 sc_points[] = {
+		ps_current_scissors.position,
+		{ { ps_current_scissors.position.x,
+			  ps_current_scissors.position.y + ps_current_scissors.size.y } },
+		{ { ps_current_scissors.position.x + ps_current_scissors.size.x,
+			  ps_current_scissors.position.y + ps_current_scissors.size.y } },
+		{ { ps_current_scissors.position.x + ps_current_scissors.size.x,
+			  ps_current_scissors.position.y } },
+	};
+
+	for (uint i = 0; i < 4; i++)
+    {
+        uint k = (i + 1) % 4;
+
+        clip(&new_points, ps_current_path.points.data, ps_current_path.points.size,
+			 sc_points[i], sc_points[k]);
+		dynamic_array_copy(&new_points, &ps_current_path.points);
+		dynamic_array_clear(&new_points);
+    }
+
 	uint64_t count = 0;
 	for (uint64_t i = 0; i < ps_current_path.points.size; i++) {
 		Vector2* position = dynamic_array_at(&ps_current_path.points, i);
 		vector2_add(&mean_pos, mean_pos, *position);
 
-		Vector2 i1, i2, i3, i4;
-		GLboolean x_touched = GL_FALSE,
-			y_touched = GL_FALSE;
+		PsVert* new_vert = dynamic_array_push_back(&list->vbo, 1);
+		count++;
 
-		if (ps_current_scissors.active) {
-			Vector2 *previous_position, *next_position;
-			previous_position = ps_fill_previous_point(i, position);
-			next_position = ps_fill_next_point(i, position);
+		new_vert->color = color;
+		new_vert->position = *position;
 
-			Vector2 sc_down_left = ps_current_scissors.position,
-				sc_down_right = { { ps_current_scissors.position.x + ps_current_scissors.size.x,
-					ps_current_scissors.position.y } },
-				sc_up_right = { { ps_current_scissors.position.x + ps_current_scissors.size.x,
-					ps_current_scissors.position.y + ps_current_scissors.size.y } },
-				sc_up_left = { { ps_current_scissors.position.x,
-					ps_current_scissors.position.y + ps_current_scissors.size.y } };
-
-			if (position->x < ps_current_scissors.position.x) {
-				if (previous_position->x < ps_current_scissors.position.x &&
-					next_position->x < ps_current_scissors.position.x)
-				{
-					continue;
-				}
-
-				x_touched = GL_TRUE;
-
-				i1 = vector2_line_intersection(*previous_position, *position, sc_up_left, sc_down_left);
-				i2 = vector2_line_intersection(*next_position, *position, sc_up_left, sc_down_left);
-			}
-
-			if (position->y < ps_current_scissors.position.y) {
-				if (previous_position->y < ps_current_scissors.position.y &&
-					next_position->y < ps_current_scissors.position.y)
-				{
-					continue;
-				}
-
-				y_touched = GL_TRUE;
-
-				i3 = vector2_line_intersection(*previous_position, *position, sc_down_left, sc_down_right);
-				i4 = vector2_line_intersection(*next_position, *position, sc_down_left, sc_down_right);
-			}
+		if (flags & PS_TEXTURED_POLY) {
+			new_vert->uv_coords.x = (position->x - aabb.x) / width;
+			new_vert->uv_coords.y = (position->y - aabb.y) / height;
 		}
-
-		i1.x = fmax(i1.x, ps_current_scissors.position.x);
-		i1.y = fmax(i1.y, ps_current_scissors.position.y);
-		i2.x = fmax(i2.x, ps_current_scissors.position.x);
-		i2.y = fmax(i2.y, ps_current_scissors.position.y);
-
-		i3.x = fmax(i3.x, ps_current_scissors.position.x);
-		i3.y = fmax(i3.y, ps_current_scissors.position.y);
-		i4.x = fmax(i4.x, ps_current_scissors.position.x);
-		i4.y = fmax(i4.y, ps_current_scissors.position.y);
-
-		if (x_touched) {
-			PsVert* new_vert = dynamic_array_push_back(&list->vbo, 2);
-			count += 2;
-
-			new_vert[0].color = color;
-			new_vert[1].color = color;
-
-			new_vert[0].position = i1;
-			new_vert[1].position = i2;
-
-			if (flags & PS_TEXTURED_POLY) {
-				new_vert[0].uv_coords.x = (position->x - aabb.x) / width;
-				new_vert[0].uv_coords.y = (position->y - aabb.y) / height;
-
-				new_vert[1].uv_coords.x = (position->x - aabb.x) / width;
-				new_vert[1].uv_coords.y = (position->y - aabb.y) / height;
-			}
-			else {
-				new_vert[0].uv_coords = ps_white_pixel;
-				new_vert[1].uv_coords = ps_white_pixel;
-			}
-		}
-
-		if (y_touched) {
-			PsVert* new_vert = dynamic_array_push_back(&list->vbo, 2);
-			count += 2;
-
-			new_vert[0].color = color;
-			new_vert[1].color = color;
-
-			new_vert[0].position = i3;
-			new_vert[1].position = i4;
-
-			if (flags & PS_TEXTURED_POLY) {
-				new_vert[0].uv_coords.x = (position->x - aabb.x) / width;
-				new_vert[0].uv_coords.y = (position->y - aabb.y) / height;
-
-				new_vert[1].uv_coords.x = (position->x - aabb.x) / width;
-				new_vert[1].uv_coords.y = (position->y - aabb.y) / height;
-			}
-			else {
-				new_vert[0].uv_coords = ps_white_pixel;
-				new_vert[1].uv_coords = ps_white_pixel;
-			}
-		}
-
-		if (!x_touched && !y_touched) {
-			PsVert* new_vert = dynamic_array_push_back(&list->vbo, 1);
-			count++;
-
-			new_vert->color = color;
-			new_vert->position = *position;
-
-			if (flags & PS_TEXTURED_POLY) {
-				new_vert->uv_coords.x = (position->x - aabb.x) / width;
-				new_vert->uv_coords.y = (position->y - aabb.y) / height;
-			}
-			else {
-				new_vert->uv_coords = ps_white_pixel;
-			}
+		else {
+			new_vert->uv_coords = ps_white_pixel;
 		}
 	}
 

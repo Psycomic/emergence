@@ -133,6 +133,17 @@ void dynamic_array_clear(DynamicArray* arr) {
 	arr->size = 0;
 }
 
+void dynamic_array_copy(DynamicArray* src, DynamicArray* dst) {
+	assert(src->element_size == dst->element_size);
+
+	if (src->capacity > dst->capacity) {
+		dst->data = realloc(dst->data, src->capacity);
+	}
+
+	dst->size = src->size;
+	memcpy(dst->data, src->data, src->element_size * src->size);
+}
+
 void dynamic_array_destroy(DynamicArray* arr) {
 	free(arr->data);
 
