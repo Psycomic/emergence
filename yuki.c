@@ -121,6 +121,8 @@ inline static char* yk_symbol_cstr(YkObject sym);
 static YkCompilerVar* yk_find_closed_vars(YkObject expr, YkClosedVar* upenvs, YkObject env);
 static YkCompilerVar* yk_find_closed_conts(YkObject expr, YkClosedVar* upenvs, YkObject env);
 
+YkObject yk_make_cpointer(void* cptr);
+
 static YkObject yk_arglist_cfun,
 	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
 	yk_symbol_file_mode_binary_input, yk_symbol_file_mode_binary_output, yk_symbol_file_mode_binary_append,
@@ -249,6 +251,9 @@ mark:
 	else if (YK_TYPEOF(o) == yk_t_string_stream) {
 		yk_mark_block_data(YK_PTR(o)->string_stream.buffer);
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+	}
+	else if (YK_TYPEOF(o) == yk_t_cpointer) {
+		/* DO NOTHING */
 	}
 	else {
 		assert(0);
@@ -1485,6 +1490,45 @@ static YkObject yk_builtin_gc(YkUint nargs) {
 	return YK_NIL;
 }
 
+static YkObject yk_builtin_make_window(YkUint nargs) {
+	YkObject title = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_TYPEOF(title) == yk_t_string);
+
+	PsWidget* window = ps_window_create(yk_string_to_c_str(title));
+	return yk_make_cpointer(window);
+}
+
+static YkObject yk_builtin_make_box(YkUint nargs) {
+	YkObject direction = yk_lisp_stack_top[0],
+		margin = yk_lisp_stack_top[1];
+
+	YK_ASSERT(YK_SYMBOLP(direction) && YK_FLOATP(margin));
+
+	PsDirection dir;
+
+	if (yk_make_symbol_cstr("vertical") == direction) {
+		dir = PS_DIRECTION_VERTICAL;
+	} else if (yk_make_symbol_cstr("horizontal") == direction) {
+		dir = PS_DIRECTION_HORIZONTAL;
+	} else {
+		YK_ASSERT(0);
+	}
+
+	PsWidget* vbox = ps_box_create(dir, YK_FLOAT(margin));
+	return yk_make_cpointer(vbox);
+}
+
+static YkObject yk_builtin_window_set_root(YkUint nargs) {
+	YkObject window = yk_lisp_stack_top[0],
+		root = yk_lisp_stack_top[1];
+
+	YK_ASSERT(YK_TYPEOF(window) == yk_t_cpointer &&
+			  YK_TYPEOF(root) == yk_t_cpointer);
+
+	ps_window_set_root(window->pointer.cpointer, root->pointer.cpointer);
+	return YK_NIL;
+}
+
 static YkObject yk_arglist(YkUint nargs) {
 	YkObject list = YK_NIL;
 	YK_GC_PROTECT1(list);
@@ -1790,6 +1834,10 @@ void yk_init() {
 
 	yk_make_builtin("breakpoint", 0, yk_builtin_breakpoint);
 	yk_make_builtin("invoke-debugger", 1, yk_default_debugger);
+
+	yk_make_builtin("ps-make-window", 1, yk_builtin_make_window);
+	yk_make_builtin("ps-make-box", 2, yk_builtin_make_box);
+	yk_make_builtin("ps-window-set-root", 2, yk_builtin_window_set_root);
 }
 
 static void yk_assert(const char* expression, const char* file, uint32_t line) {
@@ -1968,6 +2016,14 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 	last_i->modifier = modifier;
 	last_i->opcode = op;
 	YK_GC_UNPROTECT;
+}
+
+YkObject yk_make_cpointer(void* cptr) {
+	YkObject obj = yk_alloc();
+	obj->pointer.cpointer = cptr;
+	obj->pointer.t = yk_t_cpointer;
+
+	return obj;
 }
 
 static YkObject yk_nreverse(YkObject list) {
@@ -3684,7 +3740,6 @@ static void yk_compile_loop(YkObject bytecode, YkCompilerState* state) {
 	case yk_t_array:
 	case yk_t_bytecode:
 	case yk_t_c_proc:
-	case yk_t_class:
 	case yk_t_closure:
 	case yk_t_float:
 	case yk_t_instance:

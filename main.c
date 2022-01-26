@@ -130,12 +130,6 @@ static PsWidget* result_label;
 static PsWidget* wireframe_button;
 static Worker* terrain_worker = NULL;
 
-void scene_character_callback(void* data, Key key) {
-	if (key.code == 'w' && scene->flags & SCENE_GUI_MODE) {
-		ps_toggle_wireframe();
-	}
-}
-
 void update() {
 	p7_loop();
 	scene_draw(scene, background_color);
@@ -190,9 +184,7 @@ void update() {
 		YK_GC_UNPROTECT;
 	}
 
-	if (scene->flags & SCENE_GUI_MODE)
-		ps_render();
-
+	ps_render(scene->flags & SCENE_GUI_MODE);
 	scene_handle_events(scene);
 
 	if (g_window.keys[GLFW_KEY_Q] && !(scene->flags & SCENE_GUI_MODE)) {
@@ -297,7 +289,6 @@ int do_main(int argc, char** argv) {
 	random_init();
 
 	window_add_resize_hook(scene_resize_callback, scene);
-	window_add_character_hook(scene_character_callback, NULL);
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");

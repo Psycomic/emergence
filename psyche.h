@@ -29,10 +29,8 @@ typedef enum {
 typedef void PsWindow;
 typedef void PsWidget;
 
-extern PsWidget* ps_current_input;
-
 void ps_init();
-void ps_render();
+void ps_render(BOOL is_visible);
 void ps_resized_callback(void* data, int width, int height);
 void ps_character_callback(uint codepoint);
 void ps_scroll_callback(float yoffset);

@@ -64,6 +64,24 @@ typedef struct {
 } PsDrawData;
 
 typedef struct {
+	enum {
+		PS_EVENT_CHARACTER_INPUT,
+		PS_EVENT_RIGHT_CLICK,
+		PS_EVENT_LEFT_CLICK,
+		PS_EVENT_HANDLED
+	} type;
+
+	union {
+		Key key;
+		Vector2 click;
+	} event;
+} PsEvent;
+
+#define PS_MAX_EVENTS 1024
+static PsEvent ps_event_queue[PS_MAX_EVENTS];
+static uint64_t ps_event_queue_end = 0; /*  */
+
+typedef struct {
 	DynamicArray points;		// Vector2*
 	float thickness;
 
@@ -180,8 +198,6 @@ typedef struct {
 
 #define PS_MAX_WINDOWS 255
 
-PsInput* ps_current_input = NULL;
-
 static PsWindow* ps_windows[PS_MAX_WINDOWS];
 static uint64_t ps_windows_count = 0;
 
@@ -205,8 +221,8 @@ static PsFont ps_current_font;
 
 static BOOL ps_wireframe;
 
-Key psyche_last_key;
-static BOOL last_character_read = GL_TRUE;
+/* Key psyche_last_key; */
+/* static BOOL last_character_read = GL_TRUE; */
 
 static Vector2 ps_white_pixel = {
 	.x = 0.f,
@@ -257,14 +273,24 @@ void ps_atlas_init(Image* image) {
 	ps_atlas.texture_id = texture_create(image);
 }
 
+void ps_dispatch_event(PsEvent evt) {
+	ps_event_queue[(ps_event_queue_end++ % PS_MAX_EVENTS)] = evt;
+}
+void ps_handled_event(uint64_t i) {
+	ps_event_queue[i].type = PS_EVENT_HANDLED;
+}
+
 void ps_resized_callback(void* data, int width, int height) {
 	ps_ctx.display_size.x = (float)width;
 	ps_ctx.display_size.y = (float)height;
 }
 
 void ps_character_callback(void* data, Key key) {
-	psyche_last_key = key;
-	last_character_read = GL_FALSE;
+	PsEvent new_event;
+	new_event.type = PS_EVENT_CHARACTER_INPUT;
+	new_event.event.key = key;
+
+	ps_dispatch_event(new_event);
 }
 
 void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t glyph_height, uint32_t width, uint32_t height) {
@@ -347,78 +373,82 @@ void ps_toggle_wireframe() {
 	ps_wireframe = !ps_wireframe;
 }
 
-void ps_render() {
-	ps_draw_gui();
+void ps_render(BOOL is_visible) {
+	if (is_visible) {
+		ps_draw_gui();
 
-	GLint last_vertex_array; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
-	GLint last_polygon_mode[2]; glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
-	GLboolean last_cull_face; glGetBooleanv(GL_CULL_FACE_MODE, &last_cull_face);
+		GLint last_vertex_array; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
+		GLint last_polygon_mode[2]; glGetIntegerv(GL_POLYGON_MODE, last_polygon_mode);
+		GLboolean last_cull_face; glGetBooleanv(GL_CULL_FACE_MODE, &last_cull_face);
 
-    glBindVertexArray(ps_vao);
+		glBindVertexArray(ps_vao);
 
-	glBindBuffer(GL_ARRAY_BUFFER, ps_vbo);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ps_ibo);
+		glBindBuffer(GL_ARRAY_BUFFER, ps_vbo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ps_ibo);
 
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glEnableVertexAttribArray(2);
+		glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(1);
+		glEnableVertexAttribArray(2);
 
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(PsVert), OFFSET_OF(PsVert, position));
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(PsVert), OFFSET_OF(PsVert, uv_coords));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(PsVert), OFFSET_OF(PsVert, color));
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(PsVert), OFFSET_OF(PsVert, position));
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(PsVert), OFFSET_OF(PsVert, uv_coords));
+		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(PsVert), OFFSET_OF(PsVert, color));
 
-	Mat4 ortho_matrix;
-	mat4_create_orthogonal(ortho_matrix, -ps_ctx.display_size.x / 2, ps_ctx.display_size.x / 2,
-						   -ps_ctx.display_size.y / 2, ps_ctx.display_size.y / 2, -1.f, 1.f);
+		Mat4 ortho_matrix;
+		mat4_create_orthogonal(ortho_matrix, -ps_ctx.display_size.x / 2, ps_ctx.display_size.x / 2,
+							   -ps_ctx.display_size.y / 2, ps_ctx.display_size.y / 2, -1.f, 1.f);
 
-	glUseProgram(ps_shader);
+		glUseProgram(ps_shader);
 
-	if (ps_wireframe)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	else
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	glDisable(GL_CULL_FACE);
-
-	glUniformMatrix4fv(ps_matrix_location, 1, GL_FALSE, ortho_matrix);
-	glUniform1i(ps_texture_location, 0);
-
-	for (uint64_t i = 0; i < ps_ctx.draw_lists_count; i++) {
-		PsDrawList* cmd_list = ps_ctx.draw_lists[i];
-
-		if (cmd_list->vbo.size != cmd_list->vbo_last_size)
-			glBufferData(GL_ARRAY_BUFFER, cmd_list->vbo.size * sizeof(PsVert), cmd_list->vbo.data, GL_STREAM_DRAW);
+		if (ps_wireframe)
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		else
-			glBufferSubData(GL_ARRAY_BUFFER, 0, cmd_list->vbo.size * sizeof(PsVert), cmd_list->vbo.data);
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-		if (cmd_list->ibo.size != cmd_list->ibo_last_size)
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, cmd_list->ibo.size * sizeof(PsIndex), cmd_list->ibo.data, GL_STREAM_DRAW);
-		else
-			glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, cmd_list->ibo.size * sizeof(PsIndex), cmd_list->ibo.data);
+		glDisable(GL_CULL_FACE);
 
-		cmd_list->ibo_last_size = cmd_list->ibo.size;
-		cmd_list->vbo_last_size = cmd_list->vbo.size;
+		glUniformMatrix4fv(ps_matrix_location, 1, GL_FALSE, ortho_matrix);
+		glUniform1i(ps_texture_location, 0);
 
-		for (uint64_t j = 0; j < cmd_list->commands.size; j++) {
-			PsDrawCmd* cmd = dynamic_array_at(&cmd_list->commands, j);
+		for (uint64_t i = 0; i < ps_ctx.draw_lists_count; i++) {
+			PsDrawList* cmd_list = ps_ctx.draw_lists[i];
 
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, ps_atlas.texture_id);
-			glDrawElements(GL_TRIANGLES, cmd->elements_count, sizeof(PsIndex) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, (const void*)cmd->ibo_offset);
+			if (cmd_list->vbo.size != cmd_list->vbo_last_size)
+				glBufferData(GL_ARRAY_BUFFER, cmd_list->vbo.size * sizeof(PsVert), cmd_list->vbo.data, GL_STREAM_DRAW);
+			else
+				glBufferSubData(GL_ARRAY_BUFFER, 0, cmd_list->vbo.size * sizeof(PsVert), cmd_list->vbo.data);
 
-			ps_draw_cmd_clear(cmd);
+			if (cmd_list->ibo.size != cmd_list->ibo_last_size)
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, cmd_list->ibo.size * sizeof(PsIndex), cmd_list->ibo.data, GL_STREAM_DRAW);
+			else
+				glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, cmd_list->ibo.size * sizeof(PsIndex), cmd_list->ibo.data);
+
+			cmd_list->ibo_last_size = cmd_list->ibo.size;
+			cmd_list->vbo_last_size = cmd_list->vbo.size;
+
+			for (uint64_t j = 0; j < cmd_list->commands.size; j++) {
+				PsDrawCmd* cmd = dynamic_array_at(&cmd_list->commands, j);
+
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, ps_atlas.texture_id);
+				glDrawElements(GL_TRIANGLES, cmd->elements_count, sizeof(PsIndex) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, (const void*)cmd->ibo_offset);
+
+				ps_draw_cmd_clear(cmd);
+			}
+
+			ps_draw_list_clear(cmd_list);
 		}
 
-		ps_draw_list_clear(cmd_list);
+		glPolygonMode(GL_FRONT_AND_BACK, last_polygon_mode[0]);
+		glBindVertexArray(last_vertex_array);
+
+		if (last_cull_face)
+			glEnable(GL_CULL_FACE);
+
+		get_opengl_errors();
 	}
 
-	glPolygonMode(GL_FRONT_AND_BACK, last_polygon_mode[0]);
-	glBindVertexArray(last_vertex_array);
-
-	if (last_cull_face)
-		glEnable(GL_CULL_FACE);
-
-	get_opengl_errors();
+	ps_event_queue_end = 0;
 }
 
 void ps_begin_scissors(float x, float y, float w, float h) {
@@ -635,37 +665,38 @@ void ps_fill(Vector4 color, uint32_t flags) {
 
 	assert(ps_current_path.points.size >= 3 && (ps_current_path.flags & PS_PATH_CLOSED));
 
-	if (ps_current_scissors.active) {
-	}
-
 	Vector4 aabb = get_aabb(ps_current_path.points.data, ps_current_path.points.size);
 	float width = aabb.z - aabb.x,
 		height = aabb.w - aabb.y;
 
 	Vector2 mean_pos = { 0 };
 
-	DynamicArray new_points;
-	DYNAMIC_ARRAY_CREATE(&new_points, Vector2);
+	if (ps_current_scissors.active) {
+		DynamicArray new_points;
+		DYNAMIC_ARRAY_CREATE(&new_points, Vector2);
 
-	const Vector2 sc_points[] = {
-		ps_current_scissors.position,
-		{ { ps_current_scissors.position.x,
-			  ps_current_scissors.position.y + ps_current_scissors.size.y } },
-		{ { ps_current_scissors.position.x + ps_current_scissors.size.x,
-			  ps_current_scissors.position.y + ps_current_scissors.size.y } },
-		{ { ps_current_scissors.position.x + ps_current_scissors.size.x,
-			  ps_current_scissors.position.y } },
-	};
+		const Vector2 sc_points[] = {
+			ps_current_scissors.position,
+			{ { ps_current_scissors.position.x,
+				  ps_current_scissors.position.y + ps_current_scissors.size.y } },
+			{ { ps_current_scissors.position.x + ps_current_scissors.size.x,
+				  ps_current_scissors.position.y + ps_current_scissors.size.y } },
+			{ { ps_current_scissors.position.x + ps_current_scissors.size.x,
+				  ps_current_scissors.position.y } },
+		};
 
-	for (uint i = 0; i < 4; i++)
-    {
-        uint k = (i + 1) % 4;
+		for (uint i = 0; i < 4; i++)
+		{
+			uint k = (i + 1) % 4;
 
-        clip(&new_points, ps_current_path.points.data, ps_current_path.points.size,
-			 sc_points[i], sc_points[k]);
-		dynamic_array_copy(&new_points, &ps_current_path.points);
-		dynamic_array_clear(&new_points);
-    }
+			clip(&new_points, ps_current_path.points.data, ps_current_path.points.size,
+				 sc_points[i], sc_points[k]);
+			dynamic_array_copy(&new_points, &ps_current_path.points);
+			dynamic_array_clear(&new_points);
+		}
+
+		dynamic_array_destroy(&new_points);
+	}
 
 	uint64_t count = 0;
 	for (uint64_t i = 0; i < ps_current_path.points.size; i++) {
@@ -1173,7 +1204,12 @@ BOOL ps_window_resize_triangle_inside(PsWindow* window, Vector2 point) {
 }
 
 Vector2 ps_window_min_size(PsWindow* window) {
-	Vector2 root_min_size = ps_widget_min_size(window->root);
+	Vector2 root_min_size = { { 100.f, 100.f } };
+
+	if (window->root) {
+		root_min_size = ps_widget_min_size(window->root);
+	}
+
 	root_min_size.x += 10.f;
 	root_min_size.y += 10.f;
 
@@ -1827,10 +1863,6 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 			x_cursor_pos = min(x_cursor_pos, line_size);
 
 			input->cursor_position = x_cursor_pos + i;
-
-			last_character_read = GL_TRUE;
-			ps_current_input = input;
-
 			input->selected = GL_TRUE;
 		}
 		else if (g_window.mouse_button_left_state) {
@@ -1848,61 +1880,77 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	}
 
 	if (input->selected) {
-		if  (!last_character_read) {
-			if (key_equal(psyche_last_key, (Key) { KEY_DEL, 0 })) {
-				if (input->cursor_position > 0) {
-					uint index = --input->cursor_position;
-					memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
+		for (uint i = 0; i < ps_event_queue_end; i++) {
+			if (ps_event_queue[i].type == PS_EVENT_CHARACTER_INPUT) {
+				Key key = ps_event_queue[i].event.key;
+
+				if (key_equal(key, (Key) { KEY_DEL, 0 })) {
+					if (input->cursor_position > 0) {
+						uint index = --input->cursor_position;
+						memcpy(input->value + index, input->value + index + 1, strlen(input->value) - index);
+					}
+
+					ps_handled_event(i);
+				}
+				else if (key_equal(key, (Key) { KEY_TAB, 0 })) {
+					ps_input_insert_at_point(input, "    ");
+
+					ps_handled_event(i);
+				}
+				else if (key_equal(key, (Key) { KEY_LEFT, 0 })) {
+					if (input->cursor_position > 0)
+						input->cursor_position--;
+
+					ps_handled_event(i);
+				}
+				else if (key_equal(key, (Key) { KEY_RIGHT, 0 })) {
+					if (input->cursor_position < strlen(input->value))
+						input->cursor_position++;
+
+					ps_handled_event(i);
+				}
+				else if (key_equal(key, (Key) { KEY_UP, 0 })) {
+					uint line_size = ps_input_beginning_of_line(input);
+
+					if (input->cursor_position > 0) {
+						input->cursor_position--;
+						uint second_line_size = ps_input_beginning_of_line(input);
+						input->cursor_position += min(line_size, second_line_size);
+					}
+
+					ps_handled_event(i);
+				}
+				else if (key_equal(key, (Key) { KEY_DOWN, 0 })) {
+					uint line_size = ps_input_beginning_of_line(input);
+					input->cursor_position += line_size;
+
+					ps_input_end_of_line(input);
+
+					if (input->value[input->cursor_position] != '\0') {
+						input->cursor_position++;
+						uint saved_pos = input->cursor_position;
+						uint second_line_size = ps_input_end_of_line(input);
+
+						input->cursor_position = saved_pos + min(line_size, second_line_size);
+					}
+
+					ps_handled_event(i);
+				}
+				else if (key.modifiers == 0) {
+					char new_string[5];
+
+					u_codepoint_to_string(new_string, key.code);
+					ps_input_insert_at_point(input, new_string);
+
+					ps_handled_event(i);
+				}
+				else {
+					char buffer[16];
+					key_repr(buffer, key, sizeof(buffer) - 1);
+
+					printf("No binding to %s\n", buffer);
 				}
 			}
-			else if (key_equal(psyche_last_key, (Key) { KEY_TAB, 0 })) {
-				ps_input_insert_at_point(input, "    ");
-			}
-			else if (key_equal(psyche_last_key, (Key) { KEY_LEFT, 0 })) {
-				if (input->cursor_position > 0)
-					input->cursor_position--;
-			}
-			else if (key_equal(psyche_last_key, (Key) { KEY_RIGHT, 0 })) {
-				if (input->cursor_position < strlen(input->value))
-					input->cursor_position++;
-			}
-			else if (key_equal(psyche_last_key, (Key) { KEY_UP, 0 })) {
-				uint line_size = ps_input_beginning_of_line(input);
-
-				if (input->cursor_position > 0) {
-					input->cursor_position--;
-					uint second_line_size = ps_input_beginning_of_line(input);
-					input->cursor_position += min(line_size, second_line_size);
-				}
-			}
-			else if (key_equal(psyche_last_key, (Key) { KEY_DOWN, 0 })) {
-				uint line_size = ps_input_beginning_of_line(input);
-				input->cursor_position += line_size;
-
-				ps_input_end_of_line(input);
-
-				if (input->value[input->cursor_position] != '\0') {
-					input->cursor_position++;
-					uint saved_pos = input->cursor_position;
-					uint second_line_size = ps_input_end_of_line(input);
-
-					input->cursor_position = saved_pos + min(line_size, second_line_size);
-				}
-			}
-			else if (psyche_last_key.modifiers == 0) {
-				char new_string[5];
-
-				u_codepoint_to_string(new_string, psyche_last_key.code);
-				ps_input_insert_at_point(input, new_string);
-			}
-			else {
-				char buffer[16];
-				key_repr(buffer, psyche_last_key, sizeof(buffer) - 1);
-
-				printf("No binding to %s\n", buffer);
-			}
-
-			last_character_read = GL_TRUE;
 		}
 	}
 

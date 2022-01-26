@@ -21,9 +21,9 @@ typedef enum {
 	yk_t_continuation,
 	yk_t_boxed,
 	yk_t_instance,
-	yk_t_class,
 	yk_t_array,
 	yk_t_string,
+	yk_t_cpointer,
 	yk_t_string_stream,
 	yk_t_file_stream
 } YkType;
@@ -301,6 +301,11 @@ typedef struct {
 	YkType t;
 } YkBoxed;
 
+typedef struct {
+	void *cpointer;
+	YkType t;
+} YkCPointer;
+
 union YkUnion {
 	struct {
 		YkObject dummy;
@@ -318,6 +323,7 @@ union YkUnion {
 	YkStringStream string_stream;
 	YkFileStream file_stream;
 	YkBoxed boxed;
+	YkCPointer pointer;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);

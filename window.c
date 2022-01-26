@@ -22,6 +22,11 @@ void window_character_callback(GLFWwindow* w, uint codepoint) {
 	window_new_key(codepoint, GL_TRUE);
 }
 
+void window_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (key == GLFW_KEY_E && action == GLFW_PRESS)
+		printf("Pressed key E!\n");
+}
+
 int window_create(int width, int height, const char* title, void(*setup)(), void(*update)()) {
 	glewExperimental = 1;
 
