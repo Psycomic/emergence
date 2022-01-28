@@ -23,8 +23,12 @@ void window_character_callback(GLFWwindow* w, uint codepoint) {
 }
 
 void window_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if (key == GLFW_KEY_E && action == GLFW_PRESS)
-		printf("Pressed key E!\n");
+	if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+		window_new_key(key, GL_FALSE);
+		g_window.keys[key] = GL_TRUE;
+	} else {
+		g_window.keys[key] = GL_FALSE;
+	}
 }
 
 int window_create(int width, int height, const char* title, void(*setup)(), void(*update)()) {
@@ -47,7 +51,6 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 
 	ct_assert(sizeof(g_window.keys) > 8);
 	m_bzero(g_window.keys, sizeof(g_window.keys));
-	m_bzero(g_window.keys_delay, sizeof(g_window.keys_delay));
 
 	g_window.update = update;
 
@@ -78,6 +81,7 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 
 	glfwSetWindowSizeCallback(g_window.w, window_size_callback);
 	glfwSetCharCallback(g_window.w, window_character_callback);
+	glfwSetKeyCallback(g_window.w, window_key_callback);
 
 	setup();
 
@@ -160,6 +164,12 @@ void key_repr(char* buffer, Key k, uint32_t n) {
 	}
 }
 
+uint hash_key(void* data, uint size) {
+	Key* key = data;
+
+	return key->code | ((key->modifiers) << (3 * 8));
+}
+
 void window_new_key(uint code, BOOL is_raw) {
 	uint keycode = '?';
 	BOOL is_handled = GL_TRUE;
@@ -219,28 +229,6 @@ void window_update() {
 	g_window.cursor_position.x = (float)xpos - g_window.size.x / 2;
 	g_window.cursor_position.y = g_window.size.y / 2 - (float)ypos;
 
-	for (uint i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST; i++) {
-		g_window.keys[i] = glfwGetKey(g_window.w, i);
-
-		if (g_window.keys[i]) {
-			if (UINT_NO_LAST_BIT(g_window.keys_delay[i]) <= 0) {
-				if (UINT_LAST_BIT(g_window.keys_delay[i]))
-					g_window.keys_delay[i] = 2 | 0x10000000;
-				else
-					g_window.keys_delay[i] = 20 | 0x10000000;
-
-				window_new_key(i, GL_FALSE);
-			}
-			else {
-				g_window.keys_delay[i] = (UINT_NO_LAST_BIT(g_window.keys_delay[i]) - 1) |
-					UINT_LAST_BIT(g_window.keys_delay[i]);
-			}
-		}
-		else {
-			g_window.keys_delay[i] = 0;
-		}
-	}
-
 	g_window.should_close = glfwWindowShouldClose(g_window.w);
 	g_window.mouse_button_left_state = glfwGetMouseButton(g_window.w, GLFW_MOUSE_BUTTON_LEFT);
 }
@@ -272,26 +260,4 @@ void window_mainloop() {
 	}
 
 	glfwTerminate();
-}
-
-BOOL window_key_as_text_evt(uint key) {
-	if (g_window.keys[key]) {
-		if (UINT_NO_LAST_BIT(g_window.keys_delay[key]) <= 0) {
-			if (UINT_LAST_BIT(g_window.keys_delay[key]))
-				g_window.keys_delay[key] = 2 | 0x10000000;
-			else
-				g_window.keys_delay[key] = 20 | 0x10000000;
-
-			return GL_TRUE;
-		}
-		else {
-			g_window.keys_delay[key] = (UINT_NO_LAST_BIT(g_window.keys_delay[key]) - 1) |
-				UINT_LAST_BIT(g_window.keys_delay[key]);
-
-			return GL_FALSE;
-		}
-	}
-
-	g_window.keys_delay[key] = 0;
-	return GL_FALSE;
 }

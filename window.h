@@ -29,7 +29,6 @@ typedef struct {
 	Vector2 cursor_position;
 
 	BOOL keys[GLFW_KEY_LAST + 1];
-	uint keys_delay[GLFW_KEY_LAST + 1];
 	BOOL should_close;
 
 	int mouse_button_left_state;
@@ -61,11 +60,11 @@ int window_create(int width, int height, const char* title, void(*setup)(), void
 void window_add_resize_hook(void (*fn)(void*, int, int), void* data);
 void window_add_character_hook(void (*fn)(void*, Key), void* data);
 
-BOOL window_key_as_text_evt(uint key);
 Key key_create(uint code, uint32_t modifiers);
 BOOL key_equal(Key a, Key b);
 BOOL key_code_printable(uint code);
 void key_repr(char* buffer, Key k, uint32_t n);
+uint hash_key(void* data, uint size);
 
 void window_mainloop();
 

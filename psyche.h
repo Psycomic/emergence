@@ -6,6 +6,7 @@
 
 #include "misc.h"
 #include "images.h"
+#include "window.h"
 
 #define PS_PATH_BEING_USED	(1 << 0)
 #define PS_PATH_CLOSED 		(1 << 1)
@@ -36,6 +37,7 @@ void ps_character_callback(uint codepoint);
 void ps_scroll_callback(float yoffset);
 
 void ps_toggle_wireframe();
+void ps_add_global_binding(Key key, void (*callback)(void*), void* userptr);
 
 void ps_begin_scissors(float x, float y, float w, float h);
 void ps_end_scissors();

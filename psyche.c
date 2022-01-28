@@ -1,6 +1,5 @@
 #include "drawable.h"
 #include "random.h"
-#include "window.h"
 
 #include <string.h>
 #include <assert.h>
@@ -79,7 +78,15 @@ typedef struct {
 
 #define PS_MAX_EVENTS 1024
 static PsEvent ps_event_queue[PS_MAX_EVENTS];
-static uint64_t ps_event_queue_end = 0; /*  */
+static uint64_t ps_event_queue_end = 0;
+
+typedef struct {
+	Key key;
+	void (*callback)(void*);
+	void* userptr;
+} PsBinding;
+
+static HashTable* ps_global_bindings;
 
 typedef struct {
 	DynamicArray points;		// Vector2*
@@ -323,6 +330,8 @@ void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t
 }
 
 void ps_init() {
+	ps_global_bindings = hash_table_create(512, hash_key);
+
 	glGenBuffers(1, &ps_vbo);
 	glGenBuffers(1, &ps_ibo);
 
@@ -373,8 +382,32 @@ void ps_toggle_wireframe() {
 	ps_wireframe = !ps_wireframe;
 }
 
+void ps_add_global_binding(Key key, void (*callback)(void*), void* userptr) {
+	PsBinding* binding = malloc(sizeof(PsBinding));
+	binding->key = key;
+	binding->callback = callback;
+	binding->userptr = userptr;
+
+	hash_table_set(ps_global_bindings, &key, sizeof(Key), binding, sizeof(PsBinding));
+}
+
 void ps_render(BOOL is_visible) {
 	if (is_visible) {
+		for (uint i = 0; i < ps_event_queue_end; i++) {
+			PsEvent* event = ps_event_queue + i;
+
+			if (event->type == PS_EVENT_CHARACTER_INPUT) {
+				char buffer[64];
+				key_repr(buffer, event->event.key, sizeof(buffer));
+
+				PsBinding* binding = hash_table_get(ps_global_bindings, &event->event.key, sizeof(Key));
+				if (binding) {
+					binding->callback(binding->userptr);
+					ps_handled_event(i);
+				}
+			}
+		}
+
 		ps_draw_gui();
 
 		GLint last_vertex_array; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vertex_array);
@@ -446,6 +479,7 @@ void ps_render(BOOL is_visible) {
 			glEnable(GL_CULL_FACE);
 
 		get_opengl_errors();
+
 	}
 
 	ps_event_queue_end = 0;

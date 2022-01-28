@@ -221,6 +221,10 @@ void canvas_draw(PsWidget* canvas, Vector2 anchor, Vector2 size) {
 	ps_fill((Vector4) { { 1.f, 1.f, 1.f, 1.f } }, PS_FILLED_POLY);
 }
 
+void toggle_wireframe(void* data) {
+	ps_toggle_wireframe();
+}
+
 int do_main(int argc, char** argv) {
 	locale = setlocale(LC_ALL, "");
 
@@ -289,6 +293,7 @@ int do_main(int argc, char** argv) {
 	random_init();
 
 	window_add_resize_hook(scene_resize_callback, scene);
+	ps_add_global_binding(key_create('w', 0), toggle_wireframe, NULL);
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");
