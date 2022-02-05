@@ -3,12 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define UINT_NO_LAST_BIT(x) ((x) & 0x0fffffff)
-#define UINT_LAST_BIT(x)    ((x) & 0x10000000)
-
 Window g_window;
 
-void window_new_key(uint code, BOOL is_raw);
+void window_new_key(uint code, int mods, BOOL is_raw);
 
 void window_size_callback(GLFWwindow* window, int width, int height) {
 	g_window.size.x = (float)width;
@@ -19,12 +16,36 @@ void window_size_callback(GLFWwindow* window, int width, int height) {
 }
 
 void window_character_callback(GLFWwindow* w, uint codepoint) {
-	window_new_key(codepoint, GL_TRUE);
+	window_new_key(codepoint, 0, GL_TRUE);
 }
 
 void window_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+/*	const char* name = glfwGetKeyName(key, 0);
+	printf("Got key %s\n", name);
+
+	printf("Modifiers: ");
+	if (mods & GLFW_MOD_SHIFT) {
+		printf("Shift ");
+	}
+	if (mods & GLFW_MOD_CONTROL) {
+		printf("Control ");
+	}
+	if (mods & GLFW_MOD_ALT) {
+		printf("Alt ");
+	}
+	if (mods & GLFW_MOD_SUPER) {
+		printf("Super ");
+	}
+	if (mods & GLFW_MOD_CAPS_LOCK) {
+		printf("Caps_Lock ");
+	}
+	if (mods & GLFW_MOD_NUM_LOCK) {
+		printf("Num_Lock ");
+	}
+	printf(".\n");*/
+
 	if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-		window_new_key(key, GL_FALSE);
+		window_new_key(key, mods, GL_FALSE);
 		g_window.keys[key] = GL_TRUE;
 	} else {
 		g_window.keys[key] = GL_FALSE;
@@ -139,6 +160,10 @@ void key_repr(char* buffer, Key k, uint32_t n) {
 		strncpy(buffer + i, "s-", n - i);
 		i += 2;
 	}
+	if (k.modifiers & KEY_MOD_SHIFT) {
+		strncpy(buffer + i, "S-", n - i);
+		i += 2;
+	}
 
 	if (key_code_printable(k.code) && i < n) {
 		buffer[i] = k.code;
@@ -167,17 +192,27 @@ void key_repr(char* buffer, Key k, uint32_t n) {
 uint hash_key(void* data, uint size) {
 	Key* key = data;
 
-	return key->code | ((key->modifiers) << (3 * 8));
+	return key->code + (key->modifiers << 24);
 }
 
-void window_new_key(uint code, BOOL is_raw) {
+void window_new_key(uint code, int mods, BOOL is_raw) {
 	uint keycode = '?';
 	BOOL is_handled = GL_TRUE;
 
+	uint32_t modifiers = 0;
 	if (is_raw) {
 		keycode = code;
 	}
 	else {
+		if (mods & GLFW_MOD_CONTROL)
+			modifiers |= KEY_MOD_CTRL;
+		if (mods & GLFW_MOD_ALT)
+			modifiers |= KEY_MOD_ALT;
+		if (mods & GLFW_MOD_SUPER)
+			modifiers |= KEY_MOD_SUPER;
+		if (mods & GLFW_MOD_SHIFT)
+			modifiers |= KEY_MOD_SHIFT;
+
 		switch (code) {
 		case GLFW_KEY_ENTER:
 			keycode = '\n';
@@ -204,15 +239,18 @@ void window_new_key(uint code, BOOL is_raw) {
 			is_handled = GL_FALSE;
 			break;
 		}
-	}
 
-	uint32_t modifiers = 0;
-	if (g_window.keys[GLFW_KEY_LEFT_CONTROL] || g_window.keys[GLFW_KEY_RIGHT_CONTROL])
-		modifiers |= KEY_MOD_CTRL;
-	if (g_window.keys[GLFW_KEY_LEFT_ALT])
-		modifiers |= KEY_MOD_ALT;
-	if (g_window.keys[GLFW_KEY_LEFT_SUPER] || g_window.keys[GLFW_KEY_RIGHT_SUPER])
-		modifiers |= KEY_MOD_SUPER;
+		if (!is_handled && (modifiers & ~KEY_MOD_SHIFT))
+		{
+			is_handled = GL_TRUE;
+			const char* name = glfwGetKeyName(code, 0);
+			if (name) {
+				keycode = u_string_to_codepoint(name);
+			} else {
+				is_handled = GL_FALSE;
+			}
+		}
+	}
 
 	Key key = key_create(keycode, modifiers);
 

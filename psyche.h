@@ -30,6 +30,8 @@ typedef enum {
 typedef void PsWindow;
 typedef void PsWidget;
 
+extern PsWidget* ps_current_input;
+
 void ps_init();
 void ps_render(BOOL is_visible);
 void ps_resized_callback(void* data, int width, int height);
@@ -57,6 +59,7 @@ void ps_window_set_root(PsWindow* window, PsWidget* root_widget);
 void ps_container_add(PsWidget* container_widget, PsWidget* widget);
 
 uint8_t ps_widget_state(PsWidget* widget);
+void ps_widget_destroy(PsWidget* widget);
 
 PsWidget* ps_box_create(PsDirection direction, float spacing);
 

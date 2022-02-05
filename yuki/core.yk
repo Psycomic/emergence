@@ -326,4 +326,10 @@ and returns a list containing the results"
 						  (quote division-by-zero))))
 					  (print *handler-clusters*)
 					  (divide 10 x)))
+
+  (func test-psyche ()
+		(let ((window (ps-make-window "Hello"))
+			  (button (ps-make-button "Hey!" 15.0)))
+		  (ps-window-set-root window button)
+		  (list window button)))
   )

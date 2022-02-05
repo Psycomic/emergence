@@ -302,8 +302,9 @@ typedef struct {
 } YkBoxed;
 
 typedef struct {
-	void *cpointer;
+	YkObject dummy;
 	YkType t;
+	void *cpointer;
 } YkCPointer;
 
 union YkUnion {

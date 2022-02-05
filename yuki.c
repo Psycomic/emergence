@@ -121,7 +121,8 @@ inline static char* yk_symbol_cstr(YkObject sym);
 static YkCompilerVar* yk_find_closed_vars(YkObject expr, YkClosedVar* upenvs, YkObject env);
 static YkCompilerVar* yk_find_closed_conts(YkObject expr, YkClosedVar* upenvs, YkObject env);
 
-YkObject yk_make_cpointer(void* cptr);
+static YkObject yk_make_cpointer(void* cptr);
+static void* yk_cpointer_value(YkObject cpointer);
 
 static YkObject yk_arglist_cfun,
 	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
@@ -253,7 +254,7 @@ mark:
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
 	else if (YK_TYPEOF(o) == yk_t_cpointer) {
-		/* DO NOTHING */
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 	}
 	else {
 		assert(0);
@@ -1361,10 +1362,9 @@ static YkObject yk_builtin_array_to_list(YkUint nargs) {
 
 static YkObject yk_string_ref(YkObject string, YkInt i) {
 	uchar* string_ptr = (uchar*)YK_PTR(string)->string.data;
+	YK_ASSERT(*string_ptr != '\0');
 
 	while (--i >= 0) {
-		YK_ASSERT(*string_ptr != '\0');
-
 		if (*string_ptr <= 0x7f) {
 			string_ptr++;
 		} else if (*string_ptr >> 6 == 2) {
@@ -1376,6 +1376,8 @@ static YkObject yk_string_ref(YkObject string, YkInt i) {
 		} else if (*string_ptr >> 5 == 6) {
 			string_ptr += 2;
 		}
+
+		YK_ASSERT(*string_ptr != '\0');
 	}
 
 	return YK_MAKE_INT(u_string_to_codepoint(string_ptr));
@@ -1498,6 +1500,15 @@ static YkObject yk_builtin_make_window(YkUint nargs) {
 	return yk_make_cpointer(window);
 }
 
+static YkObject yk_builtin_window_destroy(YkUint nargs) {
+	YkObject window = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_TYPEOF(window) == yk_t_cpointer);
+
+	ps_window_destroy(yk_cpointer_value(window));
+	window->pointer.cpointer = NULL;
+	return YK_NIL;
+}
+
 static YkObject yk_builtin_make_box(YkUint nargs) {
 	YkObject direction = yk_lisp_stack_top[0],
 		margin = yk_lisp_stack_top[1];
@@ -1525,7 +1536,27 @@ static YkObject yk_builtin_window_set_root(YkUint nargs) {
 	YK_ASSERT(YK_TYPEOF(window) == yk_t_cpointer &&
 			  YK_TYPEOF(root) == yk_t_cpointer);
 
-	ps_window_set_root(window->pointer.cpointer, root->pointer.cpointer);
+	ps_window_set_root(yk_cpointer_value(window), yk_cpointer_value(root));
+	return YK_NIL;
+}
+
+static YkObject yk_builtin_make_button(YkUint nargs) {
+	YkObject text = yk_lisp_stack_top[0],
+		margin = yk_lisp_stack_top[1];
+
+	YK_ASSERT(YK_TYPEOF(text) == yk_t_string && YK_FLOATP(margin));
+
+	PsWidget* button = ps_button_create(yk_string_to_c_str(text), YK_FLOAT(margin));
+	return yk_make_cpointer(button);
+}
+
+static YkObject yk_builtin_widget_destroy(YkUint nargs) {
+	YkObject widget = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_TYPEOF(widget) == yk_t_cpointer);
+
+	ps_widget_destroy(yk_cpointer_value(widget));
+	widget->pointer.cpointer = NULL;
+
 	return YK_NIL;
 }
 
@@ -1835,9 +1866,13 @@ void yk_init() {
 	yk_make_builtin("breakpoint", 0, yk_builtin_breakpoint);
 	yk_make_builtin("invoke-debugger", 1, yk_default_debugger);
 
+	/* User interface functions */
 	yk_make_builtin("ps-make-window", 1, yk_builtin_make_window);
+	yk_make_builtin("ps-window-destroy", 1, yk_builtin_window_destroy);
 	yk_make_builtin("ps-make-box", 2, yk_builtin_make_box);
 	yk_make_builtin("ps-window-set-root", 2, yk_builtin_window_set_root);
+	yk_make_builtin("ps-make-button", 2, yk_builtin_make_button);
+	yk_make_builtin("ps-widget-destroy", 1, yk_builtin_widget_destroy);
 }
 
 static void yk_assert(const char* expression, const char* file, uint32_t line) {
@@ -2018,12 +2053,18 @@ void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObjec
 	YK_GC_UNPROTECT;
 }
 
-YkObject yk_make_cpointer(void* cptr) {
+static YkObject yk_make_cpointer(void* cptr) {
 	YkObject obj = yk_alloc();
+	obj->pointer.dummy = YK_NIL;
 	obj->pointer.cpointer = cptr;
 	obj->pointer.t = yk_t_cpointer;
 
 	return obj;
+}
+
+static void* yk_cpointer_value(YkObject cpointer) {
+	YK_ASSERT(cpointer->pointer.cpointer != NULL);
+	return cpointer->pointer.cpointer;
 }
 
 static YkObject yk_nreverse(YkObject list) {
@@ -2320,6 +2361,9 @@ void yk_print(YkObject o) {
 		break;
 	case yk_t_continuation:
 		yk_stream_format(output, "<continuation at %p>", YK_PTR(o));
+		break;
+	case yk_t_cpointer:
+		yk_stream_format(output, "<foreign pointer at %p>", YK_PTR(o));
 		break;
 	default:
 		yk_stream_format(output, "Unknown type 0x%lx!\n", YK_TYPEOF(o));

@@ -6,16 +6,17 @@
 #include <GLFW/glfw3.h>
 #include <time.h>
 
-#define KEY_MOD_ALT   (1 << 0)
-#define KEY_MOD_CTRL  (1 << 1)
-#define KEY_MOD_SUPER (1 << 2)
+#define KEY_MOD_ALT   ((uint32_t)(1 << 0))
+#define KEY_MOD_CTRL  ((uint32_t)(1 << 1))
+#define KEY_MOD_SUPER ((uint32_t)(1 << 2))
+#define KEY_MOD_SHIFT ((uint32_t)(1 << 3))
 
-#define KEY_TAB   ((1 << 16) + 1)
-#define KEY_DEL   ((1 << 16) + 2)
-#define KEY_LEFT  ((1 << 16) + 3)
-#define KEY_RIGHT ((1 << 16) + 4)
-#define KEY_UP    ((1 << 16) + 5)
-#define KEY_DOWN  ((1 << 16) + 6)
+#define KEY_TAB   (144697 + 1)
+#define KEY_DEL   (144697 + 2)
+#define KEY_LEFT  (144697 + 3)
+#define KEY_RIGHT (144697 + 4)
+#define KEY_UP    (144697 + 5)
+#define KEY_DOWN  (144697 + 6)
 
 typedef struct {
 	uint code;

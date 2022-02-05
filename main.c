@@ -239,8 +239,6 @@ int do_main(int argc, char** argv) {
 	SetConsoleOutputCP(65001);
 #endif
 
-	execute_tests();			// Unit tests
-
 	Image lain_image;
 	Image copland_os_image;
 
@@ -292,8 +290,10 @@ int do_main(int argc, char** argv) {
 
 	random_init();
 
+	execute_tests();			// Unit tests
+
 	window_add_resize_hook(scene_resize_callback, scene);
-	ps_add_global_binding(key_create('w', 0), toggle_wireframe, NULL);
+	ps_add_global_binding(key_create('w', KEY_MOD_ALT), toggle_wireframe, NULL);
 
 	GLuint texture_shader = shader_create("./shaders/vertex_texture.glsl", "./shaders/fragment_texture.glsl");
 	GLuint color_shader = shader_create("./shaders/vertex_color.glsl", "./shaders/fragment_color.glsl");

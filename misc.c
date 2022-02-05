@@ -239,7 +239,7 @@ void* hash_table_get(HashTable* table, void* key, uint key_size) {
 	if (entry == NULL)
 		return NULL;
 
-	if (entry->next_entry == NULL || (key_hash == entry->key_hash))	// Sole entry in list
+	if (entry->next_entry == NULL && (key_hash == entry->key_hash))	// Sole entry in list
 		return entry->data;
 	else if (entry->next_entry == NULL)
 		return NULL;
@@ -515,19 +515,19 @@ inline float word_to_float(uint64_t w) {
 
 inline void* debug_malloc(size_t size, const char* file, const uint line) {
 	void* return_value = malloc(size);
-	/* printf("Malloc %p, 0x%lx bytes at %s:%d\n", return_value, size, file, line); */
+	printf("Malloc %p, 0x%lx bytes at %s:%d\n", return_value, size, file, line);
 
 	return return_value;
 }
 
 inline void debug_free(void* ptr, const char* file, const uint line) {
-	/* printf("Free %p at %s:%d\n", ptr, file, line); */
+	printf("Free %p at %s:%d\n", ptr, file, line);
 
 	free(ptr);
 }
 
 inline void* debug_realloc(void* ptr, size_t size, const char* file, const uint line) {
-	/* printf("Realloc %p at %s:%d\n", ptr, file, line); */
+	printf("Realloc %p at %s:%d\n", ptr, file, line);
 
 	return realloc(ptr, size);
 }

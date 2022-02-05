@@ -6,6 +6,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <float.h>
+#include <signal.h>
 
 #define _PSYCHE_INTERNAL
 #include "psyche.h"
@@ -118,11 +119,13 @@ struct PsWidget;
 // and returns the actual size that was drawn
 typedef void (*PsDrawFunction)(struct PsWidget*, Vector2 anchor, Vector2 size);
 typedef Vector2 (*PsMinSizeFunction)(struct PsWidget*);
+typedef void (*PsDestroyFunction) (struct PsWidget*);
 
 typedef struct PsWidget {
 	struct PsWidget* parent;
 	PsDrawFunction draw;
 	PsMinSizeFunction min_size;
+	PsDestroyFunction destroy;
 
 	uint32_t flags;
 } PsWidget;
@@ -228,8 +231,7 @@ static PsFont ps_current_font;
 
 static BOOL ps_wireframe;
 
-/* Key psyche_last_key; */
-/* static BOOL last_character_read = GL_TRUE; */
+PsWidget* ps_current_input;
 
 static Vector2 ps_white_pixel = {
 	.x = 0.f,
@@ -239,6 +241,7 @@ static Vector2 ps_white_pixel = {
 extern float global_time;
 
 void ps_draw_gui();
+void ps_widget_destroy(PsWidget* widget);
 
 void ps_window_handle_events(PsWindow* selected_window);
 void ps_window_draw(PsWindow* window);
@@ -329,8 +332,11 @@ void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t
 	font->text_atlas.color_encoding = GL_BGRA;
 }
 
+static DynamicArray ps_new_points;
+
 void ps_init() {
 	ps_global_bindings = hash_table_create(512, hash_key);
+	DYNAMIC_ARRAY_CREATE(&ps_new_points, Vector2);
 
 	glGenBuffers(1, &ps_vbo);
 	glGenBuffers(1, &ps_ibo);
@@ -396,10 +402,7 @@ void ps_render(BOOL is_visible) {
 		for (uint i = 0; i < ps_event_queue_end; i++) {
 			PsEvent* event = ps_event_queue + i;
 
-			if (event->type == PS_EVENT_CHARACTER_INPUT) {
-				char buffer[64];
-				key_repr(buffer, event->event.key, sizeof(buffer));
-
+			if (event->type == PS_EVENT_CHARACTER_INPUT) {;
 				PsBinding* binding = hash_table_get(ps_global_bindings, &event->event.key, sizeof(Key));
 				if (binding) {
 					binding->callback(binding->userptr);
@@ -706,8 +709,7 @@ void ps_fill(Vector4 color, uint32_t flags) {
 	Vector2 mean_pos = { 0 };
 
 	if (ps_current_scissors.active) {
-		DynamicArray new_points;
-		DYNAMIC_ARRAY_CREATE(&new_points, Vector2);
+		dynamic_array_clear(&ps_new_points);
 
 		const Vector2 sc_points[] = {
 			ps_current_scissors.position,
@@ -723,13 +725,11 @@ void ps_fill(Vector4 color, uint32_t flags) {
 		{
 			uint k = (i + 1) % 4;
 
-			clip(&new_points, ps_current_path.points.data, ps_current_path.points.size,
+			clip(&ps_new_points, ps_current_path.points.data, ps_current_path.points.size,
 				 sc_points[i], sc_points[k]);
-			dynamic_array_copy(&new_points, &ps_current_path.points);
-			dynamic_array_clear(&new_points);
+			dynamic_array_copy(&ps_new_points, &ps_current_path.points);
+			dynamic_array_clear(&ps_new_points);
 		}
-
-		dynamic_array_destroy(&new_points);
 	}
 
 	uint64_t count = 0;
@@ -1118,15 +1118,27 @@ float ps_font_width(float size) {
 #define WINDOW_DEFAULT_WIDTH 400.f
 #define WINDOW_DEFAULT_HEIGHT 200.f
 
-void ps_widget_init(PsWidget* widget, PsDrawFunction draw, PsMinSizeFunction min_size) {
+void ps_widget_init(PsWidget* widget, PsDrawFunction draw, PsMinSizeFunction min_size, PsDestroyFunction destroy) {
 	widget->parent = NULL;
 	widget->draw = draw;
 	widget->min_size = min_size;
+	widget->destroy = destroy;
 	widget->flags = 0;
 }
 
+static void ps_container_destroy(PsWidget* widget) {
+	PsContainer* container = (PsContainer*)widget;
+
+	for (uint i = 0; i < container->children.size; i++) {
+		PsWidget** widget_ptr = dynamic_array_at(&container->children, i);
+		(*widget_ptr)->parent = NULL;
+	}
+
+	free(container);
+}
+
 void ps_container_init(PsContainer* container, PsDrawFunction draw, PsMinSizeFunction min_size, float spacing) {
-	ps_widget_init(PS_WIDGET(container), draw, min_size);
+	ps_widget_init(PS_WIDGET(container), draw, min_size, ps_container_destroy);
 	DYNAMIC_ARRAY_CREATE(&container->children, PsWidget*);
 
 	container->spacing = spacing;
@@ -1165,15 +1177,16 @@ PsWindow* ps_window_create(char* title) {
 
 void ps_window_set_root(PsWindow* window, PsWidget* root_widget) {
 	window->root = root_widget;
+	root_widget->parent = (PsWidget*)window;
 }
 
 void ps_window_destroy(PsWindow* window) {
-	free(window);
-
 	uint64_t i;
 	for (i = 0; i < ps_windows_count; i++)
 		if (ps_windows[i] == window)
 			break;
+
+	ps_windows[i]->root->parent = NULL;
 
 	free(ps_windows[i]);
 	ps_windows[i] = ps_windows[--ps_windows_count];
@@ -1181,6 +1194,13 @@ void ps_window_destroy(PsWindow* window) {
 
 void ps_widget_draw(PsWidget* widget, Vector2 anchor, Vector2 min_pos) {
 	widget->draw(widget, anchor, min_pos);
+}
+
+void ps_widget_destroy(PsWidget* widget) {
+	if (widget->parent == NULL)
+		widget->destroy(widget);
+	else
+		panic("Trying to destroy attached object!\n");
 }
 
 Vector2 ps_widget_min_size(PsWidget* widget) {
@@ -1518,7 +1538,6 @@ Vector2 ps_box_size(PsWidget* widget) {
 
 		if (box->direction == PS_DIRECTION_VERTICAL) {
 			Vector2 size = ps_widget_min_size(widget);
-
 			float displacement_size;
 
 			if (i != children->size - 1)
@@ -1533,7 +1552,6 @@ Vector2 ps_box_size(PsWidget* widget) {
 		}
 		else if (box->direction == PS_DIRECTION_HORIZONTAL) {
 			Vector2 size = ps_widget_min_size(widget);
-
 			float displacement_size;
 
 			if (i != children->size - 1)
@@ -1600,6 +1618,8 @@ void ps_box_draw(PsWidget* box_widget, Vector2 anchor, Vector2 min_size) {
 
 PsWidget* ps_box_create(PsDirection direction, float spacing) {
 	PsBox* box = malloc(sizeof(PsBox));
+	m_bzero(box, sizeof(PsLabel));
+
 	ps_container_init(PS_CONTAINER(box), ps_box_draw, ps_box_size, spacing);
 	box->direction = direction;
 
@@ -1631,8 +1651,15 @@ void ps_label_set_text(PsLabel* label, char* text) {
 	label->size.y = ps_text_height(label->text, label->text_size);
 }
 
+static void ps_label_destroy(PsWidget* widget) {
+	PsLabel* label = (PsLabel*)widget;
+	free(label->text);
+	free(label);
+}
+
 PsWidget* ps_label_create(char* text, float size) {
 	PsLabel* label = malloc(sizeof(PsLabel));
+	m_bzero(label, sizeof(PsLabel));
 
 	label->color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
 	label->text = m_strdup(text);
@@ -1641,7 +1668,7 @@ PsWidget* ps_label_create(char* text, float size) {
 	label->size.x = ps_text_width(text, size);
 	label->size.y = ps_text_height(text, size);
 
-	ps_widget_init(PS_WIDGET(label), ps_label_draw, ps_label_min_size);
+	ps_widget_init(PS_WIDGET(label), ps_label_draw, ps_label_min_size, ps_label_destroy);
 
 	return PS_WIDGET(label);
 }
@@ -1707,8 +1734,13 @@ uint8_t ps_widget_state(PsWidget* widget) {
 	return widget->flags;
 }
 
+static void ps_button_destroy(PsWidget* widget) {
+	free(widget);
+}
+
 PsWidget* ps_button_create(char* text, float size) {
 	PsButton* button = malloc(sizeof(PsButton));
+	m_bzero(button, sizeof(PsButton));
 
 	button->text = text;
 	button->text_size = size;
@@ -1716,7 +1748,7 @@ PsWidget* ps_button_create(char* text, float size) {
 	button->size.x = ps_text_width(text, size);
 	button->size.y = ps_text_height(text, size);
 
-	ps_widget_init(PS_WIDGET(button), ps_button_draw, ps_button_min_size);
+	ps_widget_init(PS_WIDGET(button), ps_button_draw, ps_button_min_size, ps_button_destroy);
 
 	return PS_WIDGET(button);
 }
@@ -1786,8 +1818,13 @@ void ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		slider->text_size, slider_text_color);
 }
 
+static void ps_slider_destroy(PsWidget* widget) {
+	free(widget);
+}
+
 PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_size, void (*callback)()) {
 	PsSlider* slider = malloc(sizeof(PsSlider));
+	m_bzero(slider, sizeof(PsSlider));
 
 	slider->val = val;
 	slider->min_val = min_val;
@@ -1800,7 +1837,7 @@ PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_
 	slider->width = ps_text_width(buffer, text_size);
 	slider->callback = callback;
 
-	ps_widget_init(PS_WIDGET(slider), ps_slider_draw, ps_slider_min_size);
+	ps_widget_init(PS_WIDGET(slider), ps_slider_draw, ps_slider_min_size, ps_slider_destroy);
 	return PS_WIDGET(slider);
 }
 
@@ -1811,15 +1848,6 @@ static Vector4 input_background_color = { { 0.f, 0.f, 0.f, 1.f } },
 	input_border_color = { { 1.f, 1.f, 1.f, 1.f } },
 	input_cursor_color = { { 1.f, 0.f, 0.f, 1.f } },
 	input_text_color = { { 1.f, 1.f, 1.f, 1.f } };
-
-void ps_input_insert_at_point(PsInput* input, char* string) {
-	char temp[INPUT_MAX_ENTERED_TEXT];
-
-	strinsert(temp, input->value, string, input->cursor_position, sizeof(temp));
-	strncpy(input->value, temp, sizeof(temp));
-
-	input->cursor_position += strlen(string);
-}
 
 uint ps_input_beginning_of_line(PsInput* input) {
 	if (input->cursor_position == 0)
@@ -1860,7 +1888,61 @@ Vector2 ps_input_min_size(PsWidget* widget) {
 				ps_text_height(input->value, input->text_size) + input_border_size * 2 } };
 }
 
-void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
+void ps_insert_at_point(char* string) {
+	PsInput* input = (PsInput*)ps_current_input;
+
+	char temp[INPUT_MAX_ENTERED_TEXT];
+
+	strinsert(temp, input->value, string, input->cursor_position, sizeof(temp));
+	strncpy(input->value, temp, sizeof(temp));
+
+	input->cursor_position += strlen(string);
+}
+
+void ps_backward_char() {
+	PsInput* input = (PsInput*)ps_current_input;
+
+	if (input->cursor_position > 0)
+		input->cursor_position--;
+}
+
+void ps_forward_char() {
+	PsInput* input = (PsInput*)ps_current_input;
+
+	if (input->cursor_position < strlen(input->value))
+		input->cursor_position++;
+}
+
+void ps_previous_line() {
+	PsInput* input = (PsInput*)ps_current_input;
+
+	uint line_size = ps_input_beginning_of_line(input);
+
+	if (input->cursor_position > 0) {
+		input->cursor_position--;
+		uint second_line_size = ps_input_beginning_of_line(input);
+		input->cursor_position += min(line_size, second_line_size);
+	}
+}
+
+void ps_next_line() {
+	PsInput* input = (PsInput*)ps_current_input;
+
+	uint line_size = ps_input_beginning_of_line(input);
+	input->cursor_position += line_size;
+
+	ps_input_end_of_line(input);
+
+	if (input->value[input->cursor_position] != '\0') {
+		input->cursor_position++;
+		uint saved_pos = input->cursor_position;
+		uint second_line_size = ps_input_end_of_line(input);
+
+		input->cursor_position = saved_pos + min(line_size, second_line_size);
+	}
+}
+
+static void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	PsInput* input = (PsInput*)widget;
 
 	input->width = ps_text_width(input->value, input->text_size) + input_border_size;
@@ -1914,6 +1996,8 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	}
 
 	if (input->selected) {
+		ps_current_input = widget;
+
 		for (uint i = 0; i < ps_event_queue_end; i++) {
 			if (ps_event_queue[i].type == PS_EVENT_CHARACTER_INPUT) {
 				Key key = ps_event_queue[i].event.key;
@@ -1927,54 +2011,30 @@ void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 					ps_handled_event(i);
 				}
 				else if (key_equal(key, (Key) { KEY_TAB, 0 })) {
-					ps_input_insert_at_point(input, "    ");
-
+					ps_insert_at_point("    ");
 					ps_handled_event(i);
 				}
 				else if (key_equal(key, (Key) { KEY_LEFT, 0 })) {
-					if (input->cursor_position > 0)
-						input->cursor_position--;
-
+					ps_backward_char();
 					ps_handled_event(i);
 				}
 				else if (key_equal(key, (Key) { KEY_RIGHT, 0 })) {
-					if (input->cursor_position < strlen(input->value))
-						input->cursor_position++;
-
+					ps_forward_char();
 					ps_handled_event(i);
 				}
 				else if (key_equal(key, (Key) { KEY_UP, 0 })) {
-					uint line_size = ps_input_beginning_of_line(input);
-
-					if (input->cursor_position > 0) {
-						input->cursor_position--;
-						uint second_line_size = ps_input_beginning_of_line(input);
-						input->cursor_position += min(line_size, second_line_size);
-					}
-
+					ps_previous_line();
 					ps_handled_event(i);
 				}
 				else if (key_equal(key, (Key) { KEY_DOWN, 0 })) {
-					uint line_size = ps_input_beginning_of_line(input);
-					input->cursor_position += line_size;
-
-					ps_input_end_of_line(input);
-
-					if (input->value[input->cursor_position] != '\0') {
-						input->cursor_position++;
-						uint saved_pos = input->cursor_position;
-						uint second_line_size = ps_input_end_of_line(input);
-
-						input->cursor_position = saved_pos + min(line_size, second_line_size);
-					}
-
+					ps_next_line();
 					ps_handled_event(i);
 				}
 				else if (key.modifiers == 0) {
 					char new_string[5];
 
 					u_codepoint_to_string(new_string, key.code);
-					ps_input_insert_at_point(input, new_string);
+					ps_insert_at_point(new_string);
 
 					ps_handled_event(i);
 				}
@@ -2019,19 +2079,24 @@ char* ps_input_value(PsInput* input) {
 	return input->value;
 }
 
-void ps_input_set_value(PsInput* input, const char* value) {
+static void ps_input_set_value(PsInput* input, const char* value) {
 	strncpy(input->value, value, INPUT_MAX_ENTERED_TEXT);
+}
+
+static void ps_input_destroy(PsWidget* widget) {
+	free(widget);
 }
 
 PsWidget* ps_input_create(char* value, float text_size) {
 	PsInput* input = malloc(sizeof(PsInput));
+	m_bzero(input, sizeof(PsInput));
 
 	input->text_size = text_size;
 	input->cursor_position = 0;
 	input->lines_count = 0;
 	input->selected = GL_FALSE;
 
-	ps_widget_init(PS_WIDGET(input), ps_input_draw, ps_input_min_size);
+	ps_widget_init(PS_WIDGET(input), ps_input_draw, ps_input_min_size, ps_input_destroy);
 
 	ps_input_set_value(input, value);
 	return PS_WIDGET(input);
@@ -2055,6 +2120,10 @@ void ps_canvas_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	ps_end_scissors();
 }
 
+static void ps_canvas_destroy(PsWidget* widget) {
+	free(widget);
+}
+
 PsWidget* ps_canvas_create(float width, float height, void (*draw_fn)(PsWidget*, Vector2, Vector2)) {
 	PsCanvas* canvas = malloc(sizeof(PsCanvas));
 
@@ -2062,6 +2131,6 @@ PsWidget* ps_canvas_create(float width, float height, void (*draw_fn)(PsWidget*,
 	canvas->height = height;
 	canvas->draw_fn = draw_fn;
 
-	ps_widget_init(PS_WIDGET(canvas), ps_canvas_draw, ps_canvas_min_size);
+	ps_widget_init(PS_WIDGET(canvas), ps_canvas_draw, ps_canvas_min_size, ps_canvas_destroy);
 	return PS_WIDGET(canvas);
 }
