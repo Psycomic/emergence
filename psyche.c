@@ -209,7 +209,11 @@ typedef struct {
 #define PS_MAX_WINDOWS 255
 
 static PsWindow* ps_windows[PS_MAX_WINDOWS];
+static PsWindow* ps_hidden_windows[PS_MAX_WINDOWS];
+static BOOL ps_hidden_windows_clicked[PS_MAX_WINDOWS];
 static uint64_t ps_windows_count = 0;
+static uint64_t ps_hidden_windows_count = 0;
+static uint64_t ps_hidden_windows_clicked_count = 0;
 
 static GLuint ps_vbo;
 static GLuint ps_ibo;
@@ -247,6 +251,7 @@ void ps_window_handle_events(PsWindow* selected_window);
 void ps_window_draw(PsWindow* window);
 Vector2 ps_window_anchor(PsWindow* window);
 void ps_fill_rect(float x, float y, float w, float h, Vector4 color);
+void ps_add_global_binding(Key key, void (*callback)(void*), void* userptr);
 
 BOOL is_in_box(Vector2 point, float x, float y, float w, float h) {
 	return point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h;
@@ -332,6 +337,30 @@ void ps_font_init(PsFont* font, const char* path, uint32_t glyph_width, uint32_t
 	font->text_atlas.color_encoding = GL_BGRA;
 }
 
+void ps_window_switch_to(uint64_t id);
+
+void ps_switch_window(void* data) {
+	if (ps_windows_count > 1) {
+		ps_window_switch_to(ps_windows_count - 2);
+	}
+}
+
+void ps_hide_window(void* data) {
+	if (ps_windows_count > 0) {
+		ps_hidden_windows[ps_hidden_windows_count++] = ps_windows[ps_windows_count - 1];
+		ps_hidden_windows_clicked[ps_hidden_windows_clicked_count++] = GL_FALSE;
+		ps_windows_count--;
+	}
+}
+
+void ps_window_destroy(PsWindow* window);
+
+void ps_destroy_window(void* data) {
+	if (ps_windows_count > 0) {
+		ps_window_destroy(ps_windows[ps_windows_count - 1]);
+	}
+}
+
 static DynamicArray ps_new_points;
 
 void ps_init() {
@@ -371,6 +400,10 @@ void ps_init() {
 
 	window_add_character_hook(ps_character_callback, NULL);
 	window_add_resize_hook(ps_resized_callback, NULL);
+
+	ps_add_global_binding((Key) { 's', KEY_MOD_CTRL }, ps_switch_window, NULL);
+	ps_add_global_binding((Key) { 'h', KEY_MOD_CTRL }, ps_hide_window, NULL);
+	ps_add_global_binding((Key) { 'k', KEY_MOD_CTRL }, ps_destroy_window, NULL);
 }
 
 void ps_draw_list_clear(PsDrawList* cmd_list) {
@@ -1181,15 +1214,28 @@ void ps_window_set_root(PsWindow* window, PsWidget* root_widget) {
 }
 
 void ps_window_destroy(PsWindow* window) {
+	PsWindow* w = NULL;
 	uint64_t i;
-	for (i = 0; i < ps_windows_count; i++)
-		if (ps_windows[i] == window)
+	for (i = 0; i < ps_windows_count; i++) {
+		if (ps_windows[i] == window) {
+			w = ps_windows[i];
+			ps_windows[i] = ps_windows[--ps_windows_count];
 			break;
+		}
+	}
 
-	ps_windows[i]->root->parent = NULL;
+	if (w == NULL) {
+		for (i = 0; i < ps_hidden_windows_count; i++) {
+			if (ps_hidden_windows[i] == window) {
+				w = ps_hidden_windows[i];
+				ps_hidden_windows[i] = ps_hidden_windows[--ps_hidden_windows_count];
+				break;
+			}
+		}
+	}
 
-	free(ps_windows[i]);
-	ps_windows[i] = ps_windows[--ps_windows_count];
+	w->root->parent = NULL;
+	free(w);
 }
 
 void ps_widget_draw(PsWidget* widget, Vector2 anchor, Vector2 min_pos) {
@@ -1330,6 +1376,83 @@ void ps_menubar_draw() {
 	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } }, 20.f, (Vector4) { { 0.9f, 0.9f, 0.9f, 1.f } });
 }
 
+static Vector4 ps_dock_text_color = { { 1.f, 1.f, 1.f, 1.f } },
+	ps_dock_background_color = { { 0.f, 0.f, 0.5f, 1.f } };
+
+static float ps_dock_y_offset = 10.f,
+	ps_dock_text_size = 18.f;
+
+void ps_dock_draw() {
+	if (ps_hidden_windows_count > 0) {
+		float total_size = 0.f;
+		for (uint i = 0; i < ps_hidden_windows_count; i++) {
+			total_size += ps_text_width(ps_hidden_windows[i]->title, ps_dock_text_size) + 20.f;
+		}
+
+		float x = -total_size / 2.f - 15.f,
+			y = -g_window.size.y / 2.f,
+			w = total_size + 10.f,
+			h = ps_dock_text_size + 20.f + ps_dock_y_offset;
+
+		static Vector4 white = { { 1.f, 1.f, 1.f, 1.f } };
+
+		ps_fill_rect(x, y, w, h, (Vector4) { { 0.f, 0.f, 0.f, 0.7f } });
+		ps_fill_rect(x, y, 1.f, h, white);
+		ps_fill_rect(x, y + h, w, 1.f, white);
+		ps_fill_rect(x + w, y, 1.f, h, white);
+
+		float x_offset = 0.f;
+		for (uint i = 0; i < ps_hidden_windows_count; i++) {
+			float width = ps_text_width(ps_hidden_windows[i]->title, ps_dock_text_size) + 10.f;
+
+			float x = -total_size / 2.f + x_offset - 5.f,
+				y = -g_window.size.y / 2.f + ps_dock_y_offset,
+				w = width,
+				h = ps_dock_text_size + 10.f;
+
+			Vector4 background_color = ps_dock_background_color,
+				text_color = ps_dock_text_color;
+
+			if (!g_window.mouse_button_left_state && ps_hidden_windows_clicked[i]) {
+				ps_windows[ps_windows_count++] = ps_hidden_windows[i];
+				ps_hidden_windows[i] = ps_hidden_windows[--ps_hidden_windows_count];
+				ps_hidden_windows_clicked[i] = ps_hidden_windows_clicked[--ps_hidden_windows_clicked_count];
+			}
+
+			ps_hidden_windows_clicked[i] = GL_FALSE;
+
+			if (is_in_box(g_window.cursor_position, x, y, w, h)) {
+				background_color = (Vector4) { { 0.5f, 0.5f, 1.f, 1.f } };
+				text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+
+				if (g_window.mouse_button_left_state) {
+					ps_hidden_windows_clicked[i] = GL_TRUE;
+				}
+			} else {
+				ps_hidden_windows_clicked[i] = GL_FALSE;
+			}
+
+			ps_fill_rect(x, y, w, h, background_color);
+
+			static Vector4 gray = { { 1.f, 1.f, 1.f, 1.f } },
+				black = { { 0.f, 0.f, 0.f, 1.f } };
+
+			ps_fill_rect(x, y, w, 1.f, gray);
+			ps_fill_rect(x + w, y, 1.f, h, gray);
+
+			ps_fill_rect(x, y, 1.f, h, black);
+			ps_fill_rect(x, y + h, w, 1.f, black);
+
+			ps_text(ps_hidden_windows[i]->title,
+					(Vector2) { { -total_size / 2.f + x_offset,
+							-g_window.size.y / 2.f + ps_dock_text_size + 5.f + ps_dock_y_offset } },
+					ps_dock_text_size, text_color);
+
+			x_offset += width + 10.f;
+		}
+	}
+}
+
 void ps_window_draw(PsWindow* window) {
 	Vector4 border_color;
 
@@ -1451,6 +1574,7 @@ void ps_draw_gui() {
 	}
 
 	ps_menubar_draw();
+	ps_dock_draw();
 }
 
 void ps_window_switch_to(uint64_t id) {
@@ -1512,8 +1636,9 @@ void ps_window_handle_events(PsWindow* selected_window) {
 		else {
 			for (int i = ps_windows_count - 1; i >= 0; i--) {
 				if (ps_window_inside(ps_windows[i], pointer_position)) {
-					if (i != ps_windows_count - 1)
+					if (i != ps_windows_count - 1) {
 						ps_window_switch_to(i);
+					}
 
 					break;
 				}
