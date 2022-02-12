@@ -307,6 +307,13 @@ typedef struct {
 	void *cpointer;
 } YkCPointer;
 
+typedef struct {
+	YkObject type_symbol;
+	YkType t;
+	YkObject* slots;
+	YkUint slots_count;
+} YkInstance;
+
 union YkUnion {
 	struct {
 		YkObject dummy;
@@ -325,6 +332,7 @@ union YkUnion {
 	YkFileStream file_stream;
 	YkBoxed boxed;
 	YkCPointer pointer;
+	YkInstance instance;
 };
 
 ct_assert(sizeof(union YkUnion) % 16 == 0);

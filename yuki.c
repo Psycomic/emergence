@@ -108,6 +108,7 @@ static YkObject yk_nreverse(YkObject list);
 static YkUint yk_length(YkObject list);
 static bool yk_member(YkObject element, YkObject list);
 
+static YkObject yk_make_symbol_from_string(YkObject string);
 static void yk_mark_block_data(void* data);
 static void yk_array_allocator_sweep();
 static void yk_array_allocator_print();
@@ -255,6 +256,12 @@ mark:
 	}
 	else if (YK_TYPEOF(o) == yk_t_cpointer) {
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+	} else if (YK_TYPEOF(o) == yk_t_instance) {
+		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
+		yk_mark_block_data(YK_PTR(o)->instance.slots);
+		for (uint i = 0; i < YK_PTR(o)->instance.slots_count; i++) {
+			yk_mark(YK_PTR(o)->instance.slots[i]);
+		}
 	}
 	else {
 		assert(0);
@@ -1425,6 +1432,44 @@ static YkObject yk_builtin_aset(YkUint nargs) {
 	return value;
 }
 
+static YkObject yk_builtin_make_symbol(YkUint nargs) {
+	YkObject string = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_TYPEOF(string) == yk_t_string);
+
+	return yk_make_symbol_from_string(string);
+}
+
+static YkObject yk_builtin_symbol_string(YkUint nargs) {
+	YkObject symbol = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_SYMBOLP(symbol));
+	return YK_PTR(symbol)->symbol.name;
+}
+
+static YkObject yk_builtin_string_concat(YkUint nargs) {
+	YkObject end_string = YK_NIL;
+	YK_GC_PROTECT1(end_string);
+	YkUint total_size = 0, j = 0;
+
+	for (uint i = 0; i < nargs; i++) {
+		total_size += YK_PTR(yk_lisp_stack_top[i])->string.size;
+	}
+
+	end_string = yk_make_string("", 0);
+	end_string->string.data = yk_array_allocator_alloc(total_size + 1);
+	end_string->string.size = total_size;
+
+	for (uint i = 0; i < nargs; i++) {
+		memcpy(end_string->string.data + j, yk_lisp_stack_top[i]->string.data,
+			   yk_lisp_stack_top[i]->string.size);
+		j += yk_lisp_stack_top[i]->string.size;
+	}
+
+	end_string->string.data[j] = '\0';
+
+	YK_GC_UNPROTECT;
+	return end_string;
+}
+
 static YkObject yk_builtin_make_file_stream(YkUint nargs) {
 	return yk_make_file_stream(yk_lisp_stack_top[0], yk_lisp_stack_top[1], NULL);
 }
@@ -1490,6 +1535,45 @@ static YkObject yk_builtin_stream_close(YkUint nargs) {
 static YkObject yk_builtin_gc(YkUint nargs) {
 	yk_gc();
 	return YK_NIL;
+}
+
+static YkObject yk_builtin_make_instance(YkUint nargs) {
+	YkObject type = yk_lisp_stack_top[0],
+		slots_number = yk_lisp_stack_top[1];
+
+	YK_ASSERT(YK_INTP(slots_number) && YK_SYMBOLP(type));
+	YkInt n = YK_INT(slots_number);
+	YK_ASSERT(n > 0);
+
+	YkObject instance = yk_alloc();
+	instance->t.t = yk_t_instance;
+	instance->instance.type_symbol = type;
+	instance->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * n);
+	instance->instance.slots_count = n;
+
+	return instance;
+}
+
+static YkObject yk_builtin_set_slot(YkUint nargs) {
+	YkObject instance = yk_lisp_stack_top[0],
+		slot = yk_lisp_stack_top[1],
+		value = yk_lisp_stack_top[2];
+
+	YK_ASSERT(YK_TYPEOF(instance) == yk_t_instance && YK_INTP(slot) &&
+			  YK_INT(slot) >= 0 && YK_INT(slot) < (YkInt)instance->instance.slots_count);
+
+	instance->instance.slots[YK_INT(slot)] = value;
+	return value;
+}
+
+static YkObject yk_builtin_get_slot(YkUint args) {
+	YkObject instance = yk_lisp_stack_top[0],
+		slot = yk_lisp_stack_top[1];
+
+	YK_ASSERT(YK_TYPEOF(instance) == yk_t_instance && YK_INTP(slot) &&
+			  YK_INT(slot) >= 0 && YK_INT(slot) < (YkInt)instance->instance.slots_count);
+
+	return instance->instance.slots[YK_INT(slot)];
 }
 
 static YkObject yk_builtin_make_window(YkUint nargs) {
@@ -1778,7 +1862,7 @@ void yk_init() {
 	yk_make_builtin("+", -1, yk_builtin_add);
 	yk_make_builtin("*", -1, yk_builtin_mul);
 	yk_make_builtin("/", -1, yk_builtin_div);
-	yk_make_builtin("-", -1, yk_builtin_sub);
+	yk_make_builtin("-", -2, yk_builtin_sub);
 	yk_make_builtin("**", 2, yk_builtin_pow);
 	yk_make_builtin("mod", 2, yk_builtin_mod);
 
@@ -1858,6 +1942,14 @@ void yk_init() {
 	yk_make_builtin("register-global!", 1, yk_builtin_register_global);
 	yk_make_builtin("register-function!", 2, yk_builtin_register_function);
 
+	yk_make_builtin("make-symbol", 1, yk_builtin_make_symbol);
+	yk_make_builtin("symbol-string", 1, yk_builtin_symbol_string);
+	yk_make_builtin("string-concat", -1, yk_builtin_string_concat);
+
+	yk_make_builtin("make-instance", 2, yk_builtin_make_instance);
+	yk_make_builtin("set-slot!", 3, yk_builtin_set_slot);
+	yk_make_builtin("get-slot", 2, yk_builtin_get_slot);
+
 	yk_make_builtin("clock", 0, yk_builtin_clock);
 	yk_make_builtin("random", 1, yk_builtin_random);
 
@@ -1884,17 +1976,14 @@ static void yk_assert(const char* expression, const char* file, uint32_t line) {
 	yk_default_debugger(1);
 }
 
-YkObject yk_make_symbol(const char* name, uint size) {
-	YK_ASSERT(*name != '\0');
-	YkObject sym = YK_NIL, string = YK_NIL;
+static YkObject yk_make_symbol_from_string(YkObject string) {
+	YkObject sym = YK_NIL;
 	YK_GC_PROTECT2(sym, string);
 
-	uint64_t string_hash = hash_string((uchar*)name, size);
+	uint64_t string_hash = hash_string((uchar*)yk_string_to_c_str(string), string->string.size);
 	uint16_t index = string_hash % YK_SYMBOL_TABLE_SIZE;
 
 	if (yk_symbol_table[index] == NULL) {
-		string = yk_make_string(name, size);
-
 		sym = yk_alloc();
 
 		sym->symbol.name = string;
@@ -1926,8 +2015,6 @@ YkObject yk_make_symbol(const char* name, uint size) {
 				return s;
 			}
 		} else {
-			string = yk_make_string(name, size);
-
 			sym = yk_alloc();
 
 			sym->symbol.name = string;
@@ -1945,6 +2032,15 @@ YkObject yk_make_symbol(const char* name, uint size) {
 			return sym;
 		}
 	}
+}
+
+YkObject yk_make_symbol(const char* name, uint size) {
+	YK_ASSERT(*name != '\0');
+	YkObject string = YK_NIL;
+	YK_GC_PROTECT1(string);
+	string = yk_make_string(name, size);
+	YK_GC_UNPROTECT;
+	return yk_make_symbol_from_string(string);
 }
 
 YkObject yk_make_symbol_cstr(const char* cstr) {
@@ -2364,6 +2460,10 @@ void yk_print(YkObject o) {
 		break;
 	case yk_t_cpointer:
 		yk_stream_format(output, "<foreign pointer at %p>", YK_PTR(o));
+		break;
+	case yk_t_instance:
+		yk_stream_format(output, "<%s at %p>", yk_symbol_cstr(YK_PTR(o)->instance.type_symbol),
+						 YK_PTR(o));
 		break;
 	default:
 		yk_stream_format(output, "Unknown type 0x%lx!\n", YK_TYPEOF(o));
@@ -3720,6 +3820,10 @@ static void yk_compile_call(YkObject bytecode, YkCompilerState* state) {
 	{
 		YkObject macro_return =	yk_apply(YK_PTR(YK_CAR(state->expr))->symbol.value,
 										 YK_CDR(state->expr));
+		printf("Macro return: \n");
+		yk_print(macro_return);
+		printf("\n");
+
 		new_state.expr = macro_return;
 		yk_compile_loop(bytecode, &new_state);
 		return;

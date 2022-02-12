@@ -43,6 +43,16 @@
 and returns a list containing the results"
 		 (map-helper fn lst nil))
 
+   (func enumerate-helper (fn lst i acc)
+		 (if (null? lst)
+			 (reverse! acc)
+			 (enumerate-helper fn (tail lst) (1+ i)
+							   (: (fn i (head lst)) acc))))
+
+   (func enumerate (fn lst)
+		 "Like map, but adds a counter as a first parameter"
+		 (enumerate-helper fn lst 0 nil))
+
    (func quasiquote-helper (expression)
 		 (if (list? expression)
 			 (if (eq? (head expression) (quote unquote))
@@ -100,21 +110,6 @@ and returns a list containing the results"
 
   (define pi 3.1415)
 
-  (assert (= 5 5))
-  (assert (= 5.0 5))
-  (assert (= 5 5.0))
-  (assert (= 5.0 5.0))
-
-  (assert (> 4.5 2))
-  (assert (> 6 3.2))
-  (assert (> 6 5))
-  (assert (> 6.5 5.5))
-
-  (assert (< 2 4.5))
-  (assert (< 3 6.2))
-  (assert (< 5 6))
-  (assert (< 5.5 6.5))
-
   (macro for (e lst . body)
 		 (let ((list-sym (gensym))
 			   (cont-sym (gensym)))
@@ -155,11 +150,76 @@ and returns a list containing the results"
   (func 1+ (x) "Add one to `x'" (+ x 1))
   (func 1- (x) "Substract one to `x'" (- x 1))
 
-(func search (lst element key)
+  (func search (lst element key)
 		(cond ((null? lst) nil)
 			  ((eq? (key (first lst)) element)
 			   (first lst))
 			  (t (search (tail lst) element key))))
+
+  (macro defstruct (name . slots)
+		 (let ((accessor-name
+				(lambda (slot)
+				  (make-symbol (string-concat (symbol-string name) "-"
+											  (symbol-string slot)))))
+			   (instance-sym (gensym)))
+		   (append (list (quote do))
+				   (list (quasiquote
+						  (func (unquote (make-symbol
+										  (string-concat "make-" (symbol-string name))))
+								(unquote slots)
+								(let (((unquote instance-sym)
+									   (make-instance (quote (unquote name))
+													  (unquote (length slots)))))
+								  (unquote (append (list (quote do))
+												   (enumerate
+													(lambda (i slot)
+													  (quasiquote
+													   (set-slot! (unquote instance-sym)
+																  (unquote i) (unquote slot))))
+													slots)))
+								  (unquote instance-sym)))))
+				   (enumerate (lambda (i slot)
+								(quasiquote
+								 (func (unquote (accessor-name slot)) (instance)
+									   (get-slot instance (unquote i)))))
+							  slots))))
+
+  (define *handler-clusters* nil)
+
+  (macro handler-bind (bindings . forms)
+		 (let ((make-binding
+				(lambda (binding)
+				  (quasiquote
+				   (list (quote (unquote (first binding)))
+						 (unquote (second binding)))))))
+		   (let ((cluster (map make-binding bindings)))
+			 (append (list (quote dynamic-let)
+						   (list (list (quote *handler-clusters*)
+									   (list (quote append)
+											 (append (list (quote list))
+													 cluster)
+											 (quote *handler-clusters*)))))
+					 forms))))
+
+  (macro handler-case (form . cases)
+		 (let ((cont-sym (gensym)))
+		   (let ((make-binding
+				  (lambda (binding)
+					(list (first binding)
+						  (append (list (quote lambda) (second binding))
+								  (list (list (quote exit) cont-sym
+											  (append (list (quote do))
+													  (tail (tail binding))))))))))
+			 (list (quote with-cont) cont-sym
+				   (list (quote handler-bind)
+						 (map make-binding cases)
+						 form)))))
+
+  (func error (type . args)
+		(let ((handler (search *handler-clusters* type first)))
+		  (if handler
+			  ((second handler) args)
+			  (invoke-debugger type))))
 
   (func make-board (size)
 		"Makes a Game of Life board of size `size'"
@@ -277,43 +337,6 @@ and returns a list containing the results"
 						(set! i (1+ i)))))
 		  (list i fn)))
 
-  (define *handler-clusters* nil)
-
-  (macro handler-bind (bindings . forms)
-		 (let ((make-binding
-				(lambda (binding)
-				  (quasiquote
-				   (list (quote (unquote (first binding)))
-						 (unquote (second binding)))))))
-		   (let ((cluster (map make-binding bindings)))
-			 (append (list (quote dynamic-let)
-						   (list (list (quote *handler-clusters*)
-									   (list (quote append)
-											 (append (list (quote list))
-													 cluster)
-											 (quote *handler-clusters*)))))
-					 forms))))
-
-  (macro handler-case (form . cases)
-		 (let ((cont-sym (gensym)))
-		   (let ((make-binding
-				  (lambda (binding)
-					(list (first binding)
-						  (append (list (quote lambda) (second binding))
-								  (list (list (quote exit) cont-sym
-											  (append (list (quote do))
-													  (tail (tail binding))))))))))
-			 (list (quote with-cont) cont-sym
-				   (list (quote handler-bind)
-						 (map make-binding cases)
-						 form)))))
-
-  (func error (type . args)
-		(let ((handler (search *handler-clusters* type first)))
-		  (if handler
-			  ((second handler) args)
-			  (invoke-debugger type))))
-
   (func divide (a b)
 		(if (= b 0)
 			(error (quote division-by-zero) nil)
@@ -332,4 +355,10 @@ and returns a list containing the results"
 			  (button (ps-make-button "Hey!" 15.0)))
 		  (ps-window-set-root window button)
 		  (list window button)))
+
+  (func make-point (x y)
+		(let ((instance (make-instance (quote point) 2)))
+		  (set-slot! instance 0 x)
+		  (set-slot! instance 1 y)
+		  instance))
   )
