@@ -156,7 +156,7 @@ and returns a list containing the results"
 			   (first lst))
 			  (t (search (tail lst) element key))))
 
-  (macro defstruct (name . slots)
+  (macro struct (name . slots)
 		 (let ((accessor-name
 				(lambda (slot)
 				  (make-symbol (string-concat (symbol-string name) "-"

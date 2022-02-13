@@ -128,7 +128,11 @@ static void* yk_cpointer_value(YkObject cpointer);
 static YkObject yk_arglist_cfun,
 	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
 	yk_symbol_file_mode_binary_input, yk_symbol_file_mode_binary_output, yk_symbol_file_mode_binary_append,
-	yk_symbol_eof, yk_symbol_environnement, yk_array_cfun;
+	yk_symbol_eof, yk_symbol_environnement, yk_array_cfun,
+	yk_symbol_type_list, yk_symbol_type_int, yk_symbol_type_float,
+	yk_symbol_type_symbol, yk_symbol_type_function, yk_symbol_type_array,
+	yk_symbol_type_string, yk_symbol_type_cpointer, yk_symbol_type_string_stream,
+	yk_symbol_type_file_stream;
 
 #ifdef _DEBUG
 YkObject yk_ptr(YkObject o) {
@@ -1667,6 +1671,58 @@ static YkObject yk_builtin_breakpoint(YkUint nargs) {
 	return YK_NIL;
 }
 
+static YkObject yk_builtin_type_of(YkUint nargs) {
+	YkObject object = yk_lisp_stack_top[0];
+
+	if (object == YK_NIL) {
+		return YK_NIL;
+	}
+
+	switch(YK_TYPEOF(object)) {
+	case yk_t_list:
+		return yk_symbol_type_list;
+		break;
+	case yk_t_int:
+		return yk_symbol_type_int;
+		break;
+	case yk_t_float:
+		return yk_symbol_type_float;
+		break;
+	case yk_t_symbol:
+		return yk_symbol_type_symbol;
+		break;
+	case yk_t_c_proc:
+		return yk_symbol_type_function;
+		break;
+	case yk_t_closure:
+		return yk_symbol_type_function;
+		break;
+	case yk_t_bytecode:
+		return yk_symbol_type_function;
+		break;
+	case yk_t_instance:
+		return YK_PTR(object)->instance.type_symbol;
+		break;
+	case yk_t_array:
+		return yk_symbol_type_array;
+		break;
+	case yk_t_string:
+		return yk_symbol_type_string;
+		break;
+	case yk_t_cpointer:
+		return yk_symbol_type_cpointer;
+		break;
+	case yk_t_string_stream:
+		return yk_symbol_type_string_stream;
+		break;
+	case yk_t_file_stream:
+		return yk_symbol_type_file_stream;
+		break;
+	default:
+		return YK_NIL;
+	}
+}
+
 static YkObject yk_default_debugger(YkUint nargs) {
 	YkObject error = yk_lisp_stack_top[0];
 
@@ -1815,6 +1871,16 @@ void yk_init() {
 	YK_PTR(yk_tee)->symbol.type = yk_s_constant;
 
 	yk_symbol_environnement = yk_make_symbol_cstr("*environnement*");
+	yk_symbol_type_list = yk_make_symbol_cstr("list");
+	yk_symbol_type_int = yk_make_symbol_cstr("int");
+	yk_symbol_type_float = yk_make_symbol_cstr("float");
+	yk_symbol_type_symbol = yk_make_symbol_cstr("symbol");
+	yk_symbol_type_function = yk_make_symbol_cstr("function");
+	yk_symbol_type_array = yk_make_symbol_cstr("array");
+	yk_symbol_type_string = yk_make_symbol_cstr("string");
+	yk_symbol_type_cpointer = yk_make_symbol_cstr("cpointer");
+	yk_symbol_type_string_stream = yk_make_symbol_cstr("string-stream");
+	yk_symbol_type_file_stream = yk_make_symbol_cstr("file-stream");
 
 	yk_nil = yk_make_symbol_cstr("nil");
 	YK_PTR(yk_nil)->symbol.value = YK_NIL;
@@ -1949,6 +2015,8 @@ void yk_init() {
 	yk_make_builtin("make-instance", 2, yk_builtin_make_instance);
 	yk_make_builtin("set-slot!", 3, yk_builtin_set_slot);
 	yk_make_builtin("get-slot", 2, yk_builtin_get_slot);
+
+	yk_make_builtin("type-of", 1, yk_builtin_type_of);
 
 	yk_make_builtin("clock", 0, yk_builtin_clock);
 	yk_make_builtin("random", 1, yk_builtin_random);
@@ -3820,9 +3888,6 @@ static void yk_compile_call(YkObject bytecode, YkCompilerState* state) {
 	{
 		YkObject macro_return =	yk_apply(YK_PTR(YK_CAR(state->expr))->symbol.value,
 										 YK_CDR(state->expr));
-		printf("Macro return: \n");
-		yk_print(macro_return);
-		printf("\n");
 
 		new_state.expr = macro_return;
 		yk_compile_loop(bytecode, &new_state);
