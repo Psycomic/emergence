@@ -125,14 +125,19 @@ static YkCompilerVar* yk_find_closed_conts(YkObject expr, YkClosedVar* upenvs, Y
 static YkObject yk_make_cpointer(void* cptr);
 static void* yk_cpointer_value(YkObject cpointer);
 
+static YkObject yk_find_class(YkObject symbol);
+
 static YkObject yk_arglist_cfun,
 	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
 	yk_symbol_file_mode_binary_input, yk_symbol_file_mode_binary_output, yk_symbol_file_mode_binary_append,
 	yk_symbol_eof, yk_symbol_environnement, yk_array_cfun,
-	yk_symbol_type_list, yk_symbol_type_int, yk_symbol_type_float,
-	yk_symbol_type_symbol, yk_symbol_type_function, yk_symbol_type_array,
+	yk_symbol_type_list, yk_symbol_type_number, yk_symbol_type_stream, yk_symbol_type_int,
+	yk_symbol_type_float, yk_symbol_type_symbol, yk_symbol_type_function, yk_symbol_type_array,
 	yk_symbol_type_string, yk_symbol_type_cpointer, yk_symbol_type_string_stream,
-	yk_symbol_type_file_stream;
+	yk_symbol_type_file_stream, yk_symbol_type_class, yk_symbol_type_builtin_class,
+	yk_class_class = NULL, yk_class_builtin_class = NULL,
+	yk_class_number, yk_class_function, yk_class_symbol, yk_class_stream,
+	yk_class_string_stream, yk_class_file_stream, yk_class_int, yk_class_float;
 
 #ifdef _DEBUG
 YkObject yk_ptr(YkObject o) {
@@ -195,6 +200,7 @@ mark:
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 
 		yk_mark(YK_PTR(o)->symbol.value);
+		yk_mark(YK_PTR(o)->symbol.class_value);
 		o = YK_PTR(o)->symbol.name;
 		goto mark;
 	}
@@ -505,6 +511,65 @@ static float yk_fixnum_to_float(YkObject fix) {
 
 char* yk_string_to_c_str(YkObject string) {
 	return YK_PTR(string)->string.data;
+}
+
+#define YK_CLASS_OF(x)	   (YK_PTR(x)->instance.class)
+#define YK_CLASS_NAME(x)   (YK_PTR(x)->instance.slots[0])
+#define YK_CLASS_PARENT(x) (YK_PTR(x)->instance.slots[1])
+#define YK_CLASS_SIZE(x)   (YK_PTR(x)->instance.slots[2])
+
+static inline YkObject yk_find_class(YkObject symbol) {
+	YkObject value = YK_PTR(symbol)->symbol.class_value;
+	YK_ASSERT(value != NULL);
+
+	return value;
+}
+
+static bool yk_subclassp(YkObject c1, YkObject c2) {
+start:
+	if (c1 == c2) {
+		return true;
+	} else {
+		YkObject parent = YK_CLASS_PARENT(c1);
+		if (parent == yk_tee)
+			return false;
+
+		c1 = parent;
+		goto start;
+	}
+}
+
+static bool yk_subtypep(YkObject t1, YkObject t2) {
+	if (t2 == yk_tee)
+		return true;
+
+	return yk_subclassp(yk_find_class(t1), yk_find_class(t2));
+}
+
+static YkObject yk_make_instance(YkObject class) {
+	YK_ASSERT(YK_CLASS_OF(class) != yk_class_builtin_class);
+	YkUint slots_count = YK_INT(YK_CLASS_SIZE(class));
+
+	YkObject instance = yk_alloc();
+	instance->t.t = yk_t_instance;
+	instance->instance.class = class;
+	instance->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * slots_count);
+	instance->instance.slots_count = slots_count;
+
+	return instance;
+}
+
+static YkObject yk_make_class(YkObject metaclass, YkObject name, YkObject parent, YkUint size) {
+	YkUint parent_size = parent == yk_tee ? 0 : YK_INT(YK_CLASS_SIZE(parent));
+
+	YkObject new_class = yk_make_instance(metaclass);
+	new_class->instance.slots[0] = name;
+	new_class->instance.slots[1] = parent;
+	new_class->instance.slots[2] = YK_MAKE_INT(size + parent_size);
+
+	YK_PTR(name)->symbol.class_value = new_class;
+
+	return new_class;
 }
 
 static YkObject yk_make_file_stream(YkObject path, YkObject mode, FILE* optional_fptr) {
@@ -1169,16 +1234,9 @@ static YkObject yk_builtin_symbolp(YkUint nargs) {
 	return YK_SYMBOLP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
 }
 
-static YkObject yk_builtin_closurep(YkUint nargs) {
-	return YK_CLOSUREP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
-}
-
-static YkObject yk_builtin_bytecodep(YkUint nargs) {
-	return YK_BYTECODEP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
-}
-
-static YkObject yk_builtin_compiled_functionp(YkUint nargs) {
-	return YK_CPROCP(yk_lisp_stack_top[0]) ? yk_tee : YK_NIL;
+static YkObject yk_builtin_functionp(YkUint nargs) {
+	return (YK_CPROCP(yk_lisp_stack_top[0]) || YK_BYTECODEP(yk_lisp_stack_top[0]) ||
+		YK_CLOSUREP(yk_lisp_stack_top[0])) ? yk_tee : YK_NIL;
 }
 
 static YkObject yk_builtin_boundp(YkUint nargs) {
@@ -1541,21 +1599,47 @@ static YkObject yk_builtin_gc(YkUint nargs) {
 	return YK_NIL;
 }
 
+static YkObject yk_builtin_set_class(YkUint nargs) {
+	YkObject name = yk_lisp_stack_top[0],
+		parent = yk_lisp_stack_top[1],
+		size = yk_lisp_stack_top[2];
+
+	YK_ASSERT(YK_SYMBOLP(name) && YK_SYMBOLP(parent) && YK_INTP(size));
+	YkObject parent_class = yk_find_class(parent);
+
+	YK_ASSERT(YK_CLASS_OF(parent_class) != yk_class_builtin_class);
+
+	return yk_make_class(yk_class_class, name, parent_class, YK_INT(size));
+}
+
 static YkObject yk_builtin_make_instance(YkUint nargs) {
-	YkObject type = yk_lisp_stack_top[0],
-		slots_number = yk_lisp_stack_top[1];
+	YkObject type = yk_lisp_stack_top[0];
 
-	YK_ASSERT(YK_INTP(slots_number) && YK_SYMBOLP(type));
-	YkInt n = YK_INT(slots_number);
-	YK_ASSERT(n > 0);
+	YK_ASSERT(YK_SYMBOLP(type));
+	YkObject class = YK_PTR(type)->symbol.class_value;
+	YkUint class_size = YK_INT(YK_CLASS_SIZE(class));
+	YK_ASSERT(class != NULL && class_size == (nargs - 1));
 
-	YkObject instance = yk_alloc();
-	instance->t.t = yk_t_instance;
-	instance->instance.type_symbol = type;
-	instance->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * n);
-	instance->instance.slots_count = n;
-
+	YkObject instance = yk_make_instance(class);
+	for (uint i = 0; i < class_size; i++) {
+		instance->instance.slots[i] = yk_lisp_stack_top[1 + i];
+	}
 	return instance;
+}
+
+static YkObject yk_builtin_find_class(YkUint nargs) {
+	YkObject type = yk_lisp_stack_top[0];
+	YK_ASSERT(YK_SYMBOLP(type));
+
+	return yk_find_class(type);
+}
+
+static YkObject yk_builtin_subtypep(YkUint nargs) {
+	YkObject t1 = yk_lisp_stack_top[0],
+		t2 = yk_lisp_stack_top[1];
+
+	YK_ASSERT(YK_SYMBOLP(t1) && YK_SYMBOLP(t2));
+	return yk_subtypep(t1, t2) ? yk_tee : YK_NIL;
 }
 
 static YkObject yk_builtin_set_slot(YkUint nargs) {
@@ -1701,7 +1785,7 @@ static YkObject yk_builtin_type_of(YkUint nargs) {
 		return yk_symbol_type_function;
 		break;
 	case yk_t_instance:
-		return YK_PTR(object)->instance.type_symbol;
+		return YK_CLASS_NAME(YK_CLASS_OF(object));
 		break;
 	case yk_t_array:
 		return yk_symbol_type_array;
@@ -1844,6 +1928,25 @@ YkObject yk_apply(YkObject function, YkObject args) {
 	return result;
 }
 
+static YkObject yk_funcall(const char* fn_name, ushort nargs, ...) {
+	YkObject args = YK_NIL;
+	YK_GC_PROTECT1(args);
+
+	va_list arguments;
+	va_start(arguments, nargs);
+
+	for (uint i = 0; i < nargs; i++) {
+		YkObject o = va_arg(arguments, YkObject);
+		args = yk_cons(o, args);
+	}
+
+	va_end(arguments);
+
+	return yk_apply(YK_PTR(yk_make_symbol_cstr(fn_name))->symbol.value, args);
+
+	YK_GC_UNPROTECT;
+}
+
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
 	yk_keyword_comptime, yk_keyword_do, yk_keyword_if, yk_keyword_dynamic_let,
 	yk_keyword_with_cont, yk_keyword_exit, yk_keyword_loop,
@@ -1868,10 +1971,14 @@ void yk_init() {
 	/* Special symbols */
 	yk_tee = yk_make_symbol_cstr("t");
 	YK_PTR(yk_tee)->symbol.value = yk_tee;
+	YK_PTR(yk_tee)->symbol.class_value = yk_tee;
 	YK_PTR(yk_tee)->symbol.type = yk_s_constant;
 
 	yk_symbol_environnement = yk_make_symbol_cstr("*environnement*");
+
 	yk_symbol_type_list = yk_make_symbol_cstr("list");
+	yk_symbol_type_number = yk_make_symbol_cstr("number");
+	yk_symbol_type_stream = yk_make_symbol_cstr("stream");
 	yk_symbol_type_int = yk_make_symbol_cstr("int");
 	yk_symbol_type_float = yk_make_symbol_cstr("float");
 	yk_symbol_type_symbol = yk_make_symbol_cstr("symbol");
@@ -1881,10 +1988,32 @@ void yk_init() {
 	yk_symbol_type_cpointer = yk_make_symbol_cstr("cpointer");
 	yk_symbol_type_string_stream = yk_make_symbol_cstr("string-stream");
 	yk_symbol_type_file_stream = yk_make_symbol_cstr("file-stream");
+	yk_symbol_type_class = yk_make_symbol_cstr("class");
+	yk_symbol_type_builtin_class = yk_make_symbol_cstr("builtin-class");
 
 	yk_nil = yk_make_symbol_cstr("nil");
 	YK_PTR(yk_nil)->symbol.value = YK_NIL;
 	YK_PTR(yk_nil)->symbol.type = yk_s_constant;
+
+	yk_class_class = yk_alloc();
+	yk_class_class->t.t = yk_t_instance;
+	yk_class_class->instance.class = yk_class_class;
+	yk_class_class->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * 3);
+	yk_class_class->instance.slots[0] = yk_symbol_type_class;
+	yk_class_class->instance.slots[1] = yk_tee;
+	yk_class_class->instance.slots[2] = YK_MAKE_INT(3);
+
+	YK_PTR(yk_symbol_type_class)->symbol.class_value = yk_class_class;
+
+	yk_class_builtin_class = yk_make_class(yk_class_class, yk_symbol_type_builtin_class, yk_class_class, 3);
+	yk_class_number = yk_make_class(yk_class_builtin_class, yk_symbol_type_number, yk_tee, 0);
+	yk_class_function = yk_make_class(yk_class_builtin_class, yk_symbol_type_function, yk_tee, 0);
+	yk_class_symbol = yk_make_class(yk_class_builtin_class, yk_symbol_type_symbol, yk_tee, 0);
+	yk_class_stream = yk_make_class(yk_class_class, yk_symbol_type_stream, yk_tee, 0);
+	yk_class_string_stream = yk_make_class(yk_class_builtin_class, yk_symbol_type_string_stream, yk_class_stream, 0);
+	yk_class_file_stream = yk_make_class(yk_class_builtin_class, yk_symbol_type_file_stream, yk_class_stream, 0);
+	yk_class_int = yk_make_class(yk_class_builtin_class, yk_symbol_type_int, yk_class_number, 0);
+	yk_class_float = yk_make_class(yk_class_builtin_class, yk_symbol_type_float, yk_class_number, 0);
 
 	yk_keyword_quote = yk_make_symbol_cstr("quote");
 	yk_keyword_let = yk_make_symbol_cstr("let");
@@ -1994,9 +2123,7 @@ void yk_init() {
 	yk_make_builtin("null?", 1, yk_builtin_nullp);
 	yk_make_builtin("list?", 1, yk_builtin_listp);
 	yk_make_builtin("symbol?", 1, yk_builtin_symbolp);
-	yk_make_builtin("closure?", 1, yk_builtin_closurep);
-	yk_make_builtin("bytecode?", 1, yk_builtin_bytecodep);
-	yk_make_builtin("compiled-function?", 1, yk_builtin_compiled_functionp);
+	yk_make_builtin("function?", 1, yk_builtin_functionp);
 
 	yk_make_builtin("documentation", 1, yk_builtin_documentation);
 	yk_make_builtin("disassemble", 1, yk_builtin_disassemble);
@@ -2012,7 +2139,10 @@ void yk_init() {
 	yk_make_builtin("symbol-string", 1, yk_builtin_symbol_string);
 	yk_make_builtin("string-concat", -1, yk_builtin_string_concat);
 
-	yk_make_builtin("make-instance", 2, yk_builtin_make_instance);
+	yk_make_builtin("set-class!", 3, yk_builtin_set_class);
+	yk_make_builtin("make-instance", -2, yk_builtin_make_instance);
+	yk_make_builtin("find-class", 1, yk_builtin_find_class);
+	yk_make_builtin("subtype?", 2, yk_builtin_subtypep);
 	yk_make_builtin("set-slot!", 3, yk_builtin_set_slot);
 	yk_make_builtin("get-slot", 2, yk_builtin_get_slot);
 
@@ -2040,8 +2170,8 @@ static void yk_assert(const char* expression, const char* file, uint32_t line) {
 	snprintf(error_name, sizeof(error_name), "<assertion-error '%s' at %s:%d>", expression, file, line);
 
 	YkObject sym = yk_make_symbol_cstr(error_name);
-	YK_PUSH(yk_lisp_stack_top, sym);
-	yk_default_debugger(1);
+
+	yk_funcall("invoke-debugger", 1, sym);
 }
 
 static YkObject yk_make_symbol_from_string(YkObject string) {
@@ -2057,6 +2187,7 @@ static YkObject yk_make_symbol_from_string(YkObject string) {
 		sym->symbol.name = string;
 		sym->symbol.hash = string_hash;
 		sym->symbol.value = NULL;
+		sym->symbol.class_value = NULL;
 		sym->symbol.next_sym = NULL;
 		sym->symbol.type = yk_s_normal;
 		sym->symbol.function_nargs = 0;
@@ -2088,6 +2219,7 @@ static YkObject yk_make_symbol_from_string(YkObject string) {
 			sym->symbol.name = string;
 			sym->symbol.hash = string_hash;
 			sym->symbol.value = NULL;
+			sym->symbol.class_value = NULL;
 			sym->symbol.next_sym = NULL;
 			sym->symbol.type = yk_s_normal;
 			sym->symbol.function_nargs = 0;
@@ -2321,6 +2453,9 @@ start:
 	} else if (a == '.') {
 		token.type = YK_TOKEN_DOT;
 		return token;
+	} else if (a == '\'') {
+		token.type = YK_TOKEN_QUOTE;
+		return token;
 	} else if (a == ';') {
 		char b;
 		do {
@@ -2407,6 +2542,8 @@ static YkObject yk_read_parse_expression(const char* string, uint32_t* offset) {
 	switch (t.type) {
 	case YK_TOKEN_LEFT_PAREN:
 		return yk_read_parse_sexp(string, offset);
+	case YK_TOKEN_QUOTE:
+		return yk_cons(yk_keyword_quote, yk_cons(yk_read_parse_expression(string, offset), YK_NIL));
 	case YK_TOKEN_STRING:
 		return yk_make_string(string + t.data.string_info.begin_index,
 							  t.data.string_info.size);
@@ -2530,7 +2667,7 @@ void yk_print(YkObject o) {
 		yk_stream_format(output, "<foreign pointer at %p>", YK_PTR(o));
 		break;
 	case yk_t_instance:
-		yk_stream_format(output, "<%s at %p>", yk_symbol_cstr(YK_PTR(o)->instance.type_symbol),
+		yk_stream_format(output, "<%s at %p>", yk_symbol_cstr(YK_CLASS_NAME(YK_CLASS_OF(o))),
 						 YK_PTR(o));
 		break;
 	default:
@@ -3888,6 +4025,9 @@ static void yk_compile_call(YkObject bytecode, YkCompilerState* state) {
 	{
 		YkObject macro_return =	yk_apply(YK_PTR(YK_CAR(state->expr))->symbol.value,
 										 YK_CDR(state->expr));
+
+		yk_print(macro_return);
+		printf("\n");
 
 		new_state.expr = macro_return;
 		yk_compile_loop(bytecode, &new_state);

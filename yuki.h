@@ -164,6 +164,7 @@ typedef struct {
 		YK_TOKEN_FLOAT,
 		YK_TOKEN_SYMBOL,
 		YK_TOKEN_STRING,
+		YK_TOKEN_QUOTE
 	} type;
 
 	union {
@@ -187,16 +188,17 @@ typedef struct {
 
 typedef struct {
 	YkObject value;
+	YkObject class_value;
 	YkObject next_sym;
+	YkObject name;
+	uint64_t hash;
+	int32_t function_nargs;
 	enum YkSymbolType {
 		yk_s_normal,
 		yk_s_constant,
 		yk_s_function,
 		yk_s_macro
 	} type;
-	YkObject name;
-	uint64_t hash;
-	int32_t function_nargs;
 	uint8_t declared;
 } YkSymbol;
 
@@ -308,7 +310,7 @@ typedef struct {
 } YkCPointer;
 
 typedef struct {
-	YkObject type_symbol;
+	YkObject class;
 	YkType t;
 	YkObject* slots;
 	YkUint slots_count;
