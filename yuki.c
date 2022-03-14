@@ -126,6 +126,7 @@ static YkObject yk_make_cpointer(void* cptr);
 static void* yk_cpointer_value(YkObject cpointer);
 
 static YkObject yk_find_class(YkObject symbol);
+YkObject yk_apply(YkObject function, YkObject args);
 
 static YkObject yk_arglist_cfun,
 	yk_symbol_file_mode_input, yk_symbol_file_mode_output, yk_symbol_file_mode_append,
@@ -135,8 +136,9 @@ static YkObject yk_arglist_cfun,
 	yk_symbol_type_float, yk_symbol_type_symbol, yk_symbol_type_function, yk_symbol_type_array,
 	yk_symbol_type_string, yk_symbol_type_cpointer, yk_symbol_type_string_stream,
 	yk_symbol_type_file_stream, yk_symbol_type_class, yk_symbol_type_builtin_class,
-	yk_class_class = NULL, yk_class_builtin_class = NULL,
-	yk_class_number, yk_class_function, yk_class_symbol, yk_class_stream,
+	yk_symbol_type_object, yk_symbol_type_object_class,
+	yk_class_class = NULL, yk_class_builtin_class = NULL, yk_class_object_class = NULL,
+	yk_class_object, yk_class_number, yk_class_function, yk_class_symbol, yk_class_stream,
 	yk_class_string_stream, yk_class_file_stream, yk_class_int, yk_class_float;
 
 #ifdef _DEBUG
@@ -269,6 +271,8 @@ mark:
 	} else if (YK_TYPEOF(o) == yk_t_instance) {
 		YK_CAR(o) = YK_TAG(YK_CAR(o), YK_MARK_BIT);
 		yk_mark_block_data(YK_PTR(o)->instance.slots);
+		yk_mark(o->instance.class);
+
 		for (uint i = 0; i < YK_PTR(o)->instance.slots_count; i++) {
 			yk_mark(YK_PTR(o)->instance.slots[i]);
 		}
@@ -513,10 +517,15 @@ char* yk_string_to_c_str(YkObject string) {
 	return YK_PTR(string)->string.data;
 }
 
-#define YK_CLASS_OF(x)	   (YK_PTR(x)->instance.class)
-#define YK_CLASS_NAME(x)   (YK_PTR(x)->instance.slots[0])
-#define YK_CLASS_PARENT(x) (YK_PTR(x)->instance.slots[1])
-#define YK_CLASS_SIZE(x)   (YK_PTR(x)->instance.slots[2])
+#define YK_CLASS_OF(x)	        (x->instance.class)
+#define YK_CLASS_NAME(x)        (x->instance.slots[0])
+#define YK_CLASS_PARENT(x)      (x->instance.slots[1])
+#define YK_CLASS_SIZE(x)        (x->instance.slots[2])
+#define YK_OBJECT_METHODS(x)    (x->instance.slots[3])
+#define YK_OBJECT_SUBCLASSES(x) (x->instance.slots[4])
+
+#define YK_CLASS_INVALIDATE(x)	do { YK_CLASS_SIZE(x) = YK_MAKE_INT(-1); } while (0)
+#define YK_CLASS_INVALID(x)		(YK_CLASS_SIZE(x) == YK_MAKE_INT(-1))
 
 static inline YkObject yk_find_class(YkObject symbol) {
 	YkObject value = YK_PTR(symbol)->symbol.class_value;
@@ -547,7 +556,8 @@ static bool yk_subtypep(YkObject t1, YkObject t2) {
 }
 
 static YkObject yk_make_instance(YkObject class) {
-	YK_ASSERT(YK_CLASS_OF(class) != yk_class_builtin_class);
+	YK_ASSERT(YK_CLASS_OF(class) != yk_class_builtin_class &&
+			  !YK_CLASS_INVALID(class));
 	YkUint slots_count = YK_INT(YK_CLASS_SIZE(class));
 
 	YkObject instance = yk_alloc();
@@ -556,7 +566,19 @@ static YkObject yk_make_instance(YkObject class) {
 	instance->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * slots_count);
 	instance->instance.slots_count = slots_count;
 
+	for (uint i = 0; i < slots_count; i++) {
+		instance->instance.slots[i] = YK_NIL;
+	}
+
 	return instance;
+}
+
+static void yk_invalidate_class(YkObject class) {
+	YK_LIST_FOREACH(YK_OBJECT_SUBCLASSES(class), pair) {
+		yk_invalidate_class(YK_CAR(pair));
+	}
+
+	YK_CLASS_INVALIDATE(class);
 }
 
 static YkObject yk_make_class(YkObject metaclass, YkObject name, YkObject parent, YkUint size) {
@@ -567,6 +589,15 @@ static YkObject yk_make_class(YkObject metaclass, YkObject name, YkObject parent
 	new_class->instance.slots[1] = parent;
 	new_class->instance.slots[2] = YK_MAKE_INT(size + parent_size);
 
+	if (parent->instance.class == yk_class_object_class) {
+		YK_OBJECT_SUBCLASSES(parent) = yk_cons(new_class, YK_OBJECT_SUBCLASSES(parent));
+	}
+
+	if (YK_PTR(name)->symbol.class_value != NULL) {
+		YkObject class = YK_PTR(name)->symbol.class_value;
+		YK_ASSERT(class->instance.class == yk_class_object_class);
+		yk_invalidate_class(class);
+	}
 	YK_PTR(name)->symbol.class_value = new_class;
 
 	return new_class;
@@ -1607,9 +1638,9 @@ static YkObject yk_builtin_set_class(YkUint nargs) {
 	YK_ASSERT(YK_SYMBOLP(name) && YK_SYMBOLP(parent) && YK_INTP(size));
 	YkObject parent_class = yk_find_class(parent);
 
-	YK_ASSERT(YK_CLASS_OF(parent_class) != yk_class_builtin_class);
+	YK_ASSERT(parent_class == yk_class_object || yk_subclassp(parent_class, yk_class_object));
 
-	return yk_make_class(yk_class_class, name, parent_class, YK_INT(size));
+	return yk_make_class(yk_class_object_class, name, parent_class, YK_INT(size));
 }
 
 static YkObject yk_builtin_make_instance(YkUint nargs) {
@@ -1617,6 +1648,8 @@ static YkObject yk_builtin_make_instance(YkUint nargs) {
 
 	YK_ASSERT(YK_SYMBOLP(type));
 	YkObject class = YK_PTR(type)->symbol.class_value;
+	YK_ASSERT(class != 0);
+
 	YkUint class_size = YK_INT(YK_CLASS_SIZE(class));
 	YK_ASSERT(class != NULL && class_size == (nargs - 1));
 
@@ -1648,7 +1681,8 @@ static YkObject yk_builtin_set_slot(YkUint nargs) {
 		value = yk_lisp_stack_top[2];
 
 	YK_ASSERT(YK_TYPEOF(instance) == yk_t_instance && YK_INTP(slot) &&
-			  YK_INT(slot) >= 0 && YK_INT(slot) < (YkInt)instance->instance.slots_count);
+			  YK_INT(slot) >= 0 && YK_INT(slot) < (YkInt)instance->instance.slots_count &&
+			  !YK_CLASS_INVALID(instance->instance.class));
 
 	instance->instance.slots[YK_INT(slot)] = value;
 	return value;
@@ -1659,9 +1693,62 @@ static YkObject yk_builtin_get_slot(YkUint args) {
 		slot = yk_lisp_stack_top[1];
 
 	YK_ASSERT(YK_TYPEOF(instance) == yk_t_instance && YK_INTP(slot) &&
-			  YK_INT(slot) >= 0 && YK_INT(slot) < (YkInt)instance->instance.slots_count);
+			  YK_INT(slot) >= 0 && YK_INT(slot) < (YkInt)instance->instance.slots_count &&
+			  !YK_CLASS_INVALID(instance->instance.class));
 
 	return instance->instance.slots[YK_INT(slot)];
+}
+
+static YkObject yk_builtin_class_size(YkUint nargs) {
+	YkObject class = yk_find_class(yk_lisp_stack_top[0]);
+	return YK_CLASS_SIZE(class);
+}
+
+static YkObject yk_builtin_set_method(YkUint nargs) {
+	YkObject class = yk_lisp_stack_top[0],
+		name = yk_lisp_stack_top[1],
+		function = yk_lisp_stack_top[2];
+
+	YK_LIST_FOREACH(class->instance.slots[3], pair) {
+		if (YK_CDR(YK_CAR(pair)) == name) {
+			YK_CDR(YK_CAR(pair)) = function;
+			return function;
+		}
+	}
+
+	class->instance.slots[3] = yk_cons(yk_cons(name, function),
+									   class->instance.slots[3]);
+
+	return function;
+}
+
+static YkObject yk_builtin_call_method(YkUint nargs) {
+	YkObject object = yk_lisp_stack_top[0],
+		name = yk_lisp_stack_top[1],
+		args = YK_NIL,
+		function;
+
+	YK_GC_PROTECT1(args);
+
+	YkObject class = object->instance.class;
+
+	for (uint i = 2; i < nargs; i++) {
+		args = yk_cons(yk_lisp_stack_top[i], args);
+	}
+	args = yk_cons(object, args);
+
+	for (YkObject c = class; c != yk_class_object; c = c->instance.slots[1]) {
+		YK_LIST_FOREACH(c->instance.slots[3], pair) {
+			if (YK_CAR(YK_CAR(pair)) == name) {
+				function = YK_CDR(YK_CAR(pair));
+				YK_GC_UNPROTECT;
+				return yk_apply(function, args);
+			}
+		}
+	}
+
+	YK_ASSERT(0);
+	return YK_NIL;
 }
 
 static YkObject yk_builtin_make_window(YkUint nargs) {
@@ -1977,6 +2064,7 @@ void yk_init() {
 	yk_symbol_environnement = yk_make_symbol_cstr("*environnement*");
 
 	yk_symbol_type_list = yk_make_symbol_cstr("list");
+	yk_symbol_type_object = yk_make_symbol_cstr("object");
 	yk_symbol_type_number = yk_make_symbol_cstr("number");
 	yk_symbol_type_stream = yk_make_symbol_cstr("stream");
 	yk_symbol_type_int = yk_make_symbol_cstr("int");
@@ -1989,6 +2077,7 @@ void yk_init() {
 	yk_symbol_type_string_stream = yk_make_symbol_cstr("string-stream");
 	yk_symbol_type_file_stream = yk_make_symbol_cstr("file-stream");
 	yk_symbol_type_class = yk_make_symbol_cstr("class");
+	yk_symbol_type_object_class = yk_make_symbol_cstr("object-class");
 	yk_symbol_type_builtin_class = yk_make_symbol_cstr("builtin-class");
 
 	yk_nil = yk_make_symbol_cstr("nil");
@@ -1998,14 +2087,17 @@ void yk_init() {
 	yk_class_class = yk_alloc();
 	yk_class_class->t.t = yk_t_instance;
 	yk_class_class->instance.class = yk_class_class;
-	yk_class_class->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * 3);
+	yk_class_class->instance.slots = yk_array_allocator_alloc(sizeof(YkObject) * 4);
 	yk_class_class->instance.slots[0] = yk_symbol_type_class;
 	yk_class_class->instance.slots[1] = yk_tee;
 	yk_class_class->instance.slots[2] = YK_MAKE_INT(3);
+	yk_class_class->instance.slots[3] = YK_NIL;
 
 	YK_PTR(yk_symbol_type_class)->symbol.class_value = yk_class_class;
 
 	yk_class_builtin_class = yk_make_class(yk_class_class, yk_symbol_type_builtin_class, yk_class_class, 3);
+	yk_class_object_class = yk_make_class(yk_class_class, yk_symbol_type_object_class, yk_class_class, 5);
+	yk_class_object = yk_make_class(yk_class_class, yk_symbol_type_object, yk_tee, 0);
 	yk_class_number = yk_make_class(yk_class_builtin_class, yk_symbol_type_number, yk_tee, 0);
 	yk_class_function = yk_make_class(yk_class_builtin_class, yk_symbol_type_function, yk_tee, 0);
 	yk_class_symbol = yk_make_class(yk_class_builtin_class, yk_symbol_type_symbol, yk_tee, 0);
@@ -2145,6 +2237,9 @@ void yk_init() {
 	yk_make_builtin("subtype?", 2, yk_builtin_subtypep);
 	yk_make_builtin("set-slot!", 3, yk_builtin_set_slot);
 	yk_make_builtin("get-slot", 2, yk_builtin_get_slot);
+	yk_make_builtin("class-size", 1, yk_builtin_class_size);
+	yk_make_builtin("set-method!", 3, yk_builtin_set_method);
+	yk_make_builtin("call-method", -3, yk_builtin_call_method);
 
 	yk_make_builtin("type-of", 1, yk_builtin_type_of);
 
@@ -2667,8 +2762,12 @@ void yk_print(YkObject o) {
 		yk_stream_format(output, "<foreign pointer at %p>", YK_PTR(o));
 		break;
 	case yk_t_instance:
-		yk_stream_format(output, "<%s at %p>", yk_symbol_cstr(YK_CLASS_NAME(YK_CLASS_OF(o))),
-						 YK_PTR(o));
+		if (YK_CLASS_INVALID(YK_CLASS_OF(o))) {
+			yk_stream_format(output, "<invalid instance at %p>", YK_PTR(o));
+		} else {
+			yk_stream_format(output, "<%s at %p>", yk_symbol_cstr(YK_CLASS_NAME(YK_CLASS_OF(o))),
+							 YK_PTR(o));
+		}
 		break;
 	default:
 		yk_stream_format(output, "Unknown type 0x%lx!\n", YK_TYPEOF(o));

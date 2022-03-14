@@ -122,20 +122,39 @@ and returns a list containing the results"
 									   (set! (unquote i)
 											 (+ (unquote i) 1))))))))))
 
+  (macro method (class name lambda-list . body)
+		 (list 'set-method! (list 'find-class (list 'quote class))
+			   (list 'quote name)
+			   (append (list 'lambda lambda-list)
+					   body)))
+
+  (macro send (object method . args)
+		 (append (list 'call-method object (list 'quote method))
+				 args))
+
   (macro class (name parent . attributes)
 		 (append (list 'do
 					   (quasiquote
-						(set-class! '(unquote name) '(unquote parent) (unquote (length attributes)))))
+						(set-class! '(unquote name) '(unquote (if (null? parent) 'object parent))
+									(unquote (length attributes)))))
 				 (list (quasiquote
 						(func (unquote (make-symbol (string-concat (symbol-string name) "?")))
 							  (instance)
-							  (subtype? (type-of instance) '(unquote name)))))))
+							  (subtype? (type-of instance) '(unquote name)))))
+				 (enumerate (lambda (i a)
+							  (quasiquote
+							   (method (unquote name) (unquote a)
+									   (self)
+									   (get-slot self (unquote i)))))
+							attributes)))
 
   (func search (lst element key)
 		(cond ((null? lst) nil)
 			  ((eq? (key (first lst)) element)
 			   (first lst))
 			  (t (search (tail lst) element key))))
+
+  (class error ())
 
   (define *handler-clusters* nil)
 
@@ -169,10 +188,15 @@ and returns a list containing the results"
 						 form)))))
 
   (func error (type . args)
-		(let ((handler (search *handler-clusters* type first)))
-		  (if handler
-			  ((second handler) args)
-			  (invoke-debugger type))))
+		(assert (subtype? type 'error))
+		(let ((loop (Y (lambda (loop)
+						 (lambda (handlers)
+						   (when handlers
+							 (let ((handler (first handlers)))
+							   (if (subtype? type (first handler))
+								   ((second handler) (make-instance type))
+								   (loop (tail handlers))))))))))
+		  (loop *handler-clusters*)))
 
   (func make-board (size)
 		"Makes a Game of Life board of size `size'"
@@ -255,10 +279,6 @@ and returns a list containing the results"
 				 (set! age (head args)))
 				(t (quote message-not-understood)))))
 
-  (macro send (obj message . args)
-		 (append (list obj (list 'quote message))
-				 args))
-
   (define ewen (make-person "Ewen" 16))
 
   (define 2+5 (((let ((x 5))
@@ -266,15 +286,15 @@ and returns a list containing the results"
 
   (define Y                 ; (Y f) = (g g) where
 	(named-lambda x (f)             ;         (g g) = (f  (lambda a (apply (g g) a)))
-      ((named-lambda y (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
-       (named-lambda z (g)
-		 (f (named-lambda w (a) ((g g) a)))))))
+				  ((named-lambda y (g) (g g))   ; (Y f) ==        (f  (lambda a (apply (Y f) a)))
+				   (named-lambda z (g)
+								 (f (named-lambda w (a) ((g g) a)))))))
 
   (define fact
 	(Y (named-lambda fugg (r)
-		 (named-lambda DDDD (x)
-		   (if (< x 2) 1
-			   (* x (r (- x 1))))))))
+					 (named-lambda DDDD (x)
+								   (if (< x 2) 1
+									   (* x (r (- x 1))))))))
 
   (func test-closure-cont ()
 		(let ((i 0)
@@ -290,27 +310,31 @@ and returns a list containing the results"
 						(set! i (1+ i)))))
 		  (list i fn)))
 
+  (class division-by-zero-error error)
+
   (func divide (a b)
 		(if (= b 0)
-			(error 'division-by-zero nil)
+			(error 'division-by-zero-error)
 			(/ a b)))
 
   (func test-errors (x)
-		(handler-bind ((division-by-zero
-						(lambda (args)
-						  (print "Division by zero occured!")
-						  'division-by-zero)))
-					  (print *handler-clusters*)
-					  (divide 10 x))))
+		(handler-case (let ((a (divide 4 x)))
+						(print "Fuck yeah")
+						(* a 89))
+					  (division-by-zero-error (e)
+											  (print "Got error")
+											  e)
+					  (error (e)
+							 (print "other error")
+							 e)))
 
-(func test-psyche ()
-	  (let ((window (ps-make-window "Hello"))
-			(button (ps-make-button "Hey!" 15.0)))
-		(ps-window-set-root window button)
-		(list window button)))
+  (func test-psyche ()
+		(let ((window (ps-make-window "Hello"))
+			  (button (ps-make-button "Hey!" 15.0)))
+		  (ps-window-set-root window button)
+		  (list window button)))
 
-(do (comptime
-	 (register-function! (quote (make-symbol (string-concat (symbol-string name) "?"))) 1))
-	(set-global! (quote (make-symbol (string-concat (symbol-string name) "?")))
-				 (named-lambda (make-symbol (string-concat (symbol-string name) "?")) (instance) (subtype? (type-of instance) (quote point))))
-  (quote (make-symbol (string-concat (symbol-string name) "?"))))
+  (class point () x y)
+  (class 3d-point point z)
+
+  (define *point* (make-instance '3d-point 4 5 6)))
