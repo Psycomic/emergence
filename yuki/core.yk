@@ -133,20 +133,24 @@ and returns a list containing the results"
 				 args))
 
   (macro class (name parent . attributes)
-		 (append (list 'do
-					   (quasiquote
-						(set-class! '(unquote name) '(unquote (if (null? parent) 'object parent))
-									(unquote (length attributes)))))
-				 (list (quasiquote
-						(func (unquote (make-symbol (string-concat (symbol-string name) "?")))
-							  (instance)
-							  (subtype? (type-of instance) '(unquote name)))))
-				 (enumerate (lambda (i a)
-							  (quasiquote
-							   (method (unquote name) (unquote a)
-									   (self)
-									   (get-slot self (unquote i)))))
-							attributes)))
+		 (let ((is-superclass (if (null? parent) t
+								(if (eq? parent 'object)
+									t nil))))
+		   (append (list 'do
+						 (quasiquote
+						  (set-class! '(unquote name) '(unquote (if (null? parent) 'object parent))
+									  (unquote (length attributes)))))
+				   (list (quasiquote
+						  (func (unquote (make-symbol (string-concat (symbol-string name) "?")))
+								(instance)
+								(subtype? (type-of instance) '(unquote name)))))
+				   (enumerate (lambda (i a)
+								(quasiquote
+								 (method (unquote name) (unquote a)
+										 (self)
+										 (get-slot self (unquote
+														 (if is-superclass i (1+ i)))))))
+							  attributes))))
 
   (func search (lst element key)
 		(cond ((null? lst) nil)
@@ -337,4 +341,5 @@ and returns a list containing the results"
   (class point () x y)
   (class 3d-point point z)
 
-  (define *point* (make-instance '3d-point 4 5 6)))
+  ;; (define *point* (make-instance '3d-point 4 5 6))
+  )
