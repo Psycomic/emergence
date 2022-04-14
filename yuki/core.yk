@@ -191,16 +191,18 @@ and returns a list containing the results"
 						 (map make-binding cases)
 						 form)))))
 
-  (func error (type . args)
-		(assert (subtype? type 'error))
-		(let ((loop (Y (lambda (loop)
-						 (lambda (handlers)
-						   (when handlers
-							 (let ((handler (first handlers)))
-							   (if (subtype? type (first handler))
-								   ((second handler) (make-instance type))
-								   (loop (tail handlers))))))))))
-		  (loop *handler-clusters*)))
+  (func error (e . args)
+		(assert (error? e))
+		(let ((type (type-of e)))
+		  (let ((l (Y (lambda (l)
+						(lambda (handlers)
+						  (when handlers
+							(let ((handler (first handlers)))
+							  (if (subtype? type (first handler))
+								  ((second handler) e)
+								  (l (tail handlers))))))))))
+			(l *handler-clusters*))
+		  (invoke-debugger e)))
 
   (func make-board (size)
 		"Makes a Game of Life board of size `size'"
@@ -314,11 +316,14 @@ and returns a list containing the results"
 						(set! i (1+ i)))))
 		  (list i fn)))
 
-  (class division-by-zero-error error)
+  (class type-error error
+	expected-type given-type)
+  (class division-by-zero-error error
+	numerator)
 
   (func divide (a b)
 		(if (= b 0)
-			(error 'division-by-zero-error)
+			(error (make-instance 'division-by-zero-error a))
 			(/ a b)))
 
   (func test-errors (x)
@@ -339,7 +344,4 @@ and returns a list containing the results"
 		  (list window button)))
 
   (class point () x y)
-  (class 3d-point point z)
-
-  ;; (define *point* (make-instance '3d-point 4 5 6))
-  )
+  (class 3d-point point z))
