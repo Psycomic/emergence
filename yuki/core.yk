@@ -146,10 +146,17 @@ and returns a list containing the results"
 								(subtype? (type-of instance) '(unquote name)))))
 				   (enumerate (lambda (i a)
 								(quasiquote
-								 (method (unquote name) (unquote a)
-										 (self)
-										 (get-slot self (unquote
-														 (if is-superclass i (1+ i)))))))
+								 (do (method (unquote name) (unquote a)
+											 (self)
+											 (get-slot self (unquote
+															 (if is-superclass i (1+ i)))))
+									 (method (unquote name)
+											 (unquote (make-symbol
+													   (string-concat "set-" (symbol-string a) "!")))
+											 (self new-value)
+											 (set-slot! self (unquote
+															  (if is-superclass i (1+ i)))
+														new-value)))))
 							  attributes))))
 
   (func search (lst element key)

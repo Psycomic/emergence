@@ -170,16 +170,25 @@ void update() {
 		forms = yk_read(ps_input_value(lisp_input));
 
 		bytecode = yk_make_bytecode_begin(yk_make_symbol_cstr("input"), 0);
-		yk_compile(forms, bytecode);
+		YkObject error = yk_compile(forms, bytecode);
 
-		r = yk_run(bytecode);
 		stream = yk_make_output_string_stream();
 
-		YK_DLET_BEGIN(yk_var_output, stream);
-		yk_print(r);
-		YK_DLET_END;
+		if (error == YK_NIL) {
+			yk_run(bytecode);
+			r = yk_value_register;
 
-		ps_label_set_text(result_label, yk_string_to_c_str(yk_stream_string(stream)));
+			YK_DLET_BEGIN(yk_var_output, stream);
+			yk_print(r);
+			YK_DLET_END;
+
+			ps_label_set_text(result_label, yk_string_to_c_str(yk_stream_string(stream)));
+		} else {
+			YK_DLET_BEGIN(yk_var_output, stream);
+			yk_print(error);
+			YK_DLET_END;
+			ps_label_set_text(result_label, yk_string_to_c_str(yk_stream_string(stream)));
+		}
 
 		YK_GC_UNPROTECT;
 	}

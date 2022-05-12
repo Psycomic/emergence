@@ -380,9 +380,8 @@ YkObject yk_make_bytecode_begin(YkObject name, YkInt nargs);
 void yk_bytecode_emit(YkObject bytecode, YkOpcode op, uint16_t modifier, YkObject ptr);
 void yk_bytecode_disassemble(YkObject bytecode);
 YkObject yk_read(const char* string);
-void yk_compile(YkObject forms, YkObject bytecode);
-YkObject yk_run(YkObject bytecode);
-void yk_repl();
+YkObject yk_compile(YkObject forms, YkObject bytecode);
+int yk_run(YkObject bytecode);
 
 YkObject yk_make_output_string_stream();
 YkObject yk_stream_string(YkObject stream);
@@ -391,5 +390,6 @@ YkObject yk_make_symbol_cstr(const char* cstr);
 
 /* Public variables */
 extern YkObject yk_var_output;
+extern YkObject yk_value_register;
 
 #endif
