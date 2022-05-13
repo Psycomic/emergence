@@ -129,7 +129,8 @@ static void* yk_cpointer_value(YkObject cpointer);
 static YkObject yk_find_class(YkObject symbol);
 YkObject yk_apply(YkObject function, YkObject args);
 static YkObject yk_type_of(YkObject object);
-static void yk_go_back(YkObject value);
+static void yk_tail_apply(YkObject function, YkObject args);
+static void yk_go_back(YkObject value, int code);
 static void yk_signal_error(YkObject class, ...);
 
 static YkObject yk_arglist_cfun,
@@ -1017,8 +1018,7 @@ static YkObject yk_builtin_add(YkUint nargs) {
 				f_result += YK_FLOAT(yk_lisp_stack_top[i]);
 			} else {
 				yk_signal_error(yk_make_symbol_cstr("type-error"), yk_symbol_type_number,
-								yk_type_of(yk_lisp_stack_top[i]));
-				return YK_NIL;
+								yk_type_of(yk_lisp_stack_top[i]), NULL);
 			}
 		} else {
 			if (YK_INTP(yk_lisp_stack_top[i])) {
@@ -1029,8 +1029,7 @@ static YkObject yk_builtin_add(YkUint nargs) {
 				f_result += YK_FLOAT(yk_lisp_stack_top[i]);
 			} else {
 				yk_signal_error(yk_make_symbol_cstr("type-error"), yk_symbol_type_number,
-								yk_type_of(yk_lisp_stack_top[i]));
-				return YK_NIL;
+								yk_type_of(yk_lisp_stack_top[i]), NULL);
 			}
 		}
 	}
@@ -1792,7 +1791,7 @@ static YkObject yk_builtin_call_method(YkUint nargs) {
 				args = yk_cons(object, args);
 				function = YK_CDR(YK_CAR(pair));
 				YK_GC_UNPROTECT;
-				return yk_apply(function, args);
+				yk_tail_apply(function, args);
 			}
 		}
 		object = object->instance.slots[0];
@@ -1982,7 +1981,7 @@ make_choice:
 	m_scanf("%d", &choice);
 
 	if (choice == 1) {
-		yk_go_back(error);
+		yk_go_back(error, 1);
 	}
 	if (choice == 2) {
 		assert(0);
@@ -2091,11 +2090,38 @@ static YkObject yk_funcall(const char* fn_name, ushort nargs, ...) {
 	YK_GC_UNPROTECT;
 }
 
+static void yk_tail_apply(YkObject function, YkObject args) {
+	YkInt argcount = 0;
+
+	yk_lisp_stack_top = yk_lisp_frame_ptr;
+
+	args = yk_nreverse(args);
+	YK_LIST_FOREACH(args, a) {
+		YK_LISP_STACK_PUSH(YK_CAR(a));
+		argcount++;
+	}
+
+	YK_ASSERT(YK_BYTECODEP(function));
+
+	YkInt nargs = YK_PTR(function)->bytecode.nargs;
+	if (nargs >= 0) {
+		YK_ASSERT(argcount == nargs);
+	}
+	else {
+		YK_ASSERT(argcount >= -(nargs + 1));
+	}
+
+	yk_bytecode_register = function;
+	yk_program_counter = YK_PTR(function)->bytecode.code;
+
+	yk_go_back(function, 2);
+}
+
 static void yk_signal_error(YkObject class, ...) {
 	va_list args;
 	va_start(args, class);
 
-	YkObject arglist = YK_NIL;
+	YkObject arglist = yk_cons(class, YK_NIL);
 	YK_GC_PROTECT1(arglist);
 
 	YkObject arg = va_arg(args, YkObject);
@@ -2110,9 +2136,8 @@ static void yk_signal_error(YkObject class, ...) {
 
 	arglist = yk_nreverse(arglist);
 
-	printf("Signaled error with args ");
-	yk_print(arglist);
-	printf("!\n");
+	YkObject error = yk_apply(YK_PTR(yk_make_symbol_cstr("make-instance"))->symbol.value, arglist);
+	yk_tail_apply(YK_PTR(yk_make_symbol_cstr("error"))->symbol.value, yk_cons(error, YK_NIL));
 }
 
 static YkObject yk_keyword_quote, yk_keyword_let, yk_keyword_lambda, yk_keyword_setq,
@@ -2914,12 +2939,12 @@ static void yk_debug_info() {
 	printf("\n");
 }
 
-static void yk_go_back(YkObject value) {
+static void yk_go_back(YkObject value, int code) {
 	assert(yk_jump_stack_size > 0);
 	yk_value_register = value;
 	yk_jump_stack_size = 0;
 
-	longjmp(yk_jump_point, 1);
+	longjmp(yk_jump_point, code);
 }
 
 #define YK_RUN_DEBUG 0
@@ -2936,11 +2961,13 @@ int yk_run(YkObject bytecode) {
 
 	if (yk_jump_stack_size == 0) {
 		int code = setjmp(yk_jump_point);
-		if (code != 0) {
+		if (code == 1) {
 			yk_exit_continuation(local_exit_cont, yk_continuations_stack + YK_STACK_MAX_SIZE);
 			yk_jump_stack_size++;
 			return_code = -1;
 			goto end;
+		} else if (code == 2) {
+			printf("Jumped!\n");
 		}
 	}
 
