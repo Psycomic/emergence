@@ -113,6 +113,35 @@ typedef struct {
 	uint32_t texture_width;
 } PsFont;
 
+typedef struct {
+	char* name;
+
+	Vector4 window_background_color;
+	Vector4 window_border_active_color;
+	Vector4 window_border_inactive_color;
+	Vector4 window_resize_triangle_color;
+
+	Vector4 dock_text_color;
+	Vector4 dock_background_color;
+	Vector4 dock_hover_text_color;
+	Vector4 dock_hover_background_color;
+
+	Vector4 button_background_color;
+	Vector4 button_text_color;
+	Vector4 button_border_color;
+
+	Vector4 slider_background_color;
+	Vector4 slider_foreground_color;
+	Vector4 slider_text_color;
+
+	Vector4 input_background_color;
+	Vector4 input_border_color;
+	Vector4 input_text_color;
+	Vector4 input_cursor_color;
+
+	Vector4 label_text_color;
+} PsTheme;
+
 struct PsWidget;
 
 // Takes the anchor and the minimum size of the widget
@@ -234,6 +263,11 @@ static PsFont ps_monospaced_font;
 static PsFont ps_current_font;
 
 static BOOL ps_wireframe;
+
+#define PS_MAX_THEMES 256
+static PsTheme ps_themes[PS_MAX_THEMES];
+static uint32_t ps_themes_size;
+static PsTheme* ps_current_theme;
 
 PsWidget* ps_current_input;
 
@@ -361,6 +395,65 @@ void ps_destroy_window(void* data) {
 	}
 }
 
+void ps_make_default_theme(char* name, PsTheme* out_theme) {
+	out_theme->name = name;
+
+	out_theme->label_text_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+
+	out_theme->window_background_color = (Vector4) { { 0.1f, 0.1f, 0.1f, 0.9f } };
+	out_theme->window_border_active_color = (Vector4) { { 0.5f, 0.5f, 0.5f, 1.f } };
+	out_theme->window_border_inactive_color = (Vector4) { { 0.f, 0.f, 1.f, 1.f } };
+	out_theme->window_resize_triangle_color = (Vector4) { { 0.3f, 0.3f, 0.35f, 0.7f } };
+
+	out_theme->dock_text_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+	out_theme->dock_background_color = (Vector4) { { 0.f, 0.f, 0.5f, 1.f } };
+	out_theme->dock_hover_text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+	out_theme->dock_hover_background_color = (Vector4) { { 0.5f, 0.5f, 1.f, 1.f } };
+
+	out_theme->button_background_color = (Vector4) { { 0.5f, 0.5f, 1.f, 1.f } };
+	out_theme->button_text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+	out_theme->button_border_color = (Vector4) { { 0.1f, 0.1f, 0.1f, 0.5f } };
+
+	out_theme->slider_background_color = (Vector4) { { 0.05f, 0.05f, 0.05f, 1.f } };
+	out_theme->slider_foreground_color = (Vector4) { { 0.3f, 0.1f, 0.3f, 1.f } };
+	out_theme->slider_text_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+
+	out_theme->input_background_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+	out_theme->input_border_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+	out_theme->input_text_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+	out_theme->input_cursor_color = (Vector4) { { 1.f, 0.f, 0.f, 1.f } };
+}
+
+void ps_themes_init() {
+	ps_themes_size = 1;
+	ps_make_default_theme("default theme", &ps_themes[0]);
+	ps_make_default_theme("light theme", &ps_themes[1]);
+	ps_themes[1].window_background_color = (Vector4) { { 0.9f, 0.9f, 0.9f, 0.9f } };
+	ps_themes[1].window_border_active_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+	ps_themes[1].window_border_inactive_color = (Vector4) { { 0.5f, 0.5f, 0.5f, 1.f } };
+	ps_themes[1].window_resize_triangle_color = (Vector4) { { 0.4f, 0.4f, 0.45f, 0.7f } };
+
+	ps_themes[1].dock_text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+	ps_themes[1].dock_background_color = (Vector4) { { 1.f, 1.f, 0.8f, 1.f } };
+	ps_themes[1].dock_hover_text_color = (Vector4) { { 0.1f, 0.1f, 0.1f, 1.f } };
+	ps_themes[1].dock_hover_background_color = (Vector4) { { 0.8f, 0.8f, 0.7f, 1.f } };
+
+	ps_themes[1].button_background_color = (Vector4) { { 0.75f, 0.75f, 0.8f, 1.f } };
+
+	ps_themes[1].slider_background_color = (Vector4) { { 0.95f, 0.95f, 0.95f, 1.f } };
+	ps_themes[1].slider_foreground_color = (Vector4) { { 0.45f, 0.25f, 0.45f, 1.f } };
+	ps_themes[1].slider_text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+
+	ps_themes[1].input_background_color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+	ps_themes[1].input_border_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+	ps_themes[1].input_text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+	ps_themes[1].input_cursor_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+
+	ps_themes[1].label_text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+
+	ps_current_theme = &ps_themes[1];
+}
+
 static DynamicArray ps_new_points;
 
 void ps_init() {
@@ -397,6 +490,8 @@ void ps_init() {
 	ps_current_font = ps_monospaced_font;
 
 	ps_atlas_init(&ps_current_font.text_atlas);
+
+	ps_themes_init();
 
 	window_add_character_hook(ps_character_callback, NULL);
 	window_add_resize_hook(ps_resized_callback, NULL);
@@ -1283,10 +1378,6 @@ void ps_widget_update(PsWidget* widget, float x, float y, float w, float h) {
 	}
 }
 
-static Vector4 ps_window_background_color = { { 0.1f, 0.1f, 0.1f, 0.9f } };
-static Vector4 ps_window_border_active_color = { { 0.5f, 0.5f, 0.5f, 1.f } };
-static Vector4 ps_window_border_inactive_color = { { 0.f, 0.f, 1.f, 1.f } };
-static Vector4 resize_triangle_color = { { 0.3f, 0.3f, 0.35f, 0.7f } };
 static float ps_window_border_size = 2.f;
 
 BOOL ps_window_inside(PsWindow* window, Vector2 point) {
@@ -1376,9 +1467,6 @@ void ps_menubar_draw() {
 	ps_text(title_format, (Vector2) { { -g_window.size.x / 2 + 10.f, g_window.size.y / 2 - 4.f } }, 20.f, (Vector4) { { 0.9f, 0.9f, 0.9f, 1.f } });
 }
 
-static Vector4 ps_dock_text_color = { { 1.f, 1.f, 1.f, 1.f } },
-	ps_dock_background_color = { { 0.f, 0.f, 0.5f, 1.f } };
-
 static float ps_dock_y_offset = 10.f,
 	ps_dock_text_size = 18.f;
 
@@ -1410,8 +1498,8 @@ void ps_dock_draw() {
 				w = width,
 				h = ps_dock_text_size + 10.f;
 
-			Vector4 background_color = ps_dock_background_color,
-				text_color = ps_dock_text_color;
+			Vector4 background_color = ps_current_theme->dock_background_color,
+				text_color = ps_current_theme->dock_text_color;
 
 			if (!g_window.mouse_button_left_state && ps_hidden_windows_clicked[i]) {
 				ps_windows[ps_windows_count++] = ps_hidden_windows[i];
@@ -1422,8 +1510,8 @@ void ps_dock_draw() {
 			ps_hidden_windows_clicked[i] = GL_FALSE;
 
 			if (is_in_box(g_window.cursor_position, x, y, w, h)) {
-				background_color = (Vector4) { { 0.5f, 0.5f, 1.f, 1.f } };
-				text_color = (Vector4) { { 0.f, 0.f, 0.f, 1.f } };
+				background_color = ps_current_theme->dock_hover_background_color;
+				text_color = ps_current_theme->dock_hover_text_color;
 
 				if (g_window.mouse_button_left_state) {
 					ps_hidden_windows_clicked[i] = GL_TRUE;
@@ -1458,10 +1546,10 @@ void ps_window_draw(PsWindow* window) {
 
 	if (window->flags & PS_WINDOW_SELECTED_BIT) {
 		ps_window_handle_events(window);
-		border_color = ps_window_border_active_color;
+		border_color = ps_current_theme->window_border_active_color;
 	}
 	else {
-		border_color = ps_window_border_inactive_color;
+		border_color = ps_current_theme->window_border_inactive_color;
 	}
 
 	Vector4 brighter_border_color = border_color;
@@ -1477,7 +1565,7 @@ void ps_window_draw(PsWindow* window) {
 	window->size.y = max(min_window_size.y, window->size.y);
 	window->position.y += old_size - window->size.y;
 
-	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, ps_window_background_color); /* Background */
+	ps_fill_rect(window->position.x, window->position.y, window->size.x, window->size.y, ps_current_theme->window_background_color); /* Background */
 
 	float o_ax = window->position.x - ps_window_border_size,
 		o_ay = window->position.y + window->size.y + ps_window_border_size,
@@ -1560,7 +1648,7 @@ void ps_window_draw(PsWindow* window) {
 	ps_line_to(window->position.x + window->size.x - 30.f, window->position.y);
 	ps_line_to(window->position.x + window->size.x, window->position.y + 30.f);
 	ps_close_path();
-	ps_fill(resize_triangle_color, PS_FILLED_POLY);
+	ps_fill(ps_current_theme->window_resize_triangle_color, PS_FILLED_POLY);
 }
 
 void ps_draw_gui() {
@@ -1786,7 +1874,7 @@ PsWidget* ps_label_create(char* text, float size) {
 	PsLabel* label = malloc(sizeof(PsLabel));
 	m_bzero(label, sizeof(PsLabel));
 
-	label->color = (Vector4) { { 1.f, 1.f, 1.f, 1.f } };
+	label->color = ps_current_theme->label_text_color;
 	label->text = m_strdup(text);
 	label->text_size = size;
 
@@ -1800,10 +1888,6 @@ PsWidget* ps_label_create(char* text, float size) {
 
 static float button_padding = 5.f,
 	button_border_size = 2.f;
-
-static Vector4 button_background_color = { { 0.5f, 0.5f, 1.f, 1.f } },
-	button_text_color = { { 0.f, 0.f, 0.f, 1.f } },
-	button_border_color = { { 0.1f, 0.1f, 0.1f, 0.5f } };
 
 Vector2 ps_button_min_size(PsWidget* widget) {
 	PsButton* button = (PsButton*)widget;
@@ -1825,8 +1909,8 @@ void ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 
 	ps_widget_update(widget, x, y, w, h);
 
-	Vector4 bc_color = button_background_color,
-		txt_color = button_text_color;
+	Vector4 bc_color = ps_current_theme->button_background_color,
+		txt_color = ps_current_theme->button_text_color;
 
 	if (PS_WIDGET(button)->flags & PS_WIDGET_HOVERED) {
 		for (uint i = 0; i < 4; i++) {
@@ -1843,8 +1927,8 @@ void ps_button_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	}
 
 	ps_fill_rect(x, y, w, h, bc_color);
-	ps_fill_rect(x, y, w, button_border_size, button_border_color);
-	ps_fill_rect(x, y, button_border_size, h, button_border_color);
+	ps_fill_rect(x, y, w, button_border_size, ps_current_theme->button_border_color);
+	ps_fill_rect(x, y, button_border_size, h, ps_current_theme->button_border_color);
 
 	float text_width = ps_text_width(button->text, button->text_size);
 	float text_height = ps_text_height(button->text, button->text_size);
@@ -1879,9 +1963,6 @@ PsWidget* ps_button_create(char* text, float size) {
 }
 
 static float slider_margin = 3.f;
-static Vector4 slider_background_color = { { 0.05f, 0.05f, 0.05f, 1.f } },
-	slider_foreground_color =  { { 0.3f, 0.1f, 0.3f, 1.f } },
-	slider_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
 Vector2 ps_slider_min_size(PsWidget* widget) {
 	PsSlider* slider = (PsSlider*)widget;
@@ -1904,9 +1985,9 @@ void ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		y = anchor.y - h,
 		w = slider_width;
 
-	Vector4 fg_color = slider_foreground_color,
-		bg_color = slider_background_color,
-		txt_color = slider_text_color;
+	Vector4 fg_color = ps_current_theme->slider_foreground_color,
+		bg_color = ps_current_theme->slider_background_color,
+		txt_color = ps_current_theme->slider_text_color;
 
 	ps_widget_update(widget, x, y, w, h);
 
@@ -1940,7 +2021,7 @@ void ps_slider_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 				x + slider_width / 2 - ps_text_width(buffer, slider->text_size) / 2,
 					anchor.y - slider_margin
 					} },
-		slider->text_size, slider_text_color);
+		slider->text_size, ps_current_theme->slider_text_color);
 }
 
 static void ps_slider_destroy(PsWidget* widget) {
@@ -1968,11 +2049,6 @@ PsWidget* ps_slider_create(float* val, float min_val, float max_val, float text_
 
 static float input_border_size = 2.f,
 	input_cursor_size = 2.f;
-
-static Vector4 input_background_color = { { 0.f, 0.f, 0.f, 1.f } },
-	input_border_color = { { 1.f, 1.f, 1.f, 1.f } },
-	input_cursor_color = { { 1.f, 0.f, 0.f, 1.f } },
-	input_text_color = { { 1.f, 1.f, 1.f, 1.f } };
 
 uint ps_input_beginning_of_line(PsInput* input) {
 	if (input->cursor_position == 0)
@@ -2080,7 +2156,7 @@ static void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		y = (anchor.y - input_border_size) - h,
 		w = input_width;
 
-	Vector4 bc_color = input_background_color;
+	Vector4 bc_color = ps_current_theme->input_background_color;
 
 	ps_widget_update(widget, x, y, w, h);
 
@@ -2173,15 +2249,15 @@ static void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 		}
 	}
 
-	ps_fill_rect(x - input_border_size, y, input_border_size, h, input_border_color);
-	ps_fill_rect(x + w, y, input_border_size, h, input_border_color);
+	ps_fill_rect(x - input_border_size, y, input_border_size, h, ps_current_theme->input_border_color);
+	ps_fill_rect(x + w, y, input_border_size, h, ps_current_theme->input_border_color);
 
-	ps_fill_rect(x - input_border_size, y - input_border_size, w + input_border_size * 2, input_border_size, input_border_color);
-	ps_fill_rect(x - input_border_size, y + h, w + input_border_size * 2, input_border_size, input_border_color);
+	ps_fill_rect(x - input_border_size, y - input_border_size, w + input_border_size * 2, input_border_size, ps_current_theme->input_border_color);
+	ps_fill_rect(x - input_border_size, y + h, w + input_border_size * 2, input_border_size, ps_current_theme->input_border_color);
 
 	ps_fill_rect(x, y, w, h, bc_color);
 
-	ps_text(input->value, (Vector2) { { x, y + h } }, input->text_size, input_text_color);
+	ps_text(input->value, (Vector2) { { x, y + h } }, input->text_size, ps_current_theme->input_text_color);
 
 	uint pos_x = 0, pos_y = 0, update = 0;
 	int i = input->cursor_position;
@@ -2197,7 +2273,7 @@ static void ps_input_draw(PsWidget* widget, Vector2 anchor, Vector2 min_size) {
 	}
 
 	if (input->selected)
-		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, input_cursor_color);
+		ps_fill_rect(x + ps_font_width(input->text_size) * pos_x, y + h - input->text_size * (pos_y + 1), input_cursor_size, input->text_size, ps_current_theme->input_cursor_color);
 }
 
 char* ps_input_value(PsInput* input) {
